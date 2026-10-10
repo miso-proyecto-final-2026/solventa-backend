@@ -1,1 +1,14 @@
 *:Zone.Identifier
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+reports/
+
+# Base de datos local de desarrollo (SQLite, ver app/db.py)
+*.db
