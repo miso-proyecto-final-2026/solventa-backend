@@ -12,7 +12,9 @@ def test_ttl_queda_dentro_de_la_dispersion_10_15_por_ciento():
 
 
 def test_ttl_es_determinista_con_semilla():
-    assert ttl_con_jitter(300, rng=random.Random(1)) == ttl_con_jitter(300, rng=random.Random(1))
+    assert ttl_con_jitter(300, rng=random.Random(1)) == ttl_con_jitter(
+        300, rng=random.Random(1)
+    )
 
 
 def test_ttl_minimo_es_un_segundo():
