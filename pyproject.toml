@@ -1,0 +1,3 @@
+[tool.ruff.lint]
+# B008: Depends(...) en el valor por defecto es el patrón idiomático de FastAPI.
+ignore = ["B008"]
