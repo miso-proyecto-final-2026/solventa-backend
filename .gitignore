@@ -1,5 +1,6 @@
 *:Zone.Identifier
 
+
 # Python
 __pycache__/
 *.pyc
@@ -12,3 +13,4 @@ reports/
 
 # Base de datos local de desarrollo (SQLite, ver app/db.py)
 *.db
+
