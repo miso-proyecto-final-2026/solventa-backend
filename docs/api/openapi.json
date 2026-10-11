@@ -1,0 +1,346 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Solventa Backend",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/v1/clientes": {
+      "post": {
+        "tags": [
+          "clientes"
+        ],
+        "summary": "Crear Cliente",
+        "operationId": "crear_cliente_v1_clientes_post",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClienteCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClienteOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/perfiles/{cliente_id}": {
+      "get": {
+        "tags": [
+          "perfiles"
+        ],
+        "summary": "Perfil crudo por fuente",
+        "operationId": "obtener_perfil_perfiles__cliente_id__get",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cliente Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerfilCrudoOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ClienteCreate": {
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "apellido": {
+            "type": "string",
+            "title": "Apellido"
+          },
+          "tipo_documento": {
+            "type": "string",
+            "title": "Tipo Documento"
+          },
+          "numero_documento": {
+            "type": "string",
+            "title": "Numero Documento"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "celular": {
+            "type": "string",
+            "title": "Celular"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "acepto_terminos": {
+            "type": "boolean",
+            "title": "Acepto Terminos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre",
+          "apellido",
+          "tipo_documento",
+          "numero_documento",
+          "email",
+          "celular",
+          "password",
+          "acepto_terminos"
+        ],
+        "title": "ClienteCreate"
+      },
+      "ClienteOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "apellido": {
+            "type": "string",
+            "title": "Apellido"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "estado_kyc": {
+            "type": "string",
+            "title": "Estado Kyc"
+          },
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nombre",
+          "apellido",
+          "email",
+          "estado_kyc",
+          "access_token",
+          "creado_en"
+        ],
+        "title": "ClienteOut"
+      },
+      "FuenteOut": {
+        "properties": {
+          "fuente": {
+            "type": "string",
+            "title": "Fuente"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "degradado": {
+            "type": "boolean",
+            "title": "Degradado"
+          },
+          "por_defecto": {
+            "type": "boolean",
+            "title": "Por Defecto"
+          },
+          "hit_cache": {
+            "type": "boolean",
+            "title": "Hit Cache"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fuente",
+          "payload",
+          "degradado",
+          "por_defecto",
+          "hit_cache"
+        ],
+        "title": "FuenteOut"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "PerfilCrudoOut": {
+        "properties": {
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "por_defecto": {
+            "type": "boolean",
+            "title": "Por Defecto"
+          },
+          "degradado": {
+            "type": "boolean",
+            "title": "Degradado"
+          },
+          "fuentes": {
+            "items": {
+              "$ref": "#/components/schemas/FuenteOut"
+            },
+            "type": "array",
+            "title": "Fuentes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cliente_id",
+          "por_defecto",
+          "degradado",
+          "fuentes"
+        ],
+        "title": "PerfilCrudoOut"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

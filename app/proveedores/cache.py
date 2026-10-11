@@ -64,3 +64,28 @@ class CacheRedis:
         valor = json.dumps(payload)
         await self._r.set(clave, valor, ex=ttl_s)
         await self._r.set(clave + ":respaldo", valor, ex=ttl_respaldo_s)
+
+
+class CacheMemoria:
+    """Respaldo para desarrollo local sin Redis (sin expiración)."""
+
+    def __init__(self) -> None:
+        self._datos: dict[str, dict[str, Any]] = {}
+
+    async def obtener(self, cliente_id: str, fuente: Fuente) -> dict[str, Any] | None:
+        return self._datos.get(_clave(cliente_id, fuente))
+
+    async def obtener_respaldo(
+        self, cliente_id: str, fuente: Fuente
+    ) -> dict[str, Any] | None:
+        return self._datos.get(_clave(cliente_id, fuente))
+
+    async def guardar(
+        self,
+        cliente_id: str,
+        fuente: Fuente,
+        payload: dict[str, Any],
+        ttl_s: int,
+        ttl_respaldo_s: int,
+    ) -> None:
+        self._datos[_clave(cliente_id, fuente)] = payload
