@@ -9,7 +9,9 @@ from app.proveedores.dominio import (
     EstadoConsentimiento,
     Fuente,
 )
-from app.proveedores.simuladores import ModoFalla
+from app.proveedores.simuladores import ConfigSimulador, ModoFalla
+
+RAPIDO = {"latencia_min_ms": 0.0, "latencia_max_ms": 1.0}
 
 
 async def test_consentimiento_otorgado_consulta_ambas_fuentes_con_origen(construir):
@@ -78,9 +80,9 @@ async def test_degradado_sirve_ultimo_perfil_cacheado(construir, redis):
     servicio, proveedores, _ = construir()
     original = await servicio.obtener_perfil("c1")
     await redis.delete("perfil:c1:open_finance")  # expiró el vigente; queda el respaldo
-    proveedores[Fuente.OPEN_FINANCE].config = type(
-        proveedores[Fuente.OPEN_FINANCE].config
-    )(modo=ModoFalla.ERROR_5XX)
+    proveedores[Fuente.OPEN_FINANCE].config = ConfigSimulador(
+        modo=ModoFalla.ERROR_5XX, **RAPIDO
+    )
     perfil = await servicio.obtener_perfil("c1")
     of = next(f for f in perfil.fuentes if f.fuente is Fuente.OPEN_FINANCE)
     esperado = next(f for f in original.fuentes if f.fuente is Fuente.OPEN_FINANCE)
@@ -113,9 +115,7 @@ async def test_sondeo_en_segundo_plano_cierra_el_circuito_sin_solicitud_de_usuar
     servicio, proveedores, _ = construir(modo_of=ModoFalla.ERROR_5XX)
     for i in range(5):
         await servicio.obtener_perfil(f"c{i}")
-    proveedores[Fuente.OPEN_FINANCE].config = type(
-        proveedores[Fuente.OPEN_FINANCE].config
-    )()
+    proveedores[Fuente.OPEN_FINANCE].config = ConfigSimulador(**RAPIDO)
     await servicio.sondear_una_vez()
     assert servicio.breakers[Fuente.OPEN_FINANCE].estado is EstadoCircuito.CERRADO
 
