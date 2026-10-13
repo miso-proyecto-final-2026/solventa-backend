@@ -29,8 +29,11 @@ jobs:
         run: pip install -r requirements.txt -r requirements-dev.txt
       - name: Lint (ruff)
         run: ruff check .
-      - name: Pruebas unitarias e integración (pytest)
+      - name: Pruebas unitarias, de propiedades, de módulo y de contrato (pytest)
+        # Las pruebas de módulo levantan PostgreSQL y Redis con testcontainers (Docker del runner).
         run: pytest --cov=app --cov-report=xml --junitxml=reports/junit.xml
+      - name: Cobertura mínima del 80 % en los módulos de negocio de cotización
+        run: coverage report --include="app/cotizacion/*" --fail-under=80
       - name: Publicar reportes de pruebas
         if: always()
         uses: actions/upload-artifact@v4

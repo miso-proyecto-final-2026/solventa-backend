@@ -106,6 +106,158 @@
         }
       }
     },
+    "/v1/cotizaciones": {
+      "post": {
+        "tags": [
+          "cotizaciones"
+        ],
+        "summary": "Calcula y emite una cotizaci\u00f3n",
+        "operationId": "crear_cotizacion_v1_cotizaciones_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitudIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CotizacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Solicitud no v\u00e1lida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/cotizaciones/{id}": {
+      "get": {
+        "tags": [
+          "cotizaciones"
+        ],
+        "summary": "Consulta una cotizaci\u00f3n emitida",
+        "operationId": "obtener_cotizacion_v1_cotizaciones__id__get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CotizacionOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "La cotizaci\u00f3n no existe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/cotizaciones/{id}/latencia-cliente": {
+      "put": {
+        "tags": [
+          "cotizaciones"
+        ],
+        "summary": "Registra la latencia medida en el cliente",
+        "operationId": "registrar_latencia_cliente_v1_cotizaciones__id__latencia_cliente_put",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LatenciaClienteIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "La cotizaci\u00f3n no existe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Solicitud no v\u00e1lida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -223,6 +375,218 @@
         ],
         "title": "ClienteOut"
       },
+      "CoberturaOut": {
+        "properties": {
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "monto": {
+            "type": "integer",
+            "title": "Monto"
+          },
+          "deducible": {
+            "type": "integer",
+            "title": "Deducible"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tipo",
+          "monto",
+          "deducible"
+        ],
+        "title": "CoberturaOut"
+      },
+      "ComponenteOut": {
+        "properties": {
+          "concepto": {
+            "type": "string",
+            "title": "Concepto"
+          },
+          "monto": {
+            "type": "integer",
+            "title": "Monto"
+          }
+        },
+        "type": "object",
+        "required": [
+          "concepto",
+          "monto"
+        ],
+        "title": "ComponenteOut"
+      },
+      "CotizacionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "producto": {
+            "type": "string",
+            "title": "Producto"
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "prima_anual": {
+            "type": "integer",
+            "title": "Prima Anual"
+          },
+          "prima_mensual": {
+            "type": "integer",
+            "title": "Prima Mensual"
+          },
+          "coberturas": {
+            "items": {
+              "$ref": "#/components/schemas/CoberturaOut"
+            },
+            "type": "array",
+            "title": "Coberturas"
+          },
+          "vigente_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Vigente Hasta"
+          },
+          "version_reglas": {
+            "type": "string",
+            "title": "Version Reglas"
+          },
+          "degradado": {
+            "type": "boolean",
+            "title": "Degradado"
+          },
+          "aproximada": {
+            "type": "boolean",
+            "title": "Aproximada"
+          },
+          "aviso": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aviso"
+          },
+          "componentes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ComponenteOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Componentes"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetadataOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "cliente_id",
+          "producto",
+          "estado",
+          "moneda",
+          "prima_anual",
+          "prima_mensual",
+          "coberturas",
+          "vigente_hasta",
+          "version_reglas",
+          "degradado",
+          "aproximada",
+          "aviso",
+          "componentes",
+          "metadata"
+        ],
+        "title": "CotizacionOut"
+      },
+      "DetalleErrorOut": {
+        "properties": {
+          "campo": {
+            "type": "string",
+            "title": "Campo"
+          },
+          "motivo": {
+            "type": "string",
+            "title": "Motivo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campo",
+          "motivo"
+        ],
+        "title": "DetalleErrorOut"
+      },
+      "ErrorCuerpoOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "details": {
+            "items": {
+              "$ref": "#/components/schemas/DetalleErrorOut"
+            },
+            "type": "array",
+            "title": "Details"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "details",
+          "trace_id"
+        ],
+        "title": "ErrorCuerpoOut"
+      },
+      "ErrorRespuestaOut": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorCuerpoOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "title": "ErrorRespuestaOut"
+      },
       "FuenteOut": {
         "properties": {
           "fuente": {
@@ -270,6 +634,45 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "LatenciaClienteIn": {
+        "properties": {
+          "latencia_cliente_ms": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Latencia Cliente Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "latencia_cliente_ms"
+        ],
+        "title": "LatenciaClienteIn"
+      },
+      "MetadataOut": {
+        "properties": {
+          "hit_cache": {
+            "type": "boolean",
+            "title": "Hit Cache"
+          },
+          "latencia_interna_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latencia Interna Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hit_cache",
+          "latencia_interna_ms"
+        ],
+        "title": "MetadataOut"
+      },
       "PerfilCrudoOut": {
         "properties": {
           "cliente_id": {
@@ -300,6 +703,34 @@
           "fuentes"
         ],
         "title": "PerfilCrudoOut"
+      },
+      "SolicitudIn": {
+        "properties": {
+          "cliente_id": {
+            "type": "string",
+            "maxLength": 36,
+            "minLength": 1,
+            "title": "Cliente Id"
+          },
+          "producto": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Producto"
+          },
+          "datos": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Datos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cliente_id",
+          "producto",
+          "datos"
+        ],
+        "title": "SolicitudIn"
       },
       "ValidationError": {
         "properties": {
