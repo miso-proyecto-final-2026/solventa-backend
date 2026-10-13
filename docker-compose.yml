@@ -1,0 +1,29 @@
+# Entorno local: PostgreSQL y Redis para MS Cotización.
+#   docker compose up -d
+#   export COTIZACION_DATABASE_URL=postgresql://solventa:solventa@localhost:5432/solventa
+#   export REDIS_URL=redis://localhost:6379/0
+#   alembic upgrade head && uvicorn app.main:app --reload
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: solventa
+      POSTGRES_PASSWORD: solventa  # solo para desarrollo local
+      POSTGRES_DB: solventa
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U solventa"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
