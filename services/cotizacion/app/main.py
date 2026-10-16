@@ -22,6 +22,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         sondeador.cancel()
+        await servicio.cerrar()
         engine_cotizacion.dispose()
 
 

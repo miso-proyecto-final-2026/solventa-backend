@@ -142,6 +142,12 @@ class ServicioPerfil:
             except (TimeoutError, ProveedorError, OSError):
                 breaker.resultado_sondeo(exito=False)
 
+    async def cerrar(self) -> None:
+        """Libera los recursos de red del adaptador de consentimiento, si los tiene."""
+        cerrar = getattr(self._consentimiento, "cerrar", None)
+        if cerrar is not None:
+            await cerrar()
+
     async def ejecutar_sondeador(self) -> None:
         while True:
             await asyncio.sleep(self.config.intervalo_half_open_s)
