@@ -37,19 +37,25 @@ def upgrade() -> None:
     op.create_index("ix_identidad_clientes_numero_documento", "clientes", ["numero_documento"], unique=True, schema=SCHEMA)
     op.create_index("ix_identidad_clientes_email", "clientes", ["email"], unique=True, schema=SCHEMA)
 
-    # Los clientes registrados antes de separar el esquema vivían en public.clientes.
+    # Los clientes registrados antes de separar el esquema vivían en public.clientes. La copia es de mejor
+    # esfuerzo: en staging esa tabla pertenece al rol del servicio anterior y este rol puede no tener
+    # permiso de lectura; en ese caso se omite en lugar de bloquear el despliegue.
     op.execute(
         f"""
         DO $$
         BEGIN
             IF to_regclass('public.clientes') IS NOT NULL THEN
-                INSERT INTO "{SCHEMA}".clientes
-                    (id, nombre, apellido, tipo_documento, numero_documento, email, celular,
-                     password_hash, estado_kyc, creado_en, actualizado_en)
-                SELECT id, nombre, apellido, tipo_documento, numero_documento, email, celular,
-                       password_hash, estado_kyc, creado_en, actualizado_en
-                FROM public.clientes
-                ON CONFLICT DO NOTHING;
+                BEGIN
+                    INSERT INTO "{SCHEMA}".clientes
+                        (id, nombre, apellido, tipo_documento, numero_documento, email, celular,
+                         password_hash, estado_kyc, creado_en, actualizado_en)
+                    SELECT id, nombre, apellido, tipo_documento, numero_documento, email, celular,
+                           password_hash, estado_kyc, creado_en, actualizado_en
+                    FROM public.clientes
+                    ON CONFLICT DO NOTHING;
+                EXCEPTION WHEN insufficient_privilege THEN
+                    RAISE NOTICE 'Sin permiso sobre public.clientes: no se copian los clientes previos';
+                END;
             END IF;
         END $$;
         """

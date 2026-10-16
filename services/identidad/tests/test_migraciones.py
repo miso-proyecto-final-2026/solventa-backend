@@ -3,6 +3,7 @@
 Se omite sola si Docker no está disponible.
 """
 
+import os
 from pathlib import Path
 
 import pytest
@@ -33,6 +34,11 @@ def _docker_disponible() -> bool:
 
 @pytest.fixture(scope="module")
 def postgres_url():
+    # Permite correr estas pruebas sin Docker apuntando a un PostgreSQL desechable ya levantado.
+    existente = os.environ.get("TEST_POSTGRES_URL")
+    if existente:
+        yield existente
+        return
     if not _docker_disponible():
         pytest.skip("Docker no disponible: se omiten las pruebas con contenedores")
     from testcontainers.postgres import PostgresContainer
@@ -130,20 +136,7 @@ def test_el_registro_de_consentimiento_es_inmutable_en_la_base(base_migrada):
 
 def test_la_migracion_copia_los_clientes_que_vivian_en_public(engine_pg, alembic):
     with engine_pg.begin() as c:
-        c.execute(
-            text(
-                "CREATE TABLE public.clientes (id varchar(36), nombre varchar(200), "
-                "apellido varchar(200), tipo_documento varchar(20), numero_documento varchar(20), "
-                "email varchar(320), celular varchar(20), password_hash varchar(200), "
-                "estado_kyc varchar(20), creado_en timestamptz, actualizado_en timestamptz)"
-            )
-        )
-        c.execute(
-            text(
-                "INSERT INTO public.clientes VALUES ('viejo', 'Ana', 'Pérez', 'CC', '1', "
-                "'a@example.com', '3001234567', 'hash', 'PENDIENTE', now(), now())"
-            )
-        )
+        _crear_public_clientes(c)
 
     alembic("upgrade", "head")
 
@@ -152,11 +145,66 @@ def test_la_migracion_copia_los_clientes_que_vivian_en_public(engine_pg, alembic
     assert ids == ["viejo"]
 
 
+def test_la_migracion_no_falla_si_el_rol_no_puede_leer_public_clientes(engine_pg, postgres_url):
+    """En staging public.clientes es del rol del servicio anterior: el rol de Identidad no la lee."""
+    with engine_pg.begin() as c:
+        # Debe tener las columnas reales: con menos, PostgreSQL falla al analizar el SELECT
+        # (UndefinedColumn) antes de comprobar permisos y no se ejercita el caso de staging.
+        _crear_public_clientes(c)
+        c.execute(
+            text(
+                "DO $$ BEGIN IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'ident_sin_permiso') "
+                "THEN DROP OWNED BY ident_sin_permiso; DROP ROLE ident_sin_permiso; END IF; END $$"
+            )
+        )
+        c.execute(text("CREATE ROLE ident_sin_permiso LOGIN PASSWORD 'ident_sin_permiso'"))
+        base = c.execute(text("SELECT current_database()")).scalar_one()
+        c.execute(text(f'GRANT CREATE ON DATABASE "{base}" TO ident_sin_permiso'))
+
+    url = engine_pg.url.set(username="ident_sin_permiso", password="ident_sin_permiso")
+    cfg = Config(str(RAIZ / "alembic.ini"))
+    cfg.set_main_option("script_location", str(RAIZ / "migrations"))
+    previo = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = url.render_as_string(hide_password=False)
+    try:
+        command.upgrade(cfg, "head")
+        with engine_pg.connect() as c:
+            copiados = c.execute(text(f"SELECT count(*) FROM {SCHEMA}.clientes")).scalar_one()
+        assert copiados == 0  # sin permiso no se copia nada, pero la migración termina
+        assert "sesiones" in inspect(engine_pg).get_table_names(schema=SCHEMA)
+    finally:
+        if previo is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = previo
+        with engine_pg.begin() as c:
+            c.execute(text(f'DROP SCHEMA IF EXISTS "{SCHEMA}" CASCADE'))
+            c.execute(text("DROP OWNED BY ident_sin_permiso"))
+            c.execute(text("DROP ROLE ident_sin_permiso"))
+
 def test_la_migracion_se_puede_revertir(engine_pg, alembic):
     alembic("upgrade", "head")
     alembic("downgrade", "base")
 
     assert inspect(engine_pg).get_table_names(schema=SCHEMA) == ["alembic_version"]
+
+
+def _crear_public_clientes(c):
+    """public.clientes tal como la dejó el servicio anterior (create_all), con un cliente."""
+    c.execute(
+        text(
+            "CREATE TABLE public.clientes (id varchar(36), nombre varchar(200), "
+            "apellido varchar(200), tipo_documento varchar(20), numero_documento varchar(20), "
+            "email varchar(320), celular varchar(20), password_hash varchar(200), "
+            "estado_kyc varchar(20), creado_en timestamptz, actualizado_en timestamptz)"
+        )
+    )
+    c.execute(
+        text(
+            "INSERT INTO public.clientes VALUES ('viejo', 'Ana', 'Pérez', 'CC', '1', "
+            "'a@example.com', '3001234567', 'hash', 'PENDIENTE', now(), now())"
+        )
+    )
 
 
 def _insertar_cliente(c, id_):
