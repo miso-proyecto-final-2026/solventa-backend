@@ -44,5 +44,8 @@ El CI corre `test` y `build` en matriz por servicio.
 | `IDENTIDAD_URL` | cotizacion | URL base de MS Identidad para consultar el consentimiento. Sin ella se usa un stub (solo desarrollo). |
 | `IDENTIDAD_SERVICE_KEY` | cotizacion | Clave de servicio que Cotización envía a Identidad. |
 | `IDENTIDAD_TIMEOUT_S` | cotizacion | Timeout de la consulta (por defecto 0,3 s, dentro del presupuesto de HA01). |
+| `IDENTIDAD_UMBRAL_FALLOS`, `IDENTIDAD_ENFRIAMIENTO_S` | cotizacion | Circuit breaker de la consulta (5 fallos seguidos; 15 s de enfriamiento). |
+
+Patrones de comunicación (ADR-0002 y documento de arquitectura): la consulta de consentimiento es REST síncrono con timeout duro y circuit breaker; Kafka se reserva para los flujos de larga duración (suscripción, pagos, siniestros, notificaciones). Los contextos se relacionan por id, nunca por llave foránea ni por tabla compartida.
 
 Si Identidad no responde, Cotización asume `NO_OTORGADO` (falla cerrado): no consulta proveedores y calcula con perfil por defecto.
