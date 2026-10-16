@@ -32,6 +32,7 @@ class Escenario(str, Enum):
     RECHAZO = "rechazo"
     TIMEOUT = "timeout"
     ERROR_5XX = "error_5xx"
+    CAIDO = "caido"  # sin conexión: el proveedor ni siquiera responde
     VACIO = "vacio"
 
 
@@ -93,6 +94,12 @@ class ContratoVerificador:
         with pytest.raises(ProveedorKycError):
             await banco.verificador.verificar(solicitud())
 
+    async def test_un_proveedor_caido_se_traduce_a_error_del_dominio(self, banco: Banco):
+        banco.preparar(Escenario.CAIDO)
+
+        with pytest.raises(ProveedorKycError):
+            await banco.verificador.verificar(solicitud())
+
     async def test_una_respuesta_vacia_se_traduce_a_error_del_dominio(self, banco: Banco):
         banco.preparar(Escenario.VACIO)
 
@@ -109,7 +116,7 @@ class ContratoVerificador:
         assert primero.referencia == segundo.referencia
         assert banco.casos_abiertos() == 2
 
-    @pytest.mark.parametrize("escenario", [Escenario.ERROR_5XX, Escenario.VACIO])
+    @pytest.mark.parametrize("escenario", [Escenario.ERROR_5XX, Escenario.CAIDO, Escenario.VACIO])
     async def test_los_errores_no_filtran_el_contenido_de_las_imagenes(
         self, banco: Banco, escenario: Escenario
     ):

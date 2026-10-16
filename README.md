@@ -41,6 +41,9 @@ El CI corre `test` y `build` en matriz por servicio.
 |---|---|---|
 | `DATABASE_URL` | identidad | Base de datos; el esquema es `identidad` (Alembic: `alembic upgrade head`). |
 | `SERVICE_API_KEYS` | identidad | Claves (separadas por coma) que aceptan los servicios internos en `X-Service-Key`. |
+| `KYC_PROVEEDOR` | identidad | Proveedor de KYC: `simulado` (por defecto) o `proveedor_b`. Cambiarlo no requiere tocar código (HA06). |
+| `KYC_PROVEEDOR_B_URL`, `KYC_PROVEEDOR_B_API_KEY` | identidad | URL y clave del proveedor B; obligatorias si `KYC_PROVEEDOR=proveedor_b`. La clave debe venir de un secreto, nunca de git. |
+| `KYC_PROVEEDOR_B_TIMEOUT_S` | identidad | Timeout del cliente HTTP de B (4 s por defecto, por debajo del `KYC_TIMEOUT_S` del núcleo). |
 | `IDENTIDAD_URL` | cotizacion | URL base de MS Identidad para consultar el consentimiento. Sin ella se usa un stub (solo desarrollo). |
 | `IDENTIDAD_SERVICE_KEY` | cotizacion | Clave de servicio que Cotización envía a Identidad. |
 | `IDENTIDAD_TIMEOUT_S` | cotizacion | Timeout de la consulta (por defecto 0,3 s, dentro del presupuesto de HA01). |
