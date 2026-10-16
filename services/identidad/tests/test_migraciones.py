@@ -82,6 +82,7 @@ def test_la_migracion_crea_el_esquema_y_las_tablas(base_migrada):
         "sesiones",
         "consentimientos",
         "consentimiento_registros",
+        "verificaciones_kyc",
     } <= tablas
 
 
