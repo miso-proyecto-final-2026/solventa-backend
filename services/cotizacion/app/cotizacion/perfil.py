@@ -1,12 +1,12 @@
 """Puerto del perfil y adaptador sobre el servicio de proveedores de HU09 (HU12).
 
-El motor depende de `PerfilUnificado`. Mientras HU10 no entregue el perfil
-canónico, este adaptador lo arma desde el perfil crudo de HU09; cuando HU10
-llegue, solo se reemplaza este módulo.
+El motor depende de `PerfilUnificado`. La normalización al esquema canónico vive
+en `app.cotizacion.normalizacion` (HU10); este módulo solo la proyecta al contrato
+del motor.
 
-PROVISIONAL: los nombres crudos salen de los simuladores de HU09 y no coinciden
-con los de la documentación (`score_crediticio`, `ingresos_mensuales`). El
-mapeo definitivo se acuerda al hacer HU10.
+Los nombres crudos salen de los simuladores de HU09 y no coinciden con los de la
+documentación (`score_crediticio`, `ingresos_mensuales`); al integrar un proveedor
+real solo cambia su entrada en `NORMALIZADORES`.
 """
 
 from __future__ import annotations
@@ -15,23 +15,11 @@ import logging
 from typing import Protocol
 
 from app.cotizacion.dominio import PerfilUnificado
-from app.proveedores.dominio import Fuente, PerfilCrudo
+from app.cotizacion.normalizacion import normalizar
+from app.proveedores.dominio import PerfilCrudo
 from app.proveedores.servicio import ServicioPerfil
 
 log = logging.getLogger(__name__)
-
-# campo crudo del proveedor -> nombre canónico de la señal
-_MAPEO: dict[Fuente, dict[str, str]] = {
-    Fuente.OPEN_FINANCE: {
-        "monthlyIncomeCop": "ingresos_mensuales_cop",
-        "debtRatio": "ratio_endeudamiento",
-        "accountsOpenYears": "antiguedad_cuentas_anios",
-    },
-    Fuente.OPEN_DATA: {
-        "estrato": "estrato",
-        "reportes_negativos": "reportes_negativos",
-    },
-}
 
 
 class PerfilPort(Protocol):
@@ -39,25 +27,20 @@ class PerfilPort(Protocol):
 
 
 def unificar(crudo: PerfilCrudo) -> PerfilUnificado:
-    """Convierte el perfil crudo en el contrato del motor."""
-    if crudo.por_defecto and not crudo.fuentes:
-        # ServicioPerfil responde así solo cuando no hay consentimiento.
-        return PerfilUnificado(cliente_id=crudo.cliente_id, con_consentimiento=False)
-    senales: dict[str, int | float] = {}
-    if not crudo.degradado:
-        for fuente in crudo.fuentes:
-            if fuente.por_defecto:
-                continue
-            for campo, canonico in _MAPEO.get(fuente.fuente, {}).items():
-                valor = fuente.payload.get(campo)
-                if isinstance(valor, int | float) and not isinstance(valor, bool):
-                    senales[canonico] = valor
+    """Normaliza el perfil crudo (HU10) y lo proyecta al contrato del motor."""
+    canonico = normalizar(crudo)
+    # Un perfil degradado no aporta señales: se cotiza con la regla conservadora.
+    senales = (
+        {} if canonico.degradado else {n: c.valor for n, c in canonico.campos.items()}
+    )
     return PerfilUnificado(
-        cliente_id=crudo.cliente_id,
+        cliente_id=canonico.cliente_id,
         senales=senales,
-        degradado=crudo.degradado,
-        hit_cache=bool(crudo.fuentes) and all(f.hit_cache for f in crudo.fuentes),
-        fuentes=tuple(f.fuente.value for f in crudo.fuentes),
+        degradado=canonico.degradado,
+        con_consentimiento=canonico.con_consentimiento,
+        hit_cache=canonico.hit_cache,
+        fuentes=canonico.fuentes,
+        completitud=canonico.completitud,
     )
 
 

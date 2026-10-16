@@ -21,10 +21,11 @@ RECARGO_DEGRADADO = "recargo_degradado"
 
 @dataclass(frozen=True)
 class PerfilUnificado:
-    """Contrato mínimo del perfil que consume el motor (HU10 lo producirá a futuro).
+    """Contrato del perfil que consume el motor, derivado del perfil canónico (HU10).
 
     `senales` usa nombres canónicos (p. ej. `ratio_endeudamiento`). Estará vacío
-    cuando no haya consentimiento o el perfil sea degradado.
+    cuando no haya consentimiento o el perfil sea degradado. `completitud` es la
+    fracción de campos canónicos presentes (0 a 1).
     """
 
     cliente_id: str
@@ -33,6 +34,7 @@ class PerfilUnificado:
     con_consentimiento: bool = True
     hit_cache: bool = False
     fuentes: tuple[str, ...] = ()
+    completitud: float = 0.0
 
 
 @dataclass(frozen=True)
