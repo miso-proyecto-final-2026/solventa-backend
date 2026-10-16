@@ -7,12 +7,8 @@ from fastapi import FastAPI
 from app.cotizacion.api import router as cotizaciones_router
 from app.cotizacion.errores import registrar_errores
 from app.cotizacion.wiring import construir_servicio_cotizacion
-from app.db import Base, engine
 from app.proveedores.api import router as perfiles_router
 from app.proveedores.wiring import construir_servicio
-from app.routers.clientes import router as clientes_router
-
-Base.metadata.create_all(bind=engine)
 
 
 @asynccontextmanager
@@ -29,8 +25,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         engine_cotizacion.dispose()
 
 
-app = FastAPI(title="Solventa Backend", version="0.1.0", lifespan=lifespan)
-app.include_router(clientes_router)
+app = FastAPI(title="Solventa — MS Cotización", version="0.1.0", lifespan=lifespan)
 app.include_router(perfiles_router)
 app.include_router(cotizaciones_router)
 registrar_errores(app)

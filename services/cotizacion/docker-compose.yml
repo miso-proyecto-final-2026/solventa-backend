@@ -1,4 +1,5 @@
 # Entorno local: PostgreSQL y Redis para MS Cotización.
+#   cd services/cotizacion
 #   docker compose up -d
 #   export COTIZACION_DATABASE_URL=postgresql://solventa:solventa@localhost:5432/solventa
 #   export REDIS_URL=redis://localhost:6379/0

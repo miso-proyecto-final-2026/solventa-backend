@@ -1,3 +1,7 @@
+[tool.ruff]
+# Cada microservicio tiene su propio paquete `app`; se declara como first-party para ordenar imports.
+src = ["services/identidad", "services/cotizacion"]
+
 [tool.ruff.lint]
 # B008: Depends(...) en el valor por defecto es el patrón idiomático de FastAPI.
 ignore = ["B008"]

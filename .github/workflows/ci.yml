@@ -12,13 +12,22 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
+  # Transitorio: solventa-infra solo conoce el servicio `solventa-backend` (hoy MS Cotización).
+  # Al registrar `solventa-identidad` y `solventa-cotizacion` en services.yaml se despliega cada uno.
   ECR_REPOSITORY: solventa-backend
   EKS_CLUSTER: solventa-staging
 
 jobs:
-  test:
-    name: test
+  pruebas:
+    name: pruebas (${{ matrix.service }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [identidad, cotizacion]
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,31 +35,48 @@ jobs:
           python-version: '3.12'
           cache: pip
       - name: Instalar dependencias
-        run: pip install -r requirements.txt -r requirements-dev.txt
+        run: pip install -r requirements.txt -r ../../requirements-dev.txt
       - name: Lint (ruff)
-        run: ruff check .
+        working-directory: .
+        run: ruff check services/${{ matrix.service }}
       - name: Pruebas unitarias, de propiedades, de módulo y de contrato (pytest)
         # Las pruebas de módulo levantan PostgreSQL y Redis con testcontainers (Docker del runner).
         run: pytest --cov=app --cov-report=xml --junitxml=reports/junit.xml
       - name: Cobertura mínima del 80 % en los módulos de negocio de cotización
+        if: matrix.service == 'cotizacion'
         run: coverage report --include="app/cotizacion/*" --fail-under=80
       - name: Publicar reportes de pruebas
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pytest-reports
+          name: pytest-reports-${{ matrix.service }}
           path: |
-            reports/junit.xml
-            coverage.xml
+            services/${{ matrix.service }}/reports/junit.xml
+            services/${{ matrix.service }}/coverage.xml
+
+  # Check agregado `test`: es el contexto que exige la protección de `main`; resume la matriz.
+  test:
+    name: test
+    needs: pruebas
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar que las pruebas de todos los servicios pasaron
+        run: |
+          test "${{ needs.pruebas.result }}" = "success"
 
   build:
-    name: build
+    name: build (${{ matrix.service }})
     needs: test
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [identidad, cotizacion]
     steps:
       - uses: actions/checkout@v4
       - name: Construir imagen Docker
-        run: docker build -t ${{ env.ECR_REPOSITORY }}:${{ github.sha }} .
+        run: docker build -t solventa-${{ matrix.service }}:${{ github.sha }} services/${{ matrix.service }}
 
   deploy-staging:
     name: deploy-staging
@@ -70,7 +96,7 @@ jobs:
       - name: Construir y publicar imagen
         run: |
           IMAGE=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
-          docker build -t "$IMAGE" .
+          docker build -t "$IMAGE" services/cotizacion
           docker push "$IMAGE"
       - name: Desplegar al namespace staging en EKS
         run: |

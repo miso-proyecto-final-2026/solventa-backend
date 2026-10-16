@@ -1,69 +1,10 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Solventa Backend",
+    "title": "Solventa — MS Cotización",
     "version": "0.1.0"
   },
   "paths": {
-    "/v1/clientes": {
-      "post": {
-        "tags": [
-          "clientes"
-        ],
-        "summary": "Crear Cliente",
-        "operationId": "crear_cliente_v1_clientes_post",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ClienteCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClienteOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/perfiles/{cliente_id}": {
       "get": {
         "tags": [
@@ -111,7 +52,7 @@
         "tags": [
           "cotizaciones"
         ],
-        "summary": "Calcula y emite una cotizaci\u00f3n",
+        "summary": "Calcula y emite una cotización",
         "operationId": "crear_cotizacion_v1_cotizaciones_post",
         "requestBody": {
           "content": {
@@ -135,7 +76,7 @@
             }
           },
           "422": {
-            "description": "Solicitud no v\u00e1lida.",
+            "description": "Solicitud no válida.",
             "content": {
               "application/json": {
                 "schema": {
@@ -152,7 +93,7 @@
         "tags": [
           "cotizaciones"
         ],
-        "summary": "Consulta una cotizaci\u00f3n emitida",
+        "summary": "Consulta una cotización emitida",
         "operationId": "obtener_cotizacion_v1_cotizaciones__id__get",
         "parameters": [
           {
@@ -179,7 +120,7 @@
             }
           },
           "404": {
-            "description": "La cotizaci\u00f3n no existe.",
+            "description": "La cotización no existe.",
             "content": {
               "application/json": {
                 "schema": {
@@ -236,7 +177,7 @@
             "description": "Successful Response"
           },
           "404": {
-            "description": "La cotizaci\u00f3n no existe.",
+            "description": "La cotización no existe.",
             "content": {
               "application/json": {
                 "schema": {
@@ -246,7 +187,7 @@
             }
           },
           "422": {
-            "description": "Solicitud no v\u00e1lida.",
+            "description": "Solicitud no válida.",
             "content": {
               "application/json": {
                 "schema": {
@@ -283,98 +224,6 @@
   },
   "components": {
     "schemas": {
-      "ClienteCreate": {
-        "properties": {
-          "nombre": {
-            "type": "string",
-            "title": "Nombre"
-          },
-          "apellido": {
-            "type": "string",
-            "title": "Apellido"
-          },
-          "tipo_documento": {
-            "type": "string",
-            "title": "Tipo Documento"
-          },
-          "numero_documento": {
-            "type": "string",
-            "title": "Numero Documento"
-          },
-          "email": {
-            "type": "string",
-            "title": "Email"
-          },
-          "celular": {
-            "type": "string",
-            "title": "Celular"
-          },
-          "password": {
-            "type": "string",
-            "title": "Password"
-          },
-          "acepto_terminos": {
-            "type": "boolean",
-            "title": "Acepto Terminos"
-          }
-        },
-        "type": "object",
-        "required": [
-          "nombre",
-          "apellido",
-          "tipo_documento",
-          "numero_documento",
-          "email",
-          "celular",
-          "password",
-          "acepto_terminos"
-        ],
-        "title": "ClienteCreate"
-      },
-      "ClienteOut": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "nombre": {
-            "type": "string",
-            "title": "Nombre"
-          },
-          "apellido": {
-            "type": "string",
-            "title": "Apellido"
-          },
-          "email": {
-            "type": "string",
-            "title": "Email"
-          },
-          "estado_kyc": {
-            "type": "string",
-            "title": "Estado Kyc"
-          },
-          "access_token": {
-            "type": "string",
-            "title": "Access Token"
-          },
-          "creado_en": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Creado En"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "nombre",
-          "apellido",
-          "email",
-          "estado_kyc",
-          "access_token",
-          "creado_en"
-        ],
-        "title": "ClienteOut"
-      },
       "CoberturaOut": {
         "properties": {
           "tipo": {
