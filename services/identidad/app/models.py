@@ -1,7 +1,15 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint, event
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    event,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -74,6 +82,26 @@ class ConsentimientoRegistro(Base):
     version_texto: Mapped[str] = mapped_column(String(20))
     canal: Mapped[str] = mapped_column(String(10))
     fecha: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class VerificacionKyc(Base):
+    """Un intento de verificación de identidad (HU02). Guarda referencias, nunca las imágenes."""
+
+    __tablename__ = "verificaciones_kyc"
+    __table_args__ = (
+        UniqueConstraint("cliente_id", "clave_idempotencia", name="uq_verificacion_cliente_clave"),
+        Index("ix_verificacion_cliente_creado", "cliente_id", "creado_en"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    cliente_id: Mapped[str] = mapped_column(ForeignKey("identidad.clientes.id"))
+    clave_idempotencia: Mapped[str] = mapped_column(String(100))
+    estado: Mapped[str] = mapped_column(String(20))  # VERIFICADO | RECHAZADO | EN_REVISION
+    motivo: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    referencia_proveedor: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    reto: Mapped[str] = mapped_column(String(30))
+    evidencias: Mapped[dict] = mapped_column(JSON)  # parte -> clave en el almacén
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
 @event.listens_for(ConsentimientoRegistro, "before_update")

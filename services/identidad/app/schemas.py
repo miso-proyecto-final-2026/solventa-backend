@@ -112,3 +112,22 @@ class ConsentimientoOut(BaseModel):
     version_texto: str | None = None
     fecha_otorgamiento: datetime | None = None
     fecha_revocacion: datetime | None = None
+
+
+class VerificacionOut(BaseModel):
+    id: str
+    estado: str  # VERIFICADO | RECHAZADO | EN_REVISION
+    motivo: str | None = None
+    intentos_restantes: int
+    creado_en: datetime
+
+
+class EstadoKycOut(BaseModel):
+    """Resultado que consume HU03: estado vigente, motivo genérico e intentos restantes."""
+
+    cliente_id: str
+    estado_kyc: str
+    motivo: str | None = None
+    intentos_restantes: int
+    bloqueado_hasta: datetime | None = None
+    ultima_verificacion_id: str | None = None
