@@ -1,0 +1,351 @@
+openapi: 3.1.0
+info:
+  title: Solventa - API de cotización (HU12)
+  version: 1.0.0
+  description: |
+    Contrato del motor de rating de MS Cotización, compartido por los canales
+    móvil, web y API de socios. Se diseña antes que el código (contract-first) y
+    una prueba de contrato verifica que la implementación lo cumple.
+
+    **Moneda y redondeo.** Todos los montos están en COP, son enteros (sin
+    decimales) y se redondean con ROUND_HALF_UP en cada componente, de modo que
+    la suma de `componentes` es exactamente igual a `prima_anual`.
+
+    **Tres resultados de precio.**
+    - *Normal*: el perfil trae señales de Open Finance y ajustan el factor de riesgo.
+    - *Aproximada* (`aproximada = true`): el cliente no dio consentimiento. Se usa
+      el factor base del producto y el precio puede cambiar al comprar.
+    - *Degradada* (`degradado = true`): el proveedor de datos falló. Se aplica la
+      regla conservadora (recargo configurable). La cotización se emite igual (HTTP 201).
+
+    **Compatibilidad (RQ-I2).** La versión va en la ruta (`/v1`). Dentro de `v1`
+    solo se agregan campos opcionales; los clientes deben ignorar campos desconocidos.
+
+    **Datos del producto.** `datos` es un objeto cuyos campos dependen del
+    producto y viven en las reglas versionadas, no en este contrato: agregar un
+    ramo no cambia la API. Los campos de los productos iniciales están en los ejemplos.
+servers:
+  - url: http://localhost:8000
+    description: Local (docker compose)
+tags:
+  - name: cotizaciones
+paths:
+  /v1/cotizaciones:
+    post:
+      tags: [cotizaciones]
+      operationId: crearCotizacion
+      summary: Calcula y emite una cotización
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolicitudCotizacion'
+            examples:
+              microseguro_vida:
+                summary: Microseguro de vida
+                value:
+                  cliente_id: 3f0c1c0e-7f4e-4a52-9f0e-5a3b1c2d4e61
+                  producto: microseguro_vida
+                  datos:
+                    edad: 35
+                    suma_asegurada: 50000000
+              proteccion_dispositivos:
+                summary: Protección de dispositivos
+                value:
+                  cliente_id: 3f0c1c0e-7f4e-4a52-9f0e-5a3b1c2d4e61
+                  producto: proteccion_dispositivos
+                  datos:
+                    tipo_dispositivo: celular
+                    valor_dispositivo: 2500000
+                    antiguedad_meses: 8
+      responses:
+        '201':
+          description: Cotización emitida (también cuando es aproximada o degradada).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cotizacion'
+              examples:
+                normal:
+                  summary: Con señales de Open Finance
+                  value:
+                    id: 9a7d6b52-2f43-4a39-8d55-0c9f7e1a2b10
+                    cliente_id: 3f0c1c0e-7f4e-4a52-9f0e-5a3b1c2d4e61
+                    producto: microseguro_vida
+                    estado: EMITIDA
+                    moneda: COP
+                    prima_anual: 175000
+                    prima_mensual: 14583
+                    coberturas:
+                      - {tipo: muerte, monto: 50000000, deducible: 0}
+                      - {tipo: incapacidad_total, monto: 25000000, deducible: 0}
+                    vigente_hasta: '2026-11-11T15:00:00Z'
+                    version_reglas: 2026.10.1-prototipo
+                    degradado: false
+                    aproximada: false
+                    aviso: null
+                    componentes:
+                      - {concepto: prima_base, monto: 175000}
+                      - {concepto: ajuste_datos, monto: 0}
+                      - {concepto: ajuste_riesgo, monto: 0}
+                      - {concepto: recargo_degradado, monto: 0}
+                    metadata: {hit_cache: true, latencia_interna_ms: 12.4}
+                aproximada:
+                  summary: Sin consentimiento (precio aproximado)
+                  value:
+                    id: 1c2e0f31-6d0a-4c53-bb36-52d5f0a9e7aa
+                    cliente_id: 3f0c1c0e-7f4e-4a52-9f0e-5a3b1c2d4e61
+                    producto: proteccion_dispositivos
+                    estado: EMITIDA
+                    moneda: COP
+                    prima_anual: 135844
+                    prima_mensual: 11320
+                    coberturas:
+                      - {tipo: dano_accidental, monto: 2500000, deducible: 250000}
+                      - {tipo: robo, monto: 2500000, deducible: 500000}
+                    vigente_hasta: '2026-11-11T15:00:00Z'
+                    version_reglas: 2026.10.1-prototipo
+                    degradado: false
+                    aproximada: true
+                    aviso: Este valor es aproximado y puede cambiar al momento de la compra.
+                    componentes:
+                      - {concepto: prima_base, monto: 112500}
+                      - {concepto: ajuste_datos, monto: 16875}
+                      - {concepto: ajuste_riesgo, monto: 6469}
+                      - {concepto: recargo_degradado, monto: 0}
+                    metadata: {hit_cache: false, latencia_interna_ms: 6.1}
+                degradada:
+                  summary: Proveedor de datos caído (regla conservadora)
+                  value:
+                    id: 5b8e4d77-91c3-4a0e-a8d4-7e2f6c3b1d09
+                    cliente_id: 3f0c1c0e-7f4e-4a52-9f0e-5a3b1c2d4e61
+                    producto: microseguro_vida
+                    estado: EMITIDA
+                    moneda: COP
+                    prima_anual: 201250
+                    prima_mensual: 16771
+                    coberturas:
+                      - {tipo: muerte, monto: 50000000, deducible: 0}
+                      - {tipo: incapacidad_total, monto: 25000000, deducible: 0}
+                    vigente_hasta: '2026-11-11T15:00:00Z'
+                    version_reglas: 2026.10.1-prototipo
+                    degradado: true
+                    aproximada: false
+                    aviso: null
+                    componentes:
+                      - {concepto: prima_base, monto: 175000}
+                      - {concepto: ajuste_datos, monto: 0}
+                      - {concepto: ajuste_riesgo, monto: 0}
+                      - {concepto: recargo_degradado, monto: 26250}
+                    metadata: {hit_cache: false, latencia_interna_ms: 9.8}
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+  /v1/cotizaciones/{id}:
+    get:
+      tags: [cotizaciones]
+      operationId: obtenerCotizacion
+      summary: Consulta una cotización emitida
+      description: |
+        El desglose de `componentes` no se persiste (lo entrega HU14), por eso
+        aquí viene en `null`.
+      parameters:
+        - $ref: '#/components/parameters/CotizacionId'
+      responses:
+        '200':
+          description: Cotización encontrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cotizacion'
+        '404':
+          description: La cotización no existe.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+              example:
+                error:
+                  code: COTIZACION_NO_ENCONTRADA
+                  message: La cotización no existe.
+                  details: []
+                  trace_id: 7f6c2f5e-0e4d-4d61-9a3e-2d1f0b7c8e55
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+  /v1/cotizaciones/{id}/latencia-cliente:
+    put:
+      tags: [cotizaciones]
+      operationId: registrarLatenciaCliente
+      summary: Registra la latencia medida en el cliente (RQ-L1)
+      description: |
+        La reporta el cliente o el generador de carga. Completa
+        `latencia_cliente_ms` del registro de latencia de la cotización.
+      parameters:
+        - $ref: '#/components/parameters/CotizacionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LatenciaCliente'
+            example: {latencia_cliente_ms: 231.5}
+      responses:
+        '204':
+          description: Latencia registrada.
+        '404':
+          description: La cotización no existe.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+components:
+  parameters:
+    CotizacionId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 36}
+  responses:
+    ErrorValidacion:
+      description: |
+        Producto inexistente, datos incompletos o fuera de rango. No se calcula
+        nada. `details[].campo` indica el campo (por ejemplo `datos.edad`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorRespuesta'
+          examples:
+            fuera_de_rango:
+              value:
+                error:
+                  code: VALIDATION_ERROR
+                  message: La solicitud no es válida.
+                  details:
+                    - {campo: datos.edad, motivo: 'debe ser menor o igual a 65'}
+                  trace_id: 7f6c2f5e-0e4d-4d61-9a3e-2d1f0b7c8e55
+            producto_inexistente:
+              value:
+                error:
+                  code: VALIDATION_ERROR
+                  message: La solicitud no es válida.
+                  details:
+                    - {campo: producto, motivo: 'producto no existe; disponibles: microseguro_vida, proteccion_dispositivos'}
+                  trace_id: 7f6c2f5e-0e4d-4d61-9a3e-2d1f0b7c8e55
+  schemas:
+    SolicitudCotizacion:
+      type: object
+      required: [cliente_id, producto, datos]
+      properties:
+        cliente_id:
+          type: string
+          minLength: 1
+          maxLength: 36
+          description: Id del cliente en MS Identidad (referencia por id, sin FK).
+        producto:
+          type: string
+          description: Código del producto. Ver ejemplos para los productos iniciales.
+        datos:
+          type: object
+          description: Datos del seguro. Los campos y rangos dependen del producto.
+          additionalProperties:
+            type: [string, integer]
+    Cobertura:
+      type: object
+      required: [tipo, monto, deducible]
+      properties:
+        tipo: {type: string}
+        monto: {type: integer, minimum: 0, description: Monto asegurado en COP.}
+        deducible: {type: integer, minimum: 0, description: Deducible en COP.}
+    Componente:
+      type: object
+      required: [concepto, monto]
+      properties:
+        concepto:
+          type: string
+          enum: [prima_base, ajuste_datos, ajuste_riesgo, recargo_degradado]
+        monto:
+          type: integer
+          description: Aporte en COP a la prima anual. Puede ser negativo (descuento).
+    MetadataCotizacion:
+      type: object
+      required: [hit_cache, latencia_interna_ms]
+      properties:
+        hit_cache: {type: boolean}
+        latencia_interna_ms:
+          type: [number, 'null']
+          description: Procesamiento interno (caché, rating y persistencia).
+    Cotizacion:
+      type: object
+      required:
+        - id
+        - cliente_id
+        - producto
+        - estado
+        - moneda
+        - prima_anual
+        - prima_mensual
+        - coberturas
+        - vigente_hasta
+        - version_reglas
+        - degradado
+        - aproximada
+      properties:
+        id: {type: string}
+        cliente_id: {type: string}
+        producto: {type: string}
+        estado: {type: string, enum: [EMITIDA]}
+        moneda: {type: string, enum: [COP]}
+        prima_anual:
+          type: integer
+          minimum: 0
+          description: Prima principal. Es la suma exacta de `componentes`.
+        prima_mensual:
+          type: integer
+          minimum: 0
+          description: Informativa (prima anual / 12 redondeada). No entra en la suma.
+        coberturas:
+          type: array
+          items: {$ref: '#/components/schemas/Cobertura'}
+        vigente_hasta: {type: string, format: date-time}
+        version_reglas: {type: string}
+        degradado:
+          type: boolean
+          description: El proveedor de datos falló y se aplicó el recargo conservador.
+        aproximada:
+          type: boolean
+          description: Sin consentimiento. El precio puede cambiar al comprar.
+        aviso: {type: [string, 'null']}
+        componentes:
+          type: [array, 'null']
+          items: {$ref: '#/components/schemas/Componente'}
+        metadata:
+          oneOf:
+            - $ref: '#/components/schemas/MetadataCotizacion'
+            - type: 'null'
+    LatenciaCliente:
+      type: object
+      required: [latencia_cliente_ms]
+      properties:
+        latencia_cliente_ms: {type: number, exclusiveMinimum: 0}
+    DetalleError:
+      type: object
+      required: [campo, motivo]
+      properties:
+        campo: {type: string}
+        motivo: {type: string}
+    ErrorRespuesta:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, details, trace_id]
+          properties:
+            code: {type: string}
+            message: {type: string}
+            details:
+              type: array
+              items: {$ref: '#/components/schemas/DetalleError'}
+            trace_id: {type: string}
