@@ -1,10 +1,9 @@
-import secrets
-
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.auth import crear_sesion
 from app.db import get_db
 from app.idempotency import guardar, obtener
 from app.models import Cliente
@@ -56,6 +55,8 @@ def crear_cliente(
     )
     db.add(cliente)
     try:
+        db.flush()
+        access_token = crear_sesion(db, cliente.id)
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -70,7 +71,7 @@ def crear_cliente(
         apellido=cliente.apellido,
         email=cliente.email,
         estado_kyc=cliente.estado_kyc,
-        access_token=secrets.token_urlsafe(32),
+        access_token=access_token,
         creado_en=cliente.creado_en,
     )
     if idempotency_key:

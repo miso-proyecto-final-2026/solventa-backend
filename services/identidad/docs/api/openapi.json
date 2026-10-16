@@ -64,6 +64,172 @@
         }
       }
     },
+    "/v1/clientes/{cliente_id}/consentimientos": {
+      "post": {
+        "tags": [
+          "consentimientos"
+        ],
+        "summary": "Otorgar Consentimiento",
+        "operationId": "otorgar_consentimiento_v1_clientes__cliente_id__consentimientos_post",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cliente Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsentimientoCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentimientoOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/clientes/{cliente_id}/consentimientos/{tipo}": {
+      "get": {
+        "tags": [
+          "consentimientos"
+        ],
+        "summary": "Consultar Consentimiento",
+        "operationId": "consultar_consentimiento_v1_clientes__cliente_id__consentimientos__tipo__get",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cliente Id"
+            }
+          },
+          {
+            "name": "tipo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/TipoConsentimiento"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentimientoOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -89,6 +255,14 @@
   },
   "components": {
     "schemas": {
+      "CanalConsentimiento": {
+        "type": "string",
+        "enum": [
+          "MOVIL",
+          "WEB"
+        ],
+        "title": "CanalConsentimiento"
+      },
       "ClienteCreate": {
         "properties": {
           "nombre": {
@@ -181,6 +355,92 @@
         ],
         "title": "ClienteOut"
       },
+      "ConsentimientoCreate": {
+        "properties": {
+          "tipo": {
+            "$ref": "#/components/schemas/TipoConsentimiento",
+            "default": "OPEN_FINANCE_OPEN_DATA"
+          },
+          "version_texto": {
+            "type": "string",
+            "title": "Version Texto"
+          },
+          "canal": {
+            "$ref": "#/components/schemas/CanalConsentimiento",
+            "default": "MOVIL"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version_texto"
+        ],
+        "title": "ConsentimientoCreate"
+      },
+      "ConsentimientoOut": {
+        "properties": {
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "tipo": {
+            "$ref": "#/components/schemas/TipoConsentimiento"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoConsentimiento"
+          },
+          "version_texto": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Texto"
+          },
+          "fecha_otorgamiento": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Otorgamiento"
+          },
+          "fecha_revocacion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Revocacion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cliente_id",
+          "tipo",
+          "estado"
+        ],
+        "title": "ConsentimientoOut"
+      },
+      "EstadoConsentimiento": {
+        "type": "string",
+        "enum": [
+          "OTORGADO",
+          "REVOCADO",
+          "NO_OTORGADO"
+        ],
+        "title": "EstadoConsentimiento"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -193,6 +453,13 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "TipoConsentimiento": {
+        "type": "string",
+        "enum": [
+          "OPEN_FINANCE_OPEN_DATA"
+        ],
+        "title": "TipoConsentimiento"
       },
       "ValidationError": {
         "properties": {
