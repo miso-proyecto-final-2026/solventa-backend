@@ -34,8 +34,8 @@ def upgrade() -> None:
         sa.Column("actualizado_en", sa.DateTime(timezone=True), nullable=False),
         schema=SCHEMA,
     )
-    op.create_index("ix_clientes_numero_documento", "clientes", ["numero_documento"], unique=True, schema=SCHEMA)
-    op.create_index("ix_clientes_email", "clientes", ["email"], unique=True, schema=SCHEMA)
+    op.create_index("ix_identidad_clientes_numero_documento", "clientes", ["numero_documento"], unique=True, schema=SCHEMA)
+    op.create_index("ix_identidad_clientes_email", "clientes", ["email"], unique=True, schema=SCHEMA)
 
     # Los clientes registrados antes de separar el esquema vivían en public.clientes.
     op.execute(
@@ -63,7 +63,7 @@ def upgrade() -> None:
         sa.Column("creado_en", sa.DateTime(timezone=True), nullable=False),
         schema=SCHEMA,
     )
-    op.create_index("ix_sesiones_cliente_id", "sesiones", ["cliente_id"], schema=SCHEMA)
+    op.create_index("ix_identidad_sesiones_cliente_id", "sesiones", ["cliente_id"], schema=SCHEMA)
 
     op.create_table(
         "consentimientos",
