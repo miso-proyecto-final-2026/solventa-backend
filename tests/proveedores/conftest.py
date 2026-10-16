@@ -20,7 +20,8 @@ RAPIDO = {"latencia_min_ms": 0.0, "latencia_max_ms": 1.0}
 
 @pytest.fixture
 def redis():
-    return fakeredis.FakeAsyncRedis()
+    # redis-py >= 8 limita el pool a 100 conexiones; la prueba de ráfaga lanza más.
+    return fakeredis.FakeAsyncRedis(max_connections=1000)
 
 
 @pytest.fixture
