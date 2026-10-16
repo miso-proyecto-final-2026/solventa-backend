@@ -6,7 +6,7 @@ import logging
 
 from app.proveedores.cache import CacheMemoria, CachePerfil, CacheRedis
 from app.proveedores.config import ConfigProveedores
-from app.proveedores.consentimiento import ConsentimientoStub
+from app.proveedores.consentimiento import ConsentimientoHttp, ConsentimientoStub
 from app.proveedores.dominio import EstadoConsentimiento, Fuente, RegistroLlamada
 from app.proveedores.servicio import ServicioPerfil
 from app.proveedores.simuladores import (
@@ -38,6 +38,12 @@ def construir_servicio(config: ConfigProveedores | None = None) -> ServicioPerfi
         cache = CacheRedis(from_url(config.redis_url))
     else:
         cache = CacheMemoria()
+    consentimiento = ConsentimientoHttp.desde_entorno()
+    if consentimiento is None:
+        log.warning(
+            "IDENTIDAD_URL no está definido: se usa el stub de consentimiento (solo desarrollo)"
+        )
+        consentimiento = ConsentimientoStub(EstadoConsentimiento.OTORGADO)
     return ServicioPerfil(
         proveedores={
             Fuente.OPEN_FINANCE: SimuladorOpenFinance(
@@ -48,7 +54,7 @@ def construir_servicio(config: ConfigProveedores | None = None) -> ServicioPerfi
             ),
         },
         cache=cache,
-        consentimiento=ConsentimientoStub(EstadoConsentimiento.OTORGADO),
+        consentimiento=consentimiento,
         config=config,
         registrar=_registrar,
     )

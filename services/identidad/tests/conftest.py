@@ -4,21 +4,17 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import StaticPool, create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app import db
+from app.db import crear_engine
 from app.idempotency import _cache
 from app.main import app
 
 
 @pytest.fixture(autouse=True)
 def _base_de_datos_limpia():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    engine = crear_engine("sqlite:///:memory:")
     db.Base.metadata.create_all(bind=engine)
     SessionDePrueba = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 

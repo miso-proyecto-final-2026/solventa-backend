@@ -1,4 +1,6 @@
+import re
 from datetime import datetime
+from enum import Enum
 
 from pydantic import BaseModel, field_validator
 
@@ -73,3 +75,40 @@ class ClienteOut(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: str
+
+
+class TipoConsentimiento(str, Enum):
+    OPEN_FINANCE_OPEN_DATA = "OPEN_FINANCE_OPEN_DATA"
+
+
+class EstadoConsentimiento(str, Enum):
+    OTORGADO = "OTORGADO"
+    REVOCADO = "REVOCADO"
+    NO_OTORGADO = "NO_OTORGADO"
+
+
+class CanalConsentimiento(str, Enum):
+    MOVIL = "MOVIL"
+    WEB = "WEB"
+
+
+class ConsentimientoCreate(BaseModel):
+    tipo: TipoConsentimiento = TipoConsentimiento.OPEN_FINANCE_OPEN_DATA
+    version_texto: str
+    canal: CanalConsentimiento = CanalConsentimiento.MOVIL
+
+    @field_validator("version_texto")
+    @classmethod
+    def _version(cls, valor: str) -> str:
+        if not re.fullmatch(r"v\d{1,3}", valor):
+            raise ValueError("La versión del texto debe tener el formato v1, v2, …")
+        return valor
+
+
+class ConsentimientoOut(BaseModel):
+    cliente_id: str
+    tipo: TipoConsentimiento
+    estado: EstadoConsentimiento
+    version_texto: str | None = None
+    fecha_otorgamiento: datetime | None = None
+    fecha_revocacion: datetime | None = None
