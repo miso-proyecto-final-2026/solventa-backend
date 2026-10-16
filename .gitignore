@@ -14,3 +14,4 @@ reports/
 # Base de datos local de desarrollo (SQLite, ver app/db.py)
 *.db
 
+.venv*/
