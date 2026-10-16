@@ -1,4 +1,4 @@
-# ADR-0003 — Patrón de adaptadores para cambiar de proveedor externo
+# ADR-0004 — Patrón de adaptadores para cambiar de proveedor externo
 
 - **Estado:** Propuesto (pendiente de revisión por un integrante distinto del autor)
 - **Fecha:** 2026-10-16
