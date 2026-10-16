@@ -18,8 +18,8 @@ env:
   EKS_CLUSTER: solventa-staging
 
 jobs:
-  test:
-    name: test (${{ matrix.service }})
+  pruebas:
+    name: pruebas (${{ matrix.service }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -53,6 +53,17 @@ jobs:
           path: |
             services/${{ matrix.service }}/reports/junit.xml
             services/${{ matrix.service }}/coverage.xml
+
+  # Check agregado `test`: es el contexto que exige la protección de `main`; resume la matriz.
+  test:
+    name: test
+    needs: pruebas
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar que las pruebas de todos los servicios pasaron
+        run: |
+          test "${{ needs.pruebas.result }}" = "success"
 
   build:
     name: build (${{ matrix.service }})
