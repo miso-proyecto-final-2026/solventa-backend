@@ -3,6 +3,7 @@
 Se omite sola si Docker no está disponible.
 """
 
+import os
 from pathlib import Path
 
 import pytest
@@ -151,6 +152,37 @@ def test_la_migracion_copia_los_clientes_que_vivian_en_public(engine_pg, alembic
         ids = c.execute(text(f"SELECT id FROM {SCHEMA}.clientes")).scalars().all()
     assert ids == ["viejo"]
 
+
+def test_la_migracion_no_falla_si_el_rol_no_puede_leer_public_clientes(engine_pg, postgres_url):
+    """En staging public.clientes es del rol del servicio anterior: el rol de Identidad no la lee."""
+    with engine_pg.begin() as c:
+        c.execute(text("CREATE TABLE public.clientes (id varchar(36), nombre varchar(200))"))
+        c.execute(text("INSERT INTO public.clientes VALUES ('viejo', 'Ana')"))
+        c.execute(text("DROP ROLE IF EXISTS ident_sin_permiso"))
+        c.execute(text("CREATE ROLE ident_sin_permiso LOGIN PASSWORD 'ident_sin_permiso'"))
+        base = c.execute(text("SELECT current_database()")).scalar_one()
+        c.execute(text(f'GRANT CREATE ON DATABASE "{base}" TO ident_sin_permiso'))
+
+    url = engine_pg.url.set(username="ident_sin_permiso", password="ident_sin_permiso")
+    cfg = Config(str(RAIZ / "alembic.ini"))
+    cfg.set_main_option("script_location", str(RAIZ / "migrations"))
+    previo = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = url.render_as_string(hide_password=False)
+    try:
+        command.upgrade(cfg, "head")
+        with engine_pg.connect() as c:
+            copiados = c.execute(text(f"SELECT count(*) FROM {SCHEMA}.clientes")).scalar_one()
+        assert copiados == 0  # sin permiso no se copia nada, pero la migración termina
+        assert "sesiones" in inspect(engine_pg).get_table_names(schema=SCHEMA)
+    finally:
+        if previo is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = previo
+        with engine_pg.begin() as c:
+            c.execute(text(f'DROP SCHEMA IF EXISTS "{SCHEMA}" CASCADE'))
+            c.execute(text("DROP OWNED BY ident_sin_permiso"))
+            c.execute(text("DROP ROLE ident_sin_permiso"))
 
 def test_la_migracion_se_puede_revertir(engine_pg, alembic):
     alembic("upgrade", "head")
