@@ -52,7 +52,8 @@ jobs:
   deploy-staging:
     name: deploy-staging
     needs: build
-    # Solo en main y cuando exista el rol de AWS configurado en Settings > Variables
+    # Solo en main y cuando exista el rol de AWS configurado en Settings > Variables.
+    # El rol es solventa-ci-deploy-solventa-backend (salida service_deploy_role_arns del bootstrap de solventa-infra).
     if: github.ref == 'refs/heads/main' && vars.AWS_ROLE_ARN != ''
     runs-on: ubuntu-latest
     environment: staging
@@ -62,16 +63,66 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      # 1. Guardia: staging es un entorno bajo demanda; si el clúster no existe, el job termina en verde.
+      - name: Comprobar que staging está aprovisionado
+        id: cluster
+        run: |
+          if out=$(aws eks describe-cluster --name "$EKS_CLUSTER" --region "$AWS_REGION" 2>&1); then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif echo "$out" | grep -q "ResourceNotFoundException"; then
+            echo "::notice::staging no está aprovisionado; se omite el despliegue"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$out" >&2
+            exit 1
+          fi
+
+      # 2. Construir y publicar la imagen.
       - id: ecr
+        if: steps.cluster.outputs.exists == 'true'
         uses: aws-actions/amazon-ecr-login@v2
       - name: Construir y publicar imagen
+        if: steps.cluster.outputs.exists == 'true'
         run: |
           IMAGE=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
           docker build -t "$IMAGE" .
           docker push "$IMAGE"
-      - name: Desplegar al namespace staging en EKS
+
+      # 3. Guardia: si el baseline aún no se aplicó, solo se publica la imagen.
+      - name: Comprobar que el baseline está aplicado
+        id: baseline
+        if: steps.cluster.outputs.exists == 'true'
         run: |
-          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
+          aws eks update-kubeconfig --name "$EKS_CLUSTER" --region "$AWS_REGION"
+          if out=$(kubectl -n staging get deployment/solventa-backend 2>&1); then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif echo "$out" | grep -q "NotFound"; then
+            echo "::notice::imagen ${{ github.sha }} publicada; falta aplicar el baseline"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$out" >&2
+            exit 1
+          fi
+
+      # 4. Migrar antes de servir: si falla, el Deployment no se toca (FR-025).
+      - name: Migrar la base de datos
+        if: steps.baseline.outputs.exists == 'true'
+        run: |
+          IMAGE=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          JOB="solventa-backend-migrate-$(echo "${{ github.sha }}" | cut -c1-7)"
+          kubectl -n staging set image cronjob/solventa-backend-migrate app="$IMAGE"
+          kubectl -n staging create job "$JOB" --from=cronjob/solventa-backend-migrate
+          if ! kubectl -n staging wait --for=condition=complete "job/$JOB" --timeout=600s; then
+            echo "::error::la migración falló; el Deployment no se modificó"
+            kubectl -n staging logs "job/$JOB" || true
+            exit 1
+          fi
+
+      # 5. Rollout (sin cambios respecto a la versión anterior).
+      - name: Desplegar al namespace staging en EKS
+        if: steps.baseline.outputs.exists == 'true'
+        run: |
           kubectl -n staging set image deployment/solventa-backend \
             app=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
           kubectl -n staging rollout status deployment/solventa-backend --timeout=180s
