@@ -1,0 +1,97 @@
+# Reglas de rating v1 (HU12).
+#
+# ATENCIÓN - SUPUESTOS DE PROTOTIPO: ninguna cifra de este archivo proviene de un
+# estudio actuarial ni de la documentación del negocio (el hub no define tarifas).
+# Sirven para demostrar el motor y deben ser reemplazadas por las del área actuarial.
+#
+# Cómo se calcula la prima anual (todo en COP, redondeo ROUND_HALF_UP a 0 decimales
+# en cada paso):
+#   base        = max(tasa_anual * valor_asegurado, prima_minima)
+#   sub1        = base * producto(factores_datos)
+#   sub2        = sub1 * factor_riesgo      (factor_riesgo_base * producto(senales))
+#   prima_anual = sub2 + sub2 * recargo_degradado   (el recargo solo si el perfil es degradado)
+# Los rangos son [desde, hasta); null = sin límite. `sentido` indica cómo crece el riesgo
+# con el valor de la señal y el cargador valida que los factores lo respeten.
+version: 2026.10.1-prototipo
+moneda: COP
+vigencia_dias: 30
+
+productos:
+  microseguro_vida:
+    nombre: Microseguro de vida
+    campos:
+      edad: {tipo: entero, min: 18, max: 65}
+      suma_asegurada: {tipo: entero, min: 5000000, max: 100000000}
+    base:
+      campo_valor: suma_asegurada
+      tasa_anual: 0.0035
+      prima_minima: 60000
+    factores_datos:
+      edad:
+        rangos:
+          - {desde: null, hasta: 30, factor: 0.90}
+          - {desde: 30, hasta: 40, factor: 1.00}
+          - {desde: 40, hasta: 50, factor: 1.25}
+          - {desde: 50, hasta: 60, factor: 1.60}
+          - {desde: 60, hasta: null, factor: 2.10}
+    factor_riesgo_base: 1.00
+    senales:
+      ratio_endeudamiento:
+        sentido: directo
+        rangos:
+          - {desde: null, hasta: 0.20, factor: 0.95}
+          - {desde: 0.20, hasta: 0.35, factor: 1.00}
+          - {desde: 0.35, hasta: 0.50, factor: 1.10}
+          - {desde: 0.50, hasta: null, factor: 1.25}
+      reportes_negativos:
+        sentido: directo
+        rangos:
+          - {desde: null, hasta: 1, factor: 1.00}
+          - {desde: 1, hasta: 3, factor: 1.15}
+          - {desde: 3, hasta: null, factor: 1.35}
+      ingresos_mensuales_cop:
+        sentido: inverso
+        rangos:
+          - {desde: null, hasta: 2000000, factor: 1.10}
+          - {desde: 2000000, hasta: 6000000, factor: 1.00}
+          - {desde: 6000000, hasta: null, factor: 0.95}
+    recargo_degradado: 0.15
+    coberturas:
+      - {tipo: muerte, porcentaje_valor: 1.0, deducible_porcentaje: 0}
+      - {tipo: incapacidad_total, porcentaje_valor: 0.5, deducible_porcentaje: 0}
+
+  proteccion_dispositivos:
+    nombre: Protección de dispositivos
+    campos:
+      tipo_dispositivo: {tipo: texto, valores: [celular, portatil, tableta]}
+      valor_dispositivo: {tipo: entero, min: 300000, max: 15000000}
+      antiguedad_meses: {tipo: entero, min: 0, max: 36}
+    base:
+      campo_valor: valor_dispositivo
+      tasa_anual: 0.045
+      prima_minima: 40000
+    factores_datos:
+      tipo_dispositivo:
+        categorias: {celular: 1.15, portatil: 1.00, tableta: 0.90}
+      antiguedad_meses:
+        rangos:
+          - {desde: null, hasta: 12, factor: 1.00}
+          - {desde: 12, hasta: 24, factor: 1.10}
+          - {desde: 24, hasta: null, factor: 1.25}
+    factor_riesgo_base: 1.05
+    senales:
+      ratio_endeudamiento:
+        sentido: directo
+        rangos:
+          - {desde: null, hasta: 0.35, factor: 1.00}
+          - {desde: 0.35, hasta: 0.50, factor: 1.05}
+          - {desde: 0.50, hasta: null, factor: 1.15}
+      reportes_negativos:
+        sentido: directo
+        rangos:
+          - {desde: null, hasta: 1, factor: 1.00}
+          - {desde: 1, hasta: null, factor: 1.10}
+    recargo_degradado: 0.15
+    coberturas:
+      - {tipo: dano_accidental, porcentaje_valor: 1.0, deducible_porcentaje: 0.10}
+      - {tipo: robo, porcentaje_valor: 1.0, deducible_porcentaje: 0.20}
