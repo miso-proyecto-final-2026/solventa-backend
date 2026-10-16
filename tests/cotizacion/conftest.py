@@ -138,3 +138,13 @@ def entorno(reglas):
     yield _crear
     for e in creados:
         e.dispose()
+
+
+@pytest.fixture(scope="session")
+def redis_url():
+    if not _docker_disponible():
+        pytest.skip("Docker no disponible: se omiten las pruebas con contenedores")
+    from testcontainers.redis import RedisContainer
+
+    with RedisContainer("redis:7-alpine") as r:
+        yield f"redis://{r.get_container_host_ip()}:{r.get_exposed_port(6379)}/0"
