@@ -227,6 +227,7 @@ def test_contrato_de_consulta_que_consume_cotizacion(client):
     cuerpo = _consultar(client, cliente_id, {"X-Service-Key": CLAVE_SERVICIO}).json()
 
     assert set(cuerpo) == {
+        "id",  # HU11: la usa Cotización para la trazabilidad (campo aditivo)
         "cliente_id",
         "tipo",
         "estado",
@@ -235,3 +236,17 @@ def test_contrato_de_consulta_que_consume_cotizacion(client):
         "fecha_revocacion",
     }
     assert cuerpo["estado"] in {"OTORGADO", "REVOCADO", "NO_OTORGADO"}
+
+
+def test_el_consentimiento_vigente_expone_su_id_y_sin_otorgar_no_hay_id(client):
+    cliente_id, auth = _registrar(client)
+    sin_otorgar = _consultar(client, cliente_id, auth).json()
+
+    otorgado = _otorgar(client, cliente_id, auth).json()
+    consultado = _consultar(client, cliente_id, auth).json()
+    repetido = _otorgar(client, cliente_id, auth).json()
+
+    assert sin_otorgar["id"] is None
+    assert otorgado["id"] and otorgado["id"] == consultado["id"] == repetido["id"]
+    with _sesion_bd() as db:
+        assert db.query(Consentimiento).one().id == otorgado["id"]
