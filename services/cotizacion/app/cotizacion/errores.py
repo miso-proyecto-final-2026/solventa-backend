@@ -33,6 +33,22 @@ class CotizacionNoEncontrada(Exception):
     pass
 
 
+class DesgloseNoDisponible(Exception):
+    """Cotización anterior a HU14: existe pero no tiene desglose persistido."""
+
+
+class ErrorDesglose(Exception):
+    """El desglose no explica el precio (suma o recálculo inconsistentes). No se emite."""
+
+
+class NoAutenticado(Exception):
+    """Falta la credencial de auditoría."""
+
+
+class SinPermiso(Exception):
+    """La credencial no tiene permiso de auditoría."""
+
+
 class ErrorReglas(Exception):
     """Las reglas versionadas no existen o son inválidas (error de configuración)."""
 
@@ -68,5 +84,46 @@ def registrar_errores(app: FastAPI) -> None:
             status_code=404,
             content=cuerpo_error(
                 "COTIZACION_NO_ENCONTRADA", "La cotización no existe."
+            ),
+        )
+
+    @app.exception_handler(DesgloseNoDisponible)
+    async def _desglose_no_disponible(
+        _req: Request, _exc: DesgloseNoDisponible
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=404,
+            content=cuerpo_error(
+                "DESGLOSE_NO_DISPONIBLE",
+                "La cotización no tiene desglose de precio registrado.",
+            ),
+        )
+
+    @app.exception_handler(ErrorDesglose)
+    async def _error_desglose(_req: Request, _exc: ErrorDesglose) -> JSONResponse:
+        # El detalle va al log del servicio; el cliente no recibe datos internos.
+        return JSONResponse(
+            status_code=500,
+            content=cuerpo_error(
+                "DESGLOSE_INCONSISTENTE",
+                "No se pudo emitir la cotización. Intente de nuevo más tarde.",
+            ),
+        )
+
+    @app.exception_handler(NoAutenticado)
+    async def _no_autenticado(_req: Request, _exc: NoAutenticado) -> JSONResponse:
+        return JSONResponse(
+            status_code=401,
+            content=cuerpo_error(
+                "NO_AUTENTICADO", "Se requiere la credencial de auditoría."
+            ),
+        )
+
+    @app.exception_handler(SinPermiso)
+    async def _sin_permiso(_req: Request, _exc: SinPermiso) -> JSONResponse:
+        return JSONResponse(
+            status_code=403,
+            content=cuerpo_error(
+                "SIN_PERMISO", "La credencial no tiene permiso de auditoría."
             ),
         )

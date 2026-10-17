@@ -185,3 +185,80 @@ def test_los_ejemplos_de_error_del_contrato_coinciden_con_los_mensajes_reales(en
         == ejemplos["producto_inexistente"]["error"]["details"]
     )
     assert edad["error"]["details"] == ejemplos["fuera_de_rango"]["error"]["details"]
+
+
+# --- HU14: desglose de auditoría ------------------------------------------------
+
+RUTA_DESGLOSE = "/v1/cotizaciones/{id}/desglose"
+
+
+def test_el_ejemplo_del_desglose_cumple_el_esquema_y_suma_la_prima():
+    ejemplo = _ejemplos_de_respuesta(RUTA_DESGLOSE, "get", "200")["example"]
+
+    _validador(_esquema_respuesta(RUTA_DESGLOSE, "get", "200")).validate(ejemplo)
+
+    assert sum(c["monto"] for c in ejemplo["componentes"]) == ejemplo["prima_anual"]
+
+
+def test_el_desglose_declara_la_seguridad_y_la_esquema_de_clave_de_auditor():
+    operacion = SPEC["paths"][RUTA_DESGLOSE]["get"]
+
+    assert operacion["security"] == [{"claveAuditor": []}]
+    assert SPEC["components"]["securitySchemes"]["claveAuditor"] == {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Service-Key",
+        "description": "Clave de servicio con permiso de auditoría (`AUDITOR_API_KEYS`).",
+    }
+
+
+def test_respuestas_reales_del_desglose_cumplen_el_contrato(entorno):
+    e = entorno(
+        PerfilUnificado(
+            "x",
+            senales={"ratio_endeudamiento": 0.6},
+            fuentes=("open_finance",),
+            procedencia={"ratio_endeudamiento": ("open_finance", None)},
+        )
+    )
+    e.client.app.state.auditor_api_keys = ("k",)
+    cabecera = {"X-Service-Key": "k"}
+    c = e.client.post("/v1/cotizaciones", json=DISP).json()
+
+    ok = e.client.get(f"/v1/cotizaciones/{c['id']}/desglose", headers=cabecera)
+    sin_clave = e.client.get(f"/v1/cotizaciones/{c['id']}/desglose")
+    sin_permiso = e.client.get(
+        f"/v1/cotizaciones/{c['id']}/desglose", headers={"X-Service-Key": "otra"}
+    )
+    no_existe = e.client.get("/v1/cotizaciones/no-existe/desglose", headers=cabecera)
+
+    assert (ok.status_code, sin_clave.status_code, sin_permiso.status_code) == (
+        200,
+        401,
+        403,
+    )
+    _validador(_esquema_respuesta(RUTA_DESGLOSE, "get", "200")).validate(ok.json())
+    for codigo, respuesta in (
+        ("401", sin_clave),
+        ("403", sin_permiso),
+        ("404", no_existe),
+    ):
+        _validador(_esquema_respuesta(RUTA_DESGLOSE, "get", codigo)).validate(
+            respuesta.json()
+        )
+
+
+def test_los_ejemplos_de_error_del_desglose_coinciden_con_los_mensajes_reales(entorno):
+    e = entorno()
+    e.client.app.state.auditor_api_keys = ("k",)
+    sin_clave = e.client.get("/v1/cotizaciones/x/desglose").json()
+    sin_permiso = e.client.get(
+        "/v1/cotizaciones/x/desglose", headers={"X-Service-Key": "otra"}
+    ).json()
+
+    for codigo, real in (("401", sin_clave), ("403", sin_permiso)):
+        ejemplo = _ejemplos_de_respuesta(RUTA_DESGLOSE, "get", codigo)["example"]
+        assert (ejemplo["error"]["code"], ejemplo["error"]["message"]) == (
+            real["error"]["code"],
+            real["error"]["message"],
+        )

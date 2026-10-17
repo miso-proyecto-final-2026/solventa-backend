@@ -238,7 +238,8 @@ def test_consulta_una_cotizacion_emitida(entorno):
 
     assert r.status_code == 200
     c = r.json()
-    assert c["componentes"] is None  # el desglose persistido es HU14
+    assert sum(x["monto"] for x in c["componentes"]) == c["prima_anual"]
+    assert c["componentes"] == creada["componentes"]  # sale del desglose persistido
     for campo in (
         "id",
         "prima_anual",

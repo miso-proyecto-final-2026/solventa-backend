@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.cotizacion.api import router as cotizaciones_router
+from app.cotizacion.config import ConfigCotizacion
 from app.cotizacion.errores import registrar_errores
 from app.cotizacion.wiring import construir_servicio_cotizacion
 from app.proveedores.api import router as perfiles_router
@@ -17,6 +18,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.servicio_perfil = servicio
     servicio_cotizacion, engine_cotizacion = construir_servicio_cotizacion(servicio)
     app.state.servicio_cotizacion = servicio_cotizacion
+    app.state.auditor_api_keys = ConfigCotizacion.desde_entorno().auditor_api_keys
     sondeador = asyncio.create_task(servicio.ejecutar_sondeador())
     try:
         yield

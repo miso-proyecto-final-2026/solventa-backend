@@ -41,6 +41,9 @@ def unificar(crudo: PerfilCrudo) -> PerfilUnificado:
         hit_cache=canonico.hit_cache,
         fuentes=canonico.fuentes,
         completitud=canonico.completitud,
+        procedencia={
+            n: (c.fuente.value, c.obtenido_en) for n, c in canonico.campos.items()
+        },
     )
 
 
