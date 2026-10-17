@@ -8,6 +8,7 @@ import logging
 import random
 import time
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any
 
 from app.proveedores.cache import CachePerfil
@@ -27,6 +28,19 @@ from app.proveedores.ttl import ttl_con_jitter
 
 log = logging.getLogger(__name__)
 
+# Clave reservada con que se guarda en caché la fecha de consulta al proveedor;
+# nunca llega al payload que ven los normalizadores.
+_META_OBTENIDO_EN = "__obtenido_en"
+
+
+def _separar_meta(guardado: dict[str, Any]) -> tuple[dict[str, Any], datetime | None]:
+    payload = {k: v for k, v in guardado.items() if k != _META_OBTENIDO_EN}
+    crudo = guardado.get(_META_OBTENIDO_EN)
+    try:
+        return payload, datetime.fromisoformat(crudo) if crudo else None
+    except (TypeError, ValueError):
+        return payload, None
+
 
 class ServicioPerfil:
     def __init__(
@@ -38,6 +52,7 @@ class ServicioPerfil:
         breakers: dict[Fuente, CircuitBreaker] | None = None,
         registrar: Callable[[RegistroLlamada], None] | None = None,
         rng: random.Random | None = None,
+        reloj: Callable[[], datetime] | None = None,
     ) -> None:
         self._proveedores = proveedores
         self._cache = cache
@@ -48,6 +63,7 @@ class ServicioPerfil:
         }
         self._registrar = registrar or (lambda _r: None)
         self._rng = rng or random.Random()
+        self._reloj = reloj or (lambda: datetime.now(UTC))
 
     async def obtener_perfil(self, cliente_id: str) -> PerfilCrudo:
         if (
@@ -67,11 +83,14 @@ class ServicioPerfil:
 
         vigente = await self._cache.obtener(cliente_id, fuente)
         if vigente is not None:
+            payload, obtenido_en = _separar_meta(vigente)
             return self._cerrar(
                 cliente_id,
                 fuente,
                 inicio,
-                ResultadoFuente(fuente, vigente, hit_cache=True),
+                ResultadoFuente(
+                    fuente, payload, hit_cache=True, obtenido_en=obtenido_en
+                ),
             )
 
         if breaker.permite_solicitud():
@@ -95,11 +114,19 @@ class ServicioPerfil:
                     self.config.jitter_max,
                     self._rng,
                 )
+                obtenido_en = self._reloj()
                 await self._cache.guardar(
-                    cliente_id, fuente, payload, ttl, self.config.ttl_respaldo_s
+                    cliente_id,
+                    fuente,
+                    {**payload, _META_OBTENIDO_EN: obtenido_en.isoformat()},
+                    ttl,
+                    self.config.ttl_respaldo_s,
                 )
                 return self._cerrar(
-                    cliente_id, fuente, inicio, ResultadoFuente(fuente, payload)
+                    cliente_id,
+                    fuente,
+                    inicio,
+                    ResultadoFuente(fuente, payload, obtenido_en=obtenido_en),
                 )
 
         return self._cerrar(
@@ -109,7 +136,10 @@ class ServicioPerfil:
     async def _degradar(self, cliente_id: str, fuente: Fuente) -> ResultadoFuente:
         respaldo = await self._cache.obtener_respaldo(cliente_id, fuente)
         if respaldo is not None:
-            return ResultadoFuente(fuente, respaldo, degradado=True, hit_cache=True)
+            payload, obtenido_en = _separar_meta(respaldo)
+            return ResultadoFuente(
+                fuente, payload, degradado=True, hit_cache=True, obtenido_en=obtenido_en
+            )
         return ResultadoFuente(
             fuente, dict(PERFIL_POR_DEFECTO), degradado=True, por_defecto=True
         )

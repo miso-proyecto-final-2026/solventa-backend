@@ -7,6 +7,7 @@ proveedor vive únicamente en su adaptador.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from typing import Any, Protocol
 
@@ -46,6 +47,7 @@ class ResultadoFuente:
     degradado: bool = False
     por_defecto: bool = False
     hit_cache: bool = False
+    obtenido_en: datetime | None = None  # cuándo se consultó al proveedor
 
 
 @dataclass(frozen=True)
