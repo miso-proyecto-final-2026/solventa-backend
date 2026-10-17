@@ -73,6 +73,23 @@ class CoberturaDB(BaseCotizacion):
     __table_args__ = (Index("ix_coberturas_cotizacion_id", "cotizacion_id"),)
 
 
+class DesgloseDB(BaseCotizacion):
+    """Desglose del precio de una cotización (HU14). Solo inserción, 1:1 con la cotización.
+
+    `detalle` es JSON versionado (`version_esquema`): ver ADR-0006. En PostgreSQL un
+    trigger rechaza UPDATE y DELETE.
+    """
+
+    __tablename__ = "desgloses_precio"
+
+    cotizacion_id: Mapped[str] = mapped_column(
+        ForeignKey(f"{SCHEMA}.cotizaciones.id", ondelete="CASCADE"), primary_key=True
+    )
+    version_esquema: Mapped[int]
+    detalle: Mapped[dict[str, Any]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class LogLatenciaDB(BaseCotizacion):
     """Registro técnico por cotización (modelo ajustado tras HA01)."""
 

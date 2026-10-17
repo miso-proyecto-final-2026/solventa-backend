@@ -12,6 +12,8 @@ class ConfigCotizacion:
     reglas_version: str = "v1"
     reglas_dir: Path | None = None
     database_url: str = "sqlite:///./solventa.db"
+    # Claves de servicio con permiso de auditoría (HU14). Vacío = nadie audita.
+    auditor_api_keys: tuple[str, ...] = ()
 
     @classmethod
     def desde_entorno(cls, env: dict[str, str] | None = None) -> ConfigCotizacion:
@@ -23,4 +25,7 @@ class ConfigCotizacion:
             database_url=e.get("COTIZACION_DATABASE_URL")
             or e.get("DATABASE_URL")
             or cls.database_url,
+            auditor_api_keys=tuple(
+                k.strip() for k in e.get("AUDITOR_API_KEYS", "").split(",") if k.strip()
+            ),
         )

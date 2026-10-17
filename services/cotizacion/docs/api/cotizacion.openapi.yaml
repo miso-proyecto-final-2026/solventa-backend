@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
-  title: Solventa - API de cotización (HU12)
-  version: 1.0.0
+  title: Solventa - API de cotización (HU12, HU14)
+  version: 1.1.0
   description: |
     Contrato del motor de rating de MS Cotización, compartido por los canales
     móvil, web y API de socios. Se diseña antes que el código (contract-first) y
@@ -21,6 +21,12 @@ info:
     **Compatibilidad (RQ-I2).** La versión va en la ruta (`/v1`). Dentro de `v1`
     solo se agregan campos opcionales; los clientes deben ignorar campos desconocidos.
 
+    **Auditoría (HU14).** `GET /v1/cotizaciones/{id}/desglose` entrega cómo se
+    calculó el precio. Solo la consulta un auditor: se autentica con una clave de
+    servicio dedicada en la cabecera `X-Service-Key` (solución provisional hasta
+    que exista la gestión de roles internos). Sin cabecera responde 401; con una
+    clave sin permiso, 403; si ninguna clave está configurada nadie accede.
+
     **Datos del producto.** `datos` es un objeto cuyos campos dependen del
     producto y viven en las reglas versionadas, no en este contrato: agregar un
     ramo no cambia la API. Los campos de los productos iniciales están en los ejemplos.
@@ -29,6 +35,7 @@ servers:
     description: Local (docker compose)
 tags:
   - name: cotizaciones
+  - name: auditoria
 paths:
   /v1/cotizaciones:
     post:
@@ -147,8 +154,8 @@ paths:
       operationId: obtenerCotizacion
       summary: Consulta una cotización emitida
       description: |
-        El desglose de `componentes` no se persiste (lo entrega HU14), por eso
-        aquí viene en `null`.
+        `componentes` sale del desglose persistido al emitir. Las cotizaciones
+        anteriores a HU14 no lo tienen y lo devuelven en `null`.
       parameters:
         - $ref: '#/components/parameters/CotizacionId'
       responses:
@@ -170,6 +177,82 @@ paths:
                   message: La cotización no existe.
                   details: []
                   trace_id: 7f6c2f5e-0e4d-4d61-9a3e-2d1f0b7c8e55
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+  /v1/cotizaciones/{id}/desglose:
+    get:
+      tags: [auditoria]
+      operationId: obtenerDesglose
+      summary: Desglose del cálculo del precio (solo auditor)
+      description: |
+        Componentes, cada factor aplicado con su valor, recargos, versión de
+        reglas y referencia al perfil usado (fuente, fecha, `degradado`). No
+        incluye datos personales del cliente. Es inmutable: un recálculo genera
+        una cotización nueva. Con `prima_base`, los `factores` y el recargo se
+        reproduce `prima_anual` (redondeo ROUND_HALF_UP en cada paso).
+      security:
+        - claveAuditor: []
+      parameters:
+        - $ref: '#/components/parameters/CotizacionId'
+      responses:
+        '200':
+          description: Desglose de la cotización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Desglose'
+              example:
+                cotizacion_id: 3f1c9a52-6b1e-4f0a-9d44-0a7b1c2d3e4f
+                version_esquema: 1
+                version_reglas: 2026.10.1-prototipo
+                producto: microseguro_vida
+                moneda: COP
+                prima_base: 175000
+                factores:
+                  - {etapa: riesgo_base, nombre: factor_riesgo_base, factor: '1.00', fuente: null, obtenido_en: null}
+                  - {etapa: senal, nombre: ratio_endeudamiento, factor: '1.00', fuente: open_finance, obtenido_en: '2026-10-17T12:00:00Z'}
+                recargo_degradado_pct: null
+                componentes:
+                  - {concepto: prima_base, monto: 175000}
+                  - {concepto: ajuste_datos, monto: 0}
+                  - {concepto: ajuste_riesgo, monto: 0}
+                  - {concepto: recargo_degradado, monto: 0}
+                prima_anual: 175000
+                perfil:
+                  fuentes: [open_finance, open_data]
+                  degradado: false
+                  con_consentimiento: true
+                  completitud: 1.0
+        '401':
+          description: Falta la cabecera `X-Service-Key`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+              example:
+                error:
+                  code: NO_AUTENTICADO
+                  message: Se requiere la credencial de auditoría.
+                  details: []
+                  trace_id: 7f6c2f5e-0e4d-4d61-9a3e-2d1f0b7c8e55
+        '403':
+          description: La clave no tiene permiso de auditoría.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+              example:
+                error:
+                  code: SIN_PERMISO
+                  message: La credencial no tiene permiso de auditoría.
+                  details: []
+                  trace_id: 7f6c2f5e-0e4d-4d61-9a3e-2d1f0b7c8e55
+        '404':
+          description: La cotización no existe, o es anterior a HU14 y no tiene desglose.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
         '422':
           $ref: '#/components/responses/ErrorValidacion'
   /v1/cotizaciones/{id}/latencia-cliente:
@@ -201,6 +284,12 @@ paths:
         '422':
           $ref: '#/components/responses/ErrorValidacion'
 components:
+  securitySchemes:
+    claveAuditor:
+      type: apiKey
+      in: header
+      name: X-Service-Key
+      description: Clave de servicio con permiso de auditoría (`AUDITOR_API_KEYS`).
   parameters:
     CotizacionId:
       name: id
@@ -324,6 +413,63 @@ components:
           oneOf:
             - $ref: '#/components/schemas/MetadataCotizacion'
             - type: 'null'
+    FactorAplicado:
+      type: object
+      required: [etapa, nombre, factor, fuente, obtenido_en]
+      properties:
+        etapa: {type: string, enum: [dato, riesgo_base, senal]}
+        nombre: {type: string}
+        factor:
+          type: string
+          pattern: '^[0-9]+(\.[0-9]+)?$'
+          description: Multiplicador decimal, como texto para no perder exactitud.
+        fuente:
+          type: [string, 'null']
+          description: Solo en `senal`; proveedor del dato (sin el valor del cliente).
+        obtenido_en: {type: [string, 'null'], format: date-time}
+    PerfilUsado:
+      type: object
+      required: [fuentes, degradado, con_consentimiento, completitud]
+      properties:
+        fuentes: {type: array, items: {type: string}}
+        degradado: {type: boolean}
+        con_consentimiento: {type: boolean}
+        completitud: {type: number, minimum: 0, maximum: 1}
+    Desglose:
+      type: object
+      required:
+        - cotizacion_id
+        - version_esquema
+        - version_reglas
+        - producto
+        - moneda
+        - prima_base
+        - factores
+        - recargo_degradado_pct
+        - componentes
+        - prima_anual
+        - perfil
+      properties:
+        cotizacion_id: {type: string}
+        version_esquema: {type: integer, description: Versión del formato del desglose.}
+        version_reglas: {type: string}
+        producto: {type: string}
+        moneda: {type: string, enum: [COP]}
+        prima_base: {type: integer, minimum: 0}
+        factores:
+          type: array
+          items: {$ref: '#/components/schemas/FactorAplicado'}
+        recargo_degradado_pct:
+          type: [string, 'null']
+          description: Porcentaje del recargo conservador; `null` si no hubo degradación.
+        componentes:
+          type: array
+          items: {$ref: '#/components/schemas/Componente'}
+        prima_anual:
+          type: integer
+          minimum: 0
+          description: Igual a la suma exacta de `componentes`.
+        perfil: {$ref: '#/components/schemas/PerfilUsado'}
     LatenciaCliente:
       type: object
       required: [latencia_cliente_ms]

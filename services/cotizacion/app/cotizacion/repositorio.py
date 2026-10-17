@@ -10,13 +10,19 @@ from sqlalchemy import Engine, create_engine, select, update
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.cotizacion.dominio import CoberturaCalculada, CotizacionEmitida
+from app.cotizacion.desglose import a_json, desde_json
+from app.cotizacion.dominio import (
+    CoberturaCalculada,
+    CotizacionEmitida,
+    DesglosePrecio,
+)
 from app.cotizacion.errores import CotizacionNoEncontrada
 from app.cotizacion.modelos_db import (
     SCHEMA,
     BaseCotizacion,
     CoberturaDB,
     CotizacionDB,
+    DesgloseDB,
     LogLatenciaDB,
 )
 
@@ -58,8 +64,17 @@ class RepositorioCotizaciones:
         self._fabrica = fabrica
 
     def guardar(self, c: CotizacionEmitida, datos: dict[str, Any]) -> None:
-        """Guarda la cotización y sus coberturas en una sola transacción."""
+        """Guarda cotización, coberturas y desglose en una sola transacción (HU14)."""
         with self._fabrica() as sesion, sesion.begin():
+            if c.desglose is not None:
+                sesion.add(
+                    DesgloseDB(
+                        cotizacion_id=c.id,
+                        version_esquema=c.desglose.version_esquema,
+                        detalle=a_json(c.desglose),
+                        created_at=c.creada_en,
+                    )
+                )
             sesion.add(
                 CotizacionDB(
                     id=c.id,
@@ -121,6 +136,10 @@ class RepositorioCotizaciones:
                 .order_by(LogLatenciaDB.id)
                 .limit(1)
             )
+            desglose_fila = sesion.get(DesgloseDB, cotizacion_id)
+            desglose = (
+                desde_json(desglose_fila.detalle) if desglose_fila is not None else None
+            )
             return CotizacionEmitida(
                 id=fila.id,
                 cliente_id=fila.cliente_id,
@@ -133,7 +152,7 @@ class RepositorioCotizaciones:
                     CoberturaCalculada(c.tipo, Decimal(c.monto), Decimal(c.deducible))
                     for c in fila.coberturas
                 ),
-                componentes=(),
+                componentes=desglose.componentes if desglose else (),
                 version_reglas=fila.version_reglas,
                 degradado=fila.degradado,
                 aproximada=fila.aproximada,
@@ -141,7 +160,14 @@ class RepositorioCotizaciones:
                 creada_en=_utc(fila.created_at),
                 hit_cache=log.hit_cache if log else False,
                 latencia_interna_ms=log.latencia_interna_ms if log else None,
+                desglose=desglose,
             )
+
+    def obtener_desglose(self, cotizacion_id: str) -> DesglosePrecio | None:
+        """Desglose persistido, o None si la cotización no lo tiene (anterior a HU14)."""
+        with self._fabrica() as sesion:
+            fila = sesion.get(DesgloseDB, cotizacion_id)
+            return None if fila is None else desde_json(fila.detalle)
 
     def registrar_latencia_cliente(
         self, cotizacion_id: str, latencia_cliente_ms: float

@@ -148,3 +148,28 @@ def redis_url():
 
     with RedisContainer("redis:7-alpine") as r:
         yield f"redis://{r.get_container_host_ip()}:{r.get_exposed_port(6379)}/0"
+
+
+@pytest.fixture
+def app_real(base_migrada, postgres_url, redis_url, monkeypatch):
+    """La app completa, con la configuración tomada del entorno como en producción."""
+    monkeypatch.setenv("COTIZACION_DATABASE_URL", postgres_url)
+    monkeypatch.setenv("REDIS_URL", redis_url)
+    for prefijo in ("OPEN_FINANCE_SIM", "OPEN_DATA_SIM"):
+        monkeypatch.setenv(f"{prefijo}_LATENCIA_MIN_MS", "0")
+        monkeypatch.setenv(f"{prefijo}_LATENCIA_MAX_MS", "2")
+
+    def _abrir(**env) -> TestClient:
+        for k, v in env.items():
+            monkeypatch.setenv(k, v)
+        from app.main import app
+
+        cliente = TestClient(app)
+        cliente.__enter__()
+        abiertos.append(cliente)
+        return cliente
+
+    abiertos: list[TestClient] = []
+    yield _abrir
+    for c in abiertos:
+        c.__exit__(None, None, None)

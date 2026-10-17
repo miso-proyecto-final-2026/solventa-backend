@@ -2,18 +2,28 @@
 
 from __future__ import annotations
 
+import hmac
 from collections.abc import Callable, Coroutine
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Path, Request, Response
+from fastapi import APIRouter, Depends, Header, Path, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, Field
 
-from app.cotizacion.dominio import CotizacionEmitida, SolicitudCotizacion
-from app.cotizacion.errores import DetalleError, cuerpo_error
+from app.cotizacion.dominio import (
+    CotizacionEmitida,
+    DesglosePrecio,
+    SolicitudCotizacion,
+)
+from app.cotizacion.errores import (
+    DetalleError,
+    NoAutenticado,
+    SinPermiso,
+    cuerpo_error,
+)
 from app.cotizacion.servicio import ServicioCotizacion
 
 
@@ -90,6 +100,35 @@ class CotizacionOut(BaseModel):
     metadata: MetadataOut | None
 
 
+class FactorOut(BaseModel):
+    etapa: str
+    nombre: str
+    factor: str
+    fuente: str | None
+    obtenido_en: datetime | None
+
+
+class PerfilUsadoOut(BaseModel):
+    fuentes: list[str]
+    degradado: bool
+    con_consentimiento: bool
+    completitud: float
+
+
+class DesgloseOut(BaseModel):
+    cotizacion_id: str
+    version_esquema: int
+    version_reglas: str
+    producto: str
+    moneda: str
+    prima_base: int
+    factores: list[FactorOut]
+    recargo_degradado_pct: str | None
+    componentes: list[ComponenteOut]
+    prima_anual: int
+    perfil: PerfilUsadoOut
+
+
 class LatenciaClienteIn(BaseModel):
     latencia_cliente_ms: float = Field(gt=0)
 
@@ -114,6 +153,14 @@ _ERROR_422 = {422: {"model": ErrorRespuestaOut, "description": "Solicitud no vá
 _ERROR_404 = {
     404: {"model": ErrorRespuestaOut, "description": "La cotización no existe."}
 }
+_ERRORES_DESGLOSE = {
+    401: {"model": ErrorRespuestaOut, "description": "Falta la credencial."},
+    403: {"model": ErrorRespuestaOut, "description": "Sin permiso de auditoría."},
+    404: {
+        "model": ErrorRespuestaOut,
+        "description": "La cotización no existe o no tiene desglose.",
+    },
+}
 
 
 def obtener_servicio(request: Request) -> ServicioCotizacion:
@@ -122,6 +169,62 @@ def obtener_servicio(request: Request) -> ServicioCotizacion:
 
 Servicio = Annotated[ServicioCotizacion, Depends(obtener_servicio)]
 CotizacionId = Annotated[str, Path(alias="id", min_length=1, max_length=36)]
+
+
+def exigir_auditor(
+    request: Request,
+    x_service_key: Annotated[str | None, Header()] = None,
+) -> None:
+    """Rol de auditor con permisos mínimos: una clave de servicio dedicada (HU14).
+
+    Falla cerrado: sin claves configuradas nadie accede. Solución provisional hasta
+    que exista la gestión de roles internos (F26).
+    """
+    if not x_service_key:
+        raise NoAutenticado
+    claves = getattr(request.app.state, "auditor_api_keys", ())
+    # Se recorren todas para no revelar por tiempo cuál coincidió.
+    coincide = [hmac.compare_digest(x_service_key.encode(), k.encode()) for k in claves]
+    if not any(coincide):
+        raise SinPermiso
+
+
+Auditor = Annotated[None, Depends(exigir_auditor)]
+
+
+def a_salida_desglose(cotizacion_id: str, d: DesglosePrecio) -> DesgloseOut:
+    return DesgloseOut(
+        cotizacion_id=cotizacion_id,
+        version_esquema=d.version_esquema,
+        version_reglas=d.version_reglas,
+        producto=d.producto,
+        moneda=d.moneda,
+        prima_base=int(d.prima_base),
+        factores=[
+            FactorOut(
+                etapa=f.etapa,
+                nombre=f.nombre,
+                factor=str(f.factor),
+                fuente=f.fuente,
+                obtenido_en=f.obtenido_en,
+            )
+            for f in d.factores
+        ],
+        recargo_degradado_pct=(
+            None if d.recargo_degradado_pct is None else str(d.recargo_degradado_pct)
+        ),
+        componentes=[
+            ComponenteOut(concepto=c.concepto, monto=int(c.monto))
+            for c in d.componentes
+        ],
+        prima_anual=int(d.prima_anual),
+        perfil=PerfilUsadoOut(
+            fuentes=list(d.perfil.fuentes),
+            degradado=d.perfil.degradado,
+            con_consentimiento=d.perfil.con_consentimiento,
+            completitud=d.perfil.completitud,
+        ),
+    )
 
 
 def a_salida(c: CotizacionEmitida) -> CotizacionOut:
@@ -179,6 +282,20 @@ async def obtener_cotizacion(
     cotizacion_id: CotizacionId, servicio: Servicio
 ) -> CotizacionOut:
     return a_salida(await servicio.obtener(cotizacion_id))
+
+
+@router.get(
+    "/{id}/desglose",
+    response_model=DesgloseOut,
+    summary="Desglose del cálculo del precio (solo auditor)",
+    responses=_ERRORES_DESGLOSE,
+)
+async def obtener_desglose(
+    cotizacion_id: CotizacionId, servicio: Servicio, _auditor: Auditor
+) -> DesgloseOut:
+    return a_salida_desglose(
+        cotizacion_id, await servicio.obtener_desglose(cotizacion_id)
+    )
 
 
 @router.put(

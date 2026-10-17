@@ -18,12 +18,19 @@ from typing import Any
 from app.cotizacion.dominio import (
     AJUSTE_DATOS,
     AJUSTE_RIESGO,
+    ETAPA_DATO,
+    ETAPA_RIESGO_BASE,
+    ETAPA_SENAL,
     MONEDA,
     PRIMA_BASE,
     RECARGO_DEGRADADO,
+    VERSION_DESGLOSE,
     CoberturaCalculada,
     Componente,
+    DesglosePrecio,
+    FactorAplicado,
     PerfilUnificado,
+    PerfilUsado,
     ResultadoRating,
 )
 from app.cotizacion.errores import DetalleError, ErrorValidacion
@@ -105,16 +112,25 @@ def _factor_en_rangos(rangos: list[Any], valor: Decimal) -> Decimal:
     raise AssertionError("tabla sin cobertura total; el cargador de reglas lo impide")
 
 
-def _factor_senales(
-    senales: Mapping[str, Senal], valores: Mapping[str, int | float]
-) -> Decimal:
-    factor = _UNO
+def _factores_senales(
+    senales: Mapping[str, Senal], perfil: PerfilUnificado
+) -> list[FactorAplicado]:
+    aplicados = []
     for nombre, tabla in senales.items():
-        valor = valores.get(nombre)
+        valor = perfil.senales.get(nombre)
         if valor is None or isinstance(valor, bool):
             continue  # señal ausente: no ajusta
-        factor *= _factor_en_rangos(tabla.rangos, Decimal(str(valor)))
-    return factor
+        fuente, obtenido_en = perfil.procedencia.get(nombre, (None, None))
+        aplicados.append(
+            FactorAplicado(
+                ETAPA_SENAL,
+                nombre,
+                _factor_en_rangos(tabla.rangos, Decimal(str(valor))),
+                fuente,
+                obtenido_en,
+            )
+        )
+    return aplicados
 
 
 def calcular_prima(
@@ -130,17 +146,28 @@ def calcular_prima(
         _redondear(valor_asegurado * regla.base.tasa_anual), regla.base.prima_minima
     )
 
+    factores: list[FactorAplicado] = []
     factor_datos = _UNO
     for nombre, factor in regla.factores_datos.items():
-        factor_datos *= _factor_dato(factor, datos[nombre])
+        aplicado = _factor_dato(factor, datos[nombre])
+        factor_datos *= aplicado
+        factores.append(FactorAplicado(ETAPA_DATO, nombre, aplicado))
     subtotal_datos = _redondear(base * factor_datos)
 
     # Solo un perfil con consentimiento y sin degradar aporta señales; en los demás
     # casos rige el factor base del producto.
     usa_senales = perfil.con_consentimiento and not perfil.degradado
     factor_riesgo = regla.factor_riesgo_base
+    factores.append(
+        FactorAplicado(ETAPA_RIESGO_BASE, "factor_riesgo_base", factor_riesgo)
+    )
     if usa_senales:
-        factor_riesgo *= _factor_senales(regla.senales, perfil.senales)
+        factores_senales = _factores_senales(regla.senales, perfil)
+        factores.extend(factores_senales)
+        factor_senales = _UNO
+        for aplicado in factores_senales:
+            factor_senales *= aplicado.factor
+        factor_riesgo *= factor_senales
     subtotal_riesgo = _redondear(subtotal_datos * factor_riesgo)
 
     recargo = (
@@ -149,6 +176,12 @@ def calcular_prima(
         else Decimal(0)
     )
     prima_anual = subtotal_riesgo + recargo
+    componentes = (
+        Componente(PRIMA_BASE, base),
+        Componente(AJUSTE_DATOS, subtotal_datos - base),
+        Componente(AJUSTE_RIESGO, subtotal_riesgo - subtotal_datos),
+        Componente(RECARGO_DEGRADADO, recargo),
+    )
 
     coberturas = []
     for cob in regla.coberturas:
@@ -167,14 +200,28 @@ def calcular_prima(
         prima_anual=prima_anual,
         prima_mensual=_redondear(prima_anual / _MESES),
         coberturas=tuple(coberturas),
-        componentes=(
-            Componente(PRIMA_BASE, base),
-            Componente(AJUSTE_DATOS, subtotal_datos - base),
-            Componente(AJUSTE_RIESGO, subtotal_riesgo - subtotal_datos),
-            Componente(RECARGO_DEGRADADO, recargo),
-        ),
+        componentes=componentes,
         version_reglas=reglas.version,
         vigencia_dias=reglas.vigencia_dias,
         degradado=perfil.degradado,
         aproximada=not perfil.con_consentimiento,
+        desglose=DesglosePrecio(
+            version_esquema=VERSION_DESGLOSE,
+            version_reglas=reglas.version,
+            producto=producto,
+            moneda=MONEDA,
+            prima_base=base,
+            factores=tuple(factores),
+            recargo_degradado_pct=(
+                regla.recargo_degradado if perfil.degradado else None
+            ),
+            componentes=componentes,
+            prima_anual=prima_anual,
+            perfil=PerfilUsado(
+                fuentes=perfil.fuentes,
+                degradado=perfil.degradado,
+                con_consentimiento=perfil.con_consentimiento,
+                completitud=perfil.completitud,
+            ),
+        ),
     )

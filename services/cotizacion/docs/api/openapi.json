@@ -142,6 +142,96 @@
         }
       }
     },
+    "/v1/cotizaciones/{id}/desglose": {
+      "get": {
+        "tags": [
+          "cotizaciones"
+        ],
+        "summary": "Desglose del cálculo del precio (solo auditor)",
+        "operationId": "obtener_desglose_v1_cotizaciones__id__desglose_get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "title": "Id"
+            }
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesgloseOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta la credencial.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso de auditoría.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "La cotización no existe o no tiene desglose.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/cotizaciones/{id}/latencia-cliente": {
       "put": {
         "tags": [
@@ -375,6 +465,81 @@
         ],
         "title": "CotizacionOut"
       },
+      "DesgloseOut": {
+        "properties": {
+          "cotizacion_id": {
+            "type": "string",
+            "title": "Cotizacion Id"
+          },
+          "version_esquema": {
+            "type": "integer",
+            "title": "Version Esquema"
+          },
+          "version_reglas": {
+            "type": "string",
+            "title": "Version Reglas"
+          },
+          "producto": {
+            "type": "string",
+            "title": "Producto"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "prima_base": {
+            "type": "integer",
+            "title": "Prima Base"
+          },
+          "factores": {
+            "items": {
+              "$ref": "#/components/schemas/FactorOut"
+            },
+            "type": "array",
+            "title": "Factores"
+          },
+          "recargo_degradado_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recargo Degradado Pct"
+          },
+          "componentes": {
+            "items": {
+              "$ref": "#/components/schemas/ComponenteOut"
+            },
+            "type": "array",
+            "title": "Componentes"
+          },
+          "prima_anual": {
+            "type": "integer",
+            "title": "Prima Anual"
+          },
+          "perfil": {
+            "$ref": "#/components/schemas/PerfilUsadoOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cotizacion_id",
+          "version_esquema",
+          "version_reglas",
+          "producto",
+          "moneda",
+          "prima_base",
+          "factores",
+          "recargo_degradado_pct",
+          "componentes",
+          "prima_anual",
+          "perfil"
+        ],
+        "title": "DesgloseOut"
+      },
       "DetalleErrorOut": {
         "properties": {
           "campo": {
@@ -435,6 +600,54 @@
           "error"
         ],
         "title": "ErrorRespuestaOut"
+      },
+      "FactorOut": {
+        "properties": {
+          "etapa": {
+            "type": "string",
+            "title": "Etapa"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "factor": {
+            "type": "string",
+            "title": "Factor"
+          },
+          "fuente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fuente"
+          },
+          "obtenido_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obtenido En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "etapa",
+          "nombre",
+          "factor",
+          "fuente",
+          "obtenido_en"
+        ],
+        "title": "FactorOut"
       },
       "FuenteOut": {
         "properties": {
@@ -552,6 +765,37 @@
           "fuentes"
         ],
         "title": "PerfilCrudoOut"
+      },
+      "PerfilUsadoOut": {
+        "properties": {
+          "fuentes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fuentes"
+          },
+          "degradado": {
+            "type": "boolean",
+            "title": "Degradado"
+          },
+          "con_consentimiento": {
+            "type": "boolean",
+            "title": "Con Consentimiento"
+          },
+          "completitud": {
+            "type": "number",
+            "title": "Completitud"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fuentes",
+          "degradado",
+          "con_consentimiento",
+          "completitud"
+        ],
+        "title": "PerfilUsadoOut"
       },
       "SolicitudIn": {
         "properties": {

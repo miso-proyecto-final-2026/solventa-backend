@@ -16,12 +16,18 @@ from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
+from app.cotizacion.desglose import verificar_invariante
 from app.cotizacion.dominio import (
     ESTADO_EMITIDA,
     CotizacionEmitida,
+    DesglosePrecio,
     SolicitudCotizacion,
 )
-from app.cotizacion.errores import CotizacionNoEncontrada
+from app.cotizacion.errores import (
+    CotizacionNoEncontrada,
+    DesgloseNoDisponible,
+    ErrorDesglose,
+)
 from app.cotizacion.motor import calcular_prima, validar_solicitud
 from app.cotizacion.perfil import PerfilPort
 from app.cotizacion.reglas import ReglasTarifarias
@@ -65,6 +71,18 @@ class ServicioCotizacion:
             solicitud.producto, solicitud.datos, perfil, self._reglas
         )
 
+        try:
+            verificar_invariante(resultado.desglose)
+        except ErrorDesglose as exc:
+            # No se emite una cotización cuyo precio no se puede explicar (criterio 2).
+            log.error(
+                "desglose inconsistente; no se emite. producto=%s reglas=%s: %s",
+                resultado.producto,
+                resultado.version_reglas,
+                exc,
+            )
+            raise
+
         ahora = self._reloj()
         emitida = CotizacionEmitida(
             id=self._generar_id(),
@@ -81,6 +99,7 @@ class ServicioCotizacion:
             aproximada=resultado.aproximada,
             vigente_hasta=ahora + timedelta(days=resultado.vigencia_dias),
             creada_en=ahora,
+            desglose=resultado.desglose,
         )
         await asyncio.to_thread(self._repo.guardar, emitida, dict(solicitud.datos))
 
@@ -116,6 +135,14 @@ class ServicioCotizacion:
         if cotizacion is None:
             raise CotizacionNoEncontrada(cotizacion_id)
         return cotizacion
+
+    async def obtener_desglose(self, cotizacion_id: str) -> DesglosePrecio:
+        desglose = await asyncio.to_thread(self._repo.obtener_desglose, cotizacion_id)
+        if desglose is not None:
+            return desglose
+        # Sin desglose: o la cotización no existe, o es anterior a HU14.
+        await self.obtener(cotizacion_id)
+        raise DesgloseNoDisponible(cotizacion_id)
 
     async def registrar_latencia_cliente(self, cotizacion_id: str, ms: float) -> None:
         await asyncio.to_thread(
