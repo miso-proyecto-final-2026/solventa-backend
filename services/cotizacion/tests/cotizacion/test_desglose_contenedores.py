@@ -123,7 +123,6 @@ def _emitida(reglas, desglose: bool) -> CotizacionEmitida:
         prima_anual=r.prima_anual,
         prima_mensual=r.prima_mensual,
         coberturas=r.coberturas,
-        componentes=r.componentes,
         version_reglas=r.version_reglas,
         degradado=r.degradado,
         aproximada=r.aproximada,

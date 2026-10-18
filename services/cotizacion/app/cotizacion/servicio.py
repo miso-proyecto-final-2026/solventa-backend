@@ -93,7 +93,6 @@ class ServicioCotizacion:
             prima_anual=resultado.prima_anual,
             prima_mensual=resultado.prima_mensual,
             coberturas=resultado.coberturas,
-            componentes=resultado.componentes,
             version_reglas=resultado.version_reglas,
             degradado=resultado.degradado,
             aproximada=resultado.aproximada,

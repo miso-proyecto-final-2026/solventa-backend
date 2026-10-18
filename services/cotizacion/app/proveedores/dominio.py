@@ -85,6 +85,10 @@ class ProveedorOpenData(Protocol):
     async def sondear(self) -> None: ...
 
 
+# Lo que acepta ServicioPerfil como adaptador de una fuente (HA06, ADR-0004).
+ProveedorExterno = ProveedorOpenFinance | ProveedorOpenData
+
+
 class ConsentimientoPort(Protocol):
     """Contrato mínimo con MS Identidad (HU06). Hasta que exista se usa un stub."""
 

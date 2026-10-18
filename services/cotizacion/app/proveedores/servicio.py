@@ -21,6 +21,7 @@ from app.proveedores.dominio import (
     Fuente,
     PerfilCrudo,
     ProveedorError,
+    ProveedorExterno,
     RegistroLlamada,
     ResultadoFuente,
 )
@@ -45,7 +46,7 @@ def _separar_meta(guardado: dict[str, Any]) -> tuple[dict[str, Any], datetime | 
 class ServicioPerfil:
     def __init__(
         self,
-        proveedores: dict[Fuente, Any],
+        proveedores: dict[Fuente, ProveedorExterno],
         cache: CachePerfil,
         consentimiento: ConsentimientoPort,
         config: ConfigProveedores | None = None,
