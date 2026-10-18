@@ -1,0 +1,3651 @@
+{
+  "info": {
+    "name": "Solventa Backend",
+    "description": "Colección de pruebas de los endpoints de `solventa-backend` (MS Identidad y MS Cotización). Cada petición trae pruebas (`pm.test`) y guarda las variables que usa la siguiente, así que puede ejecutarse completa con el Collection Runner o con Newman, en el orden del árbol.\n\nVer `postman/README.md` para levantar los servicios en local.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "item": [
+    {
+      "name": "MS Identidad",
+      "item": [
+        {
+          "name": "Salud",
+          "item": [
+            {
+              "name": "Health",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "pm.test('status ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/health",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "health"
+                  ]
+                },
+                "description": "Liveness. No consulta la base de datos."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Clientes (HU01)",
+          "item": [
+            {
+              "name": "Registrar cliente",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Datos únicos por ejecución: el registro rechaza documento y correo repetidos.",
+                      "const n = Date.now().toString();",
+                      "pm.collectionVariables.set('email', `qa.${n}@solventa.test`);",
+                      "pm.collectionVariables.set('documento', n.slice(-10));",
+                      "pm.collectionVariables.set('celular', '3' + n.slice(-9));",
+                      "pm.collectionVariables.set('idem_registro', pm.variables.replaceIn('{{$guid}}'));"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "const c = pm.response.json();",
+                      "pm.test('devuelve id y access_token', () => {",
+                      "  pm.expect(c.id).to.be.a('string').and.not.empty;",
+                      "  pm.expect(c.access_token).to.be.a('string').and.not.empty;",
+                      "});",
+                      "pm.test('KYC arranca sin verificar y no expone la contraseña', () => {",
+                      "  pm.expect(c.estado_kyc).to.be.a('string');",
+                      "  pm.expect(c).to.not.have.property('password');",
+                      "  pm.expect(c).to.not.have.property('password_hash');",
+                      "});",
+                      "pm.collectionVariables.set('cliente_id', c.id);",
+                      "pm.collectionVariables.set('access_token', c.access_token);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{idem_registro}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes"
+                  ]
+                },
+                "description": "Crea el cliente y devuelve su `access_token` (única vez que viaja en claro). Genera documento, correo y celular únicos y guarda `cliente_id` y `access_token` para el resto de la colección. Envía `Idempotency-Key`.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"Camila\",\n  \"apellido\": \"Rojas\",\n  \"tipo_documento\": \"CC\",\n  \"numero_documento\": \"{{documento}}\",\n  \"email\": \"{{email}}\",\n  \"celular\": \"{{celular}}\",\n  \"password\": \"Solventa2026\",\n  \"acepto_terminos\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Registrar cliente - repetición con la misma Idempotency-Key",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "pm.test('es el mismo cliente', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('cliente_id')));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{idem_registro}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes"
+                  ]
+                },
+                "description": "Repite la solicitud anterior con la misma clave: devuelve la misma respuesta y no crea otro cliente.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"Camila\",\n  \"apellido\": \"Rojas\",\n  \"tipo_documento\": \"CC\",\n  \"numero_documento\": \"{{documento}}\",\n  \"email\": \"{{email}}\",\n  \"celular\": \"{{celular}}\",\n  \"password\": \"Solventa2026\",\n  \"acepto_terminos\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Registrar cliente - documento o correo duplicado",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                      "pm.test('mensaje genérico', () => pm.expect(pm.response.json().detail).to.include('No fue posible completar el registro'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes"
+                  ]
+                },
+                "description": "Sin `Idempotency-Key`, un documento o correo ya registrado responde 409 con un mensaje genérico (no revela cuál campo chocó).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"Camila\",\n  \"apellido\": \"Rojas\",\n  \"tipo_documento\": \"CC\",\n  \"numero_documento\": \"{{documento}}\",\n  \"email\": \"{{email}}\",\n  \"celular\": \"{{celular}}\",\n  \"password\": \"Solventa2026\",\n  \"acepto_terminos\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Registrar cliente - celular inválido",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                      "pm.test('señala el campo celular', () => pm.expect(JSON.stringify(pm.response.json().detail)).to.include('celular'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes"
+                  ]
+                },
+                "description": "El celular debe tener 10 dígitos y empezar por 3.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"Camila\",\n  \"apellido\": \"Rojas\",\n  \"tipo_documento\": \"CC\",\n  \"numero_documento\": \"ABC12345\",\n  \"email\": \"invalido@solventa.test\",\n  \"celular\": \"1234567890\",\n  \"password\": \"Solventa2026\",\n  \"acepto_terminos\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Registrar cliente - contraseña débil",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                      "pm.test('señala el campo password', () => pm.expect(JSON.stringify(pm.response.json().detail)).to.include('password'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes"
+                  ]
+                },
+                "description": "Mínimo 8 caracteres, con al menos una letra y un número.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"Camila\",\n  \"apellido\": \"Rojas\",\n  \"tipo_documento\": \"CC\",\n  \"numero_documento\": \"ABC12345\",\n  \"email\": \"debil@solventa.test\",\n  \"celular\": \"{{celular}}\",\n  \"password\": \"corta\",\n  \"acepto_terminos\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Registrar cliente - sin aceptar términos",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                      "pm.test('señala acepto_terminos', () => pm.expect(JSON.stringify(pm.response.json().detail)).to.include('acepto_terminos'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes"
+                  ]
+                },
+                "description": "`acepto_terminos` debe ser `true` (política de tratamiento de datos).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"Camila\",\n  \"apellido\": \"Rojas\",\n  \"tipo_documento\": \"CC\",\n  \"numero_documento\": \"ABC12345\",\n  \"email\": \"terminos@solventa.test\",\n  \"celular\": \"{{celular}}\",\n  \"password\": \"Solventa2026\",\n  \"acepto_terminos\": false\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Registrar segundo cliente (para pruebas de autorización)",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const n = Date.now().toString();",
+                      "pm.collectionVariables.set('email_2', `qa.dos.${n}@solventa.test`);",
+                      "pm.collectionVariables.set('documento_2', 'B' + n.slice(-9));",
+                      "pm.collectionVariables.set('celular_2', '3' + n.slice(-9));"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "const c = pm.response.json();",
+                      "pm.collectionVariables.set('otro_cliente_id', c.id);",
+                      "pm.collectionVariables.set('otro_access_token', c.access_token);",
+                      "pm.test('es un cliente distinto', () => pm.expect(c.id).to.not.eql(pm.collectionVariables.get('cliente_id')));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes"
+                  ]
+                },
+                "description": "Crea un cliente adicional. Se usa para probar que un cliente no accede a los datos de otro (403) y para los casos negativos de KYC sin consumir intentos del primero.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"Mateo\",\n  \"apellido\": \"Pardo\",\n  \"tipo_documento\": \"CC\",\n  \"numero_documento\": \"{{documento_2}}\",\n  \"email\": \"{{email_2}}\",\n  \"celular\": \"{{celular_2}}\",\n  \"password\": \"Solventa2026\",\n  \"acepto_terminos\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consentimientos (HU06)",
+          "item": [
+            {
+              "name": "Consultar consentimiento - antes de otorgarlo",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "pm.test('NO_OTORGADO y sin id de consentimiento', () => {",
+                      "  pm.expect(pm.response.json().estado).to.eql('NO_OTORGADO');",
+                      "  pm.expect(pm.response.json().id).to.be.oneOf([null, undefined]);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{cliente_id}}/consentimientos/OPEN_FINANCE_OPEN_DATA",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{cliente_id}}",
+                    "consentimientos",
+                    "OPEN_FINANCE_OPEN_DATA"
+                  ]
+                },
+                "description": "Sin registro previo el estado es `NO_OTORGADO`."
+              }
+            },
+            {
+              "name": "Otorgar consentimiento",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "const c = pm.response.json();",
+                      "pm.test('OTORGADO con fecha y versión', () => {",
+                      "  pm.expect(c.estado).to.eql('OTORGADO');",
+                      "  pm.expect(c.version_texto).to.eql('v1');",
+                      "  pm.expect(c.fecha_otorgamiento).to.be.a('string');",
+                      "});",
+                      "pm.test('devuelve el id del consentimiento vigente', () => pm.expect(c.id).to.be.a('string').and.not.empty);",
+                      "pm.collectionVariables.set('consentimiento_id', c.id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{cliente_id}}/consentimientos",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{cliente_id}}",
+                    "consentimientos"
+                  ]
+                },
+                "description": "El cliente otorga el consentimiento de Open Finance / Open Data. `version_texto` con formato `v1`, `v2`…; `canal`: `MOVIL` o `WEB`.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"tipo\": \"OPEN_FINANCE_OPEN_DATA\",\n  \"version_texto\": \"v1\",\n  \"canal\": \"WEB\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Otorgar consentimiento - repetición idempotente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "pm.test('sigue OTORGADO con el mismo id', () => {",
+                      "  pm.expect(pm.response.json().estado).to.eql('OTORGADO');",
+                      "  pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('consentimiento_id'));",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{cliente_id}}/consentimientos",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{cliente_id}}",
+                    "consentimientos"
+                  ]
+                },
+                "description": "Reintentar no crea otro consentimiento vigente: responde 200 con el existente.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"tipo\": \"OPEN_FINANCE_OPEN_DATA\",\n  \"version_texto\": \"v1\",\n  \"canal\": \"WEB\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Consultar consentimiento - como cliente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "pm.test('OTORGADO con el id del consentimiento', () => {",
+                      "  pm.expect(pm.response.json().estado).to.eql('OTORGADO');",
+                      "  pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('consentimiento_id'));",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{cliente_id}}/consentimientos/OPEN_FINANCE_OPEN_DATA",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{cliente_id}}",
+                    "consentimientos",
+                    "OPEN_FINANCE_OPEN_DATA"
+                  ]
+                },
+                "description": "El cliente consulta su propio consentimiento vigente."
+              }
+            },
+            {
+              "name": "Consultar consentimiento - como servicio interno",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "pm.test('OTORGADO con el id que usa Cotización para la trazabilidad', () => {",
+                      "  pm.expect(pm.response.json().estado).to.eql('OTORGADO');",
+                      "  pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('consentimiento_id'));",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{service_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{cliente_id}}/consentimientos/OPEN_FINANCE_OPEN_DATA",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{cliente_id}}",
+                    "consentimientos",
+                    "OPEN_FINANCE_OPEN_DATA"
+                  ]
+                },
+                "description": "Así lo consulta MS Cotización: con `X-Service-Key` (debe estar en `SERVICE_API_KEYS` de Identidad), sin sesión de cliente."
+              }
+            },
+            {
+              "name": "Consultar consentimiento - sin credenciales",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{cliente_id}}/consentimientos/OPEN_FINANCE_OPEN_DATA",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{cliente_id}}",
+                    "consentimientos",
+                    "OPEN_FINANCE_OPEN_DATA"
+                  ]
+                },
+                "description": "Sin `Authorization` ni `X-Service-Key`."
+              }
+            },
+            {
+              "name": "Consultar consentimiento - clave de servicio inválida",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "clave-que-no-existe",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{cliente_id}}/consentimientos/OPEN_FINANCE_OPEN_DATA",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{cliente_id}}",
+                    "consentimientos",
+                    "OPEN_FINANCE_OPEN_DATA"
+                  ]
+                },
+                "description": "Una `X-Service-Key` desconocida se rechaza."
+              }
+            },
+            {
+              "name": "Consultar consentimiento - de otro cliente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 403', () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{otro_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{cliente_id}}/consentimientos/OPEN_FINANCE_OPEN_DATA",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{cliente_id}}",
+                    "consentimientos",
+                    "OPEN_FINANCE_OPEN_DATA"
+                  ]
+                },
+                "description": "El token del segundo cliente no puede leer los datos del primero."
+              }
+            },
+            {
+              "name": "Consultar consentimiento - cliente inexistente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 404', () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{service_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/00000000-0000-0000-0000-000000000000/consentimientos/OPEN_FINANCE_OPEN_DATA",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "00000000-0000-0000-0000-000000000000",
+                    "consentimientos",
+                    "OPEN_FINANCE_OPEN_DATA"
+                  ]
+                },
+                "description": "Con clave de servicio (que no está atada a un cliente) un id desconocido responde 404."
+              }
+            },
+            {
+              "name": "Consultar consentimiento - tipo inválido",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{cliente_id}}/consentimientos/TIPO_QUE_NO_EXISTE",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{cliente_id}}",
+                    "consentimientos",
+                    "TIPO_QUE_NO_EXISTE"
+                  ]
+                },
+                "description": "Solo existe el tipo `OPEN_FINANCE_OPEN_DATA`."
+              }
+            },
+            {
+              "name": "Otorgar consentimiento - versión de texto inválida",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                      "pm.test('señala version_texto', () => pm.expect(JSON.stringify(pm.response.json().detail)).to.include('version_texto'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{cliente_id}}/consentimientos",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{cliente_id}}",
+                    "consentimientos"
+                  ]
+                },
+                "description": "`version_texto` debe cumplir `v<1-3 dígitos>`.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"tipo\": \"OPEN_FINANCE_OPEN_DATA\",\n  \"version_texto\": \"1.0\",\n  \"canal\": \"WEB\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Otorgar consentimiento - sin credenciales",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{cliente_id}}/consentimientos",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{cliente_id}}",
+                    "consentimientos"
+                  ]
+                },
+                "description": "Sin sesión de cliente no se puede otorgar el consentimiento.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"tipo\": \"OPEN_FINANCE_OPEN_DATA\",\n  \"version_texto\": \"v1\",\n  \"canal\": \"WEB\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Otorgar consentimiento - de otro cliente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 403', () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{otro_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{cliente_id}}/consentimientos",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{cliente_id}}",
+                    "consentimientos"
+                  ]
+                },
+                "description": "El token del segundo cliente no puede otorgar el consentimiento del primero.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"tipo\": \"OPEN_FINANCE_OPEN_DATA\",\n  \"version_texto\": \"v1\",\n  \"canal\": \"WEB\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "description": "El consentimiento habilita la consulta de Open Finance / Open Data para la cotización. Sin él, Cotización calcula con el perfil por defecto."
+        },
+        {
+          "name": "Verificación de identidad KYC (HU02)",
+          "item": [
+            {
+              "name": "Enviar verificación",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.collectionVariables.set('kyc_idempotency_key', 'kyc-' + pm.variables.replaceIn('{{$guid}}'));"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "const v = pm.response.json();",
+                      "pm.test('estado válido y contador de intentos', () => {",
+                      "  pm.expect(v.estado).to.be.oneOf(['VERIFICADO', 'RECHAZADO', 'EN_REVISION']);",
+                      "  pm.expect(v.intentos_restantes).to.be.a('number');",
+                      "  pm.expect(v.id).to.be.a('string').and.not.empty;",
+                      "});",
+                      "pm.collectionVariables.set('verificacion_id', v.id);",
+                      "pm.collectionVariables.set('estado_kyc', v.estado);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{kyc_idempotency_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{cliente_id}}/verificaciones",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{cliente_id}}",
+                    "verificaciones"
+                  ]
+                },
+                "description": "Multipart con `reto`, `documento_anverso`, `documento_reverso` y `selfie` (JPEG o PNG, máx. 5 MB cada uno) más `Idempotency-Key` obligatorio (8-100 caracteres). El reto válido es `GIRAR_IZQUIERDA`.\n\nCon el simulador por defecto (`KYC_SIMULADOR_MODO=exito`) queda `VERIFICADO`; con `rechazo` queda `RECHAZADO`; con `timeout` o `error_5xx` queda `EN_REVISION`.\n\nLos archivos viven en `postman/fixtures/`. En la app de Postman, abre Settings > General > Working directory y apúntalo a la carpeta `postman/`; con Newman, ejecuta desde esa carpeta o pasa `--working-dir postman`.",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "reto",
+                      "value": "GIRAR_IZQUIERDA",
+                      "type": "text"
+                    },
+                    {
+                      "key": "documento_anverso",
+                      "type": "file",
+                      "src": "fixtures/documento_anverso.jpg"
+                    },
+                    {
+                      "key": "documento_reverso",
+                      "type": "file",
+                      "src": "fixtures/documento_reverso.jpg"
+                    },
+                    {
+                      "key": "selfie",
+                      "type": "file",
+                      "src": "fixtures/selfie.jpg"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Enviar verificación - repetición con la misma Idempotency-Key",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "pm.test('es la misma verificación', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('verificacion_id')));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{kyc_idempotency_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{cliente_id}}/verificaciones",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{cliente_id}}",
+                    "verificaciones"
+                  ]
+                },
+                "description": "Reenviar con la misma clave devuelve el resultado anterior (200) sin consultar de nuevo al proveedor.\n\nLos archivos viven en `postman/fixtures/`. En la app de Postman, abre Settings > General > Working directory y apúntalo a la carpeta `postman/`; con Newman, ejecuta desde esa carpeta o pasa `--working-dir postman`.",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "reto",
+                      "value": "GIRAR_IZQUIERDA",
+                      "type": "text"
+                    },
+                    {
+                      "key": "documento_anverso",
+                      "type": "file",
+                      "src": "fixtures/documento_anverso.jpg"
+                    },
+                    {
+                      "key": "documento_reverso",
+                      "type": "file",
+                      "src": "fixtures/documento_reverso.jpg"
+                    },
+                    {
+                      "key": "selfie",
+                      "type": "file",
+                      "src": "fixtures/selfie.jpg"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Consultar estado KYC - como cliente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const e = pm.response.json();",
+                      "pm.test('coincide con la verificación enviada', () => {",
+                      "  pm.expect(e.cliente_id).to.eql(pm.collectionVariables.get('cliente_id'));",
+                      "  pm.expect(e.estado_kyc).to.eql(pm.collectionVariables.get('estado_kyc'));",
+                      "  pm.expect(e.ultima_verificacion_id).to.eql(pm.collectionVariables.get('verificacion_id'));",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{cliente_id}}/verificacion",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{cliente_id}}",
+                    "verificacion"
+                  ]
+                },
+                "description": "Estado vigente, motivo genérico (solo si no está verificado), intentos restantes y bloqueo temporal."
+              }
+            },
+            {
+              "name": "Consultar estado KYC - como servicio interno",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "pm.test('devuelve estado_kyc', () => pm.expect(pm.response.json().estado_kyc).to.be.a('string'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{service_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{cliente_id}}/verificacion",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{cliente_id}}",
+                    "verificacion"
+                  ]
+                },
+                "description": "Consulta con `X-Service-Key` (la usa el flujo que depende del KYC, p. ej. HU03)."
+              }
+            },
+            {
+              "name": "Enviar verificación - cliente ya verificado",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.collectionVariables.get('estado_kyc') === 'VERIFICADO') {",
+                      "  pm.test('Responde 409 (ya verificado)', () => pm.response.to.have.status(409));",
+                      "} else {",
+                      "  pm.test('Responde 201, 409 o 429', () => pm.expect(pm.response.code).to.be.oneOf([201, 409, 429]));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "kyc-{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{cliente_id}}/verificaciones",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{cliente_id}}",
+                    "verificaciones"
+                  ]
+                },
+                "description": "Con una clave nueva, un cliente `VERIFICADO` recibe 409. Si el simulador no está en modo `exito`, el resultado cambia (se acepta 201, 409 o 429).\n\nLos archivos viven en `postman/fixtures/`. En la app de Postman, abre Settings > General > Working directory y apúntalo a la carpeta `postman/`; con Newman, ejecuta desde esa carpeta o pasa `--working-dir postman`.",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "reto",
+                      "value": "GIRAR_IZQUIERDA",
+                      "type": "text"
+                    },
+                    {
+                      "key": "documento_anverso",
+                      "type": "file",
+                      "src": "fixtures/documento_anverso.jpg"
+                    },
+                    {
+                      "key": "documento_reverso",
+                      "type": "file",
+                      "src": "fixtures/documento_reverso.jpg"
+                    },
+                    {
+                      "key": "selfie",
+                      "type": "file",
+                      "src": "fixtures/selfie.jpg"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Enviar verificación - sin Idempotency-Key",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{otro_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{otro_cliente_id}}/verificaciones",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{otro_cliente_id}}",
+                    "verificaciones"
+                  ]
+                },
+                "description": "El encabezado `Idempotency-Key` es obligatorio.\n\nLos archivos viven en `postman/fixtures/`. En la app de Postman, abre Settings > General > Working directory y apúntalo a la carpeta `postman/`; con Newman, ejecuta desde esa carpeta o pasa `--working-dir postman`.",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "reto",
+                      "value": "GIRAR_IZQUIERDA",
+                      "type": "text"
+                    },
+                    {
+                      "key": "documento_anverso",
+                      "type": "file",
+                      "src": "fixtures/documento_anverso.jpg"
+                    },
+                    {
+                      "key": "documento_reverso",
+                      "type": "file",
+                      "src": "fixtures/documento_reverso.jpg"
+                    },
+                    {
+                      "key": "selfie",
+                      "type": "file",
+                      "src": "fixtures/selfie.jpg"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Enviar verificación - reto inválido",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                      "pm.test('mensaje del reto', () => pm.expect(pm.response.json().detail).to.include('reto'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{otro_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "kyc-reto-{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{otro_cliente_id}}/verificaciones",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{otro_cliente_id}}",
+                    "verificaciones"
+                  ]
+                },
+                "description": "Solo se acepta el reto de prueba de vida `GIRAR_IZQUIERDA`.\n\nLos archivos viven en `postman/fixtures/`. En la app de Postman, abre Settings > General > Working directory y apúntalo a la carpeta `postman/`; con Newman, ejecuta desde esa carpeta o pasa `--working-dir postman`.",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "reto",
+                      "value": "MIRAR_ARRIBA",
+                      "type": "text"
+                    },
+                    {
+                      "key": "documento_anverso",
+                      "type": "file",
+                      "src": "fixtures/documento_anverso.jpg"
+                    },
+                    {
+                      "key": "documento_reverso",
+                      "type": "file",
+                      "src": "fixtures/documento_reverso.jpg"
+                    },
+                    {
+                      "key": "selfie",
+                      "type": "file",
+                      "src": "fixtures/selfie.jpg"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Enviar verificación - archivo que no es imagen",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 415', () => pm.response.to.have.status(415));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{otro_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "kyc-415-{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{otro_cliente_id}}/verificaciones",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{otro_cliente_id}}",
+                    "verificaciones"
+                  ]
+                },
+                "description": "Solo se aceptan `image/jpeg` e `image/png`; un `.txt` se envía como `text/plain` y responde 415.\n\nLos archivos viven en `postman/fixtures/`. En la app de Postman, abre Settings > General > Working directory y apúntalo a la carpeta `postman/`; con Newman, ejecuta desde esa carpeta o pasa `--working-dir postman`.",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "reto",
+                      "value": "GIRAR_IZQUIERDA",
+                      "type": "text"
+                    },
+                    {
+                      "key": "documento_anverso",
+                      "type": "file",
+                      "src": "fixtures/documento_anverso.jpg"
+                    },
+                    {
+                      "key": "documento_reverso",
+                      "type": "file",
+                      "src": "fixtures/documento_reverso.jpg"
+                    },
+                    {
+                      "key": "selfie",
+                      "type": "file",
+                      "src": "fixtures/no_es_imagen.txt"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Enviar verificación - imagen con firma inválida",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                      "pm.test('mensaje genérico de imagen', () => pm.expect(pm.response.json().detail).to.eql('La imagen no es válida'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{otro_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "kyc-firma-{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{otro_cliente_id}}/verificaciones",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{otro_cliente_id}}",
+                    "verificaciones"
+                  ]
+                },
+                "description": "El archivo declara `image/jpeg` pero su contenido no empieza con la firma JPEG: 422.\n\nLos archivos viven en `postman/fixtures/`. En la app de Postman, abre Settings > General > Working directory y apúntalo a la carpeta `postman/`; con Newman, ejecuta desde esa carpeta o pasa `--working-dir postman`.",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "reto",
+                      "value": "GIRAR_IZQUIERDA",
+                      "type": "text"
+                    },
+                    {
+                      "key": "documento_anverso",
+                      "type": "file",
+                      "src": "fixtures/documento_anverso.jpg"
+                    },
+                    {
+                      "key": "documento_reverso",
+                      "type": "file",
+                      "src": "fixtures/documento_reverso.jpg"
+                    },
+                    {
+                      "key": "selfie",
+                      "type": "file",
+                      "src": "fixtures/falso.jpg"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Enviar verificación - de otro cliente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 403', () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "kyc-403-{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{otro_cliente_id}}/verificaciones",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{otro_cliente_id}}",
+                    "verificaciones"
+                  ]
+                },
+                "description": "El token del primer cliente no puede enviar la verificación del segundo.\n\nLos archivos viven en `postman/fixtures/`. En la app de Postman, abre Settings > General > Working directory y apúntalo a la carpeta `postman/`; con Newman, ejecuta desde esa carpeta o pasa `--working-dir postman`.",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "reto",
+                      "value": "GIRAR_IZQUIERDA",
+                      "type": "text"
+                    },
+                    {
+                      "key": "documento_anverso",
+                      "type": "file",
+                      "src": "fixtures/documento_anverso.jpg"
+                    },
+                    {
+                      "key": "documento_reverso",
+                      "type": "file",
+                      "src": "fixtures/documento_reverso.jpg"
+                    },
+                    {
+                      "key": "selfie",
+                      "type": "file",
+                      "src": "fixtures/selfie.jpg"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Enviar verificación - sin credenciales",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "kyc-401-{{$guid}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{otro_cliente_id}}/verificaciones",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{otro_cliente_id}}",
+                    "verificaciones"
+                  ]
+                },
+                "description": "Sin sesión de cliente.\n\nLos archivos viven en `postman/fixtures/`. En la app de Postman, abre Settings > General > Working directory y apúntalo a la carpeta `postman/`; con Newman, ejecuta desde esa carpeta o pasa `--working-dir postman`.",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "reto",
+                      "value": "GIRAR_IZQUIERDA",
+                      "type": "text"
+                    },
+                    {
+                      "key": "documento_anverso",
+                      "type": "file",
+                      "src": "fixtures/documento_anverso.jpg"
+                    },
+                    {
+                      "key": "documento_reverso",
+                      "type": "file",
+                      "src": "fixtures/documento_reverso.jpg"
+                    },
+                    {
+                      "key": "selfie",
+                      "type": "file",
+                      "src": "fixtures/selfie.jpg"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Consultar estado KYC - de otro cliente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 403', () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{otro_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{cliente_id}}/verificacion",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{cliente_id}}",
+                    "verificacion"
+                  ]
+                },
+                "description": "Un cliente no puede consultar el estado KYC de otro."
+              }
+            },
+            {
+              "name": "Consultar estado KYC - cliente sin verificaciones",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const e = pm.response.json();",
+                      "pm.test('sin verificación previa', () => {",
+                      "  pm.expect(e.ultima_verificacion_id).to.eql(null);",
+                      "  pm.expect(e.intentos_restantes).to.be.a('number').and.above(0);",
+                      "  pm.expect(e.bloqueado_hasta).to.eql(null);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{otro_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{otro_cliente_id}}/verificacion",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{otro_cliente_id}}",
+                    "verificacion"
+                  ]
+                },
+                "description": "El segundo cliente no envió imágenes válidas: conserva los intentos y no tiene verificación."
+              }
+            },
+            {
+              "name": "Consultar estado KYC - sin credenciales",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{cliente_id}}/verificacion",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{cliente_id}}",
+                    "verificacion"
+                  ]
+                },
+                "description": "Sin `Authorization` ni `X-Service-Key`."
+              }
+            },
+            {
+              "name": "Consultar estado KYC - cliente inexistente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 404', () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{service_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/00000000-0000-0000-0000-000000000000/verificacion",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "00000000-0000-0000-0000-000000000000",
+                    "verificacion"
+                  ]
+                },
+                "description": "Con clave de servicio, un id desconocido responde 404."
+              }
+            }
+          ],
+          "description": "Los archivos viven en `postman/fixtures/`. En la app de Postman, abre Settings > General > Working directory y apúntalo a la carpeta `postman/`; con Newman, ejecuta desde esa carpeta o pasa `--working-dir postman`."
+        }
+      ],
+      "description": "Registro, consentimiento y KYC. Cada carpeta depende de las variables que deja la anterior: ejecútalas en orden (Runner / Newman)."
+    },
+    {
+      "name": "MS Cotización",
+      "item": [
+        {
+          "name": "Salud",
+          "item": [
+            {
+              "name": "Health",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "pm.test('status ok', () => pm.expect(pm.response.json().status).to.eql('ok'));",
+                      "pm.test('genera X-Correlation-Id si no llega', () => pm.expect(pm.response.headers.get('X-Correlation-Id')).to.be.a('string').and.not.empty);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{cotizacion_url}}/health",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "health"
+                  ]
+                },
+                "description": "Liveness. No consulta Postgres, Redis ni Identidad. Toda respuesta lleva `X-Correlation-Id` (HU11)."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cotizaciones (HU12, HU14)",
+          "item": [
+            {
+              "name": "Crear cotización - microseguro de vida",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "const c = pm.response.json();",
+                      "pm.test('cotización emitida en COP', () => {",
+                      "  pm.expect(c.estado).to.eql('EMITIDA');",
+                      "  pm.expect(c.moneda).to.eql('COP');",
+                      "  pm.expect(c.id).to.be.a('string').and.not.empty;",
+                      "});",
+                      "pm.test('prima positiva y coberturas presentes', () => {",
+                      "  pm.expect(c.prima_anual).to.be.a('number').and.above(0);",
+                      "  pm.expect(c.prima_mensual).to.be.a('number').and.above(0);",
+                      "  pm.expect(c.coberturas).to.be.an('array').that.is.not.empty;",
+                      "});",
+                      "pm.test('el desglose suma exactamente la prima anual', () => {",
+                      "  pm.expect(c.componentes).to.be.an('array').that.is.not.empty;",
+                      "  const suma = c.componentes.reduce((acc, x) => acc + x.monto, 0);",
+                      "  pm.expect(suma).to.eql(c.prima_anual);",
+                      "});",
+                      "pm.test('una cotización aproximada lleva aviso', () => {",
+                      "  if (c.aproximada) { pm.expect(c.aviso).to.be.a('string').and.not.empty; }",
+                      "});",
+                      "pm.test('incluye metadata de latencia', () => {",
+                      "  pm.expect(c.metadata.hit_cache).to.be.a('boolean');",
+                      "});",
+                      "pm.test('producto y cliente solicitados', () => {",
+                      "  pm.expect(c.producto).to.eql('microseguro_vida');",
+                      "  pm.expect(c.cliente_id).to.eql(pm.collectionVariables.get('cliente_id'));",
+                      "});",
+                      "pm.collectionVariables.set('cotizacion_id', c.id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones"
+                  ]
+                },
+                "description": "Calcula y emite la cotización. `edad` 18-65 y `suma_asegurada` 5.000.000-100.000.000. Guarda `cotizacion_id`. Sin consentimiento (o si Identidad no responde: falla cerrado) la cotización es `aproximada` y lleva `aviso`; si un proveedor de datos falla viene `degradado`.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cliente_id\": \"{{cliente_id}}\",\n  \"producto\": \"microseguro_vida\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Crear cotización - protección de dispositivos",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "const c = pm.response.json();",
+                      "pm.test('cotización emitida en COP', () => {",
+                      "  pm.expect(c.estado).to.eql('EMITIDA');",
+                      "  pm.expect(c.moneda).to.eql('COP');",
+                      "  pm.expect(c.id).to.be.a('string').and.not.empty;",
+                      "});",
+                      "pm.test('prima positiva y coberturas presentes', () => {",
+                      "  pm.expect(c.prima_anual).to.be.a('number').and.above(0);",
+                      "  pm.expect(c.prima_mensual).to.be.a('number').and.above(0);",
+                      "  pm.expect(c.coberturas).to.be.an('array').that.is.not.empty;",
+                      "});",
+                      "pm.test('el desglose suma exactamente la prima anual', () => {",
+                      "  pm.expect(c.componentes).to.be.an('array').that.is.not.empty;",
+                      "  const suma = c.componentes.reduce((acc, x) => acc + x.monto, 0);",
+                      "  pm.expect(suma).to.eql(c.prima_anual);",
+                      "});",
+                      "pm.test('una cotización aproximada lleva aviso', () => {",
+                      "  if (c.aproximada) { pm.expect(c.aviso).to.be.a('string').and.not.empty; }",
+                      "});",
+                      "pm.test('incluye metadata de latencia', () => {",
+                      "  pm.expect(c.metadata.hit_cache).to.be.a('boolean');",
+                      "});",
+                      "pm.test('producto solicitado', () => pm.expect(c.producto).to.eql('proteccion_dispositivos'));",
+                      "pm.collectionVariables.set('cotizacion_dispositivos_id', c.id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones"
+                  ]
+                },
+                "description": "`tipo_dispositivo`: `celular`, `portatil` o `tableta`; `valor_dispositivo` 300.000-15.000.000; `antiguedad_meses` 0-36.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cliente_id\": \"{{cliente_id}}\",\n  \"producto\": \"proteccion_dispositivos\",\n  \"datos\": {\n    \"tipo_dispositivo\": \"celular\",\n    \"valor_dispositivo\": 2500000,\n    \"antiguedad_meses\": 10\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Crear cotización - cliente sin consentimiento",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "const c = pm.response.json();",
+                      "pm.test('sin consentimiento la cotización es aproximada y lleva aviso', () => {",
+                      "  if (pm.variables.get('identidad_integrada') !== 'true') { return; }",
+                      "  pm.expect(c.aproximada).to.eql(true);",
+                      "  pm.expect(c.aviso).to.be.a('string').and.not.empty;",
+                      "});",
+                      "pm.collectionVariables.set('cotizacion_sin_consentimiento_id', c.id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones"
+                  ]
+                },
+                "description": "Cotiza para el segundo cliente, que no otorgó consentimiento. Con MS Identidad integrado (`IDENTIDAD_URL`) la respuesta es `aproximada: true` con `aviso` (se calcula con el perfil por defecto, sin consultar proveedores). Con `SOLVENTA_MODO_DESARROLLO=1` y sin `IDENTIDAD_URL`, el stub siempre otorga el consentimiento y la cotización no es aproximada: pon `identidad_integrada` en `false`.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cliente_id\": \"{{otro_cliente_id}}\",\n  \"producto\": \"microseguro_vida\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Crear cotización - con X-Correlation-Id",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.collectionVariables.set('correlacion_id', 'pm-' + pm.variables.replaceIn('{{$guid}}'));"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "pm.test('devuelve el mismo X-Correlation-Id', () => pm.expect(pm.response.headers.get('X-Correlation-Id')).to.eql(pm.collectionVariables.get('correlacion_id')));",
+                      "pm.collectionVariables.set('cotizacion_correlada_id', pm.response.json().id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-Correlation-Id",
+                    "value": "{{correlacion_id}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones"
+                  ]
+                },
+                "description": "Si la solicitud trae un `X-Correlation-Id` seguro (`[A-Za-z0-9._:-]`, 1-64 caracteres) el servicio lo respeta y lo devuelve; queda en los registros de trazabilidad (HU11). Guarda `cotizacion_correlada_id` para verificarlo en «Consultar consultas externas».",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cliente_id\": \"{{cliente_id}}\",\n  \"producto\": \"microseguro_vida\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Crear cotización - X-Correlation-Id inseguro",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "const devuelto = pm.response.headers.get('X-Correlation-Id');",
+                      "pm.test('reemplaza el valor inseguro por uno generado', () => {",
+                      "  pm.expect(devuelto).to.not.eql('valor inseguro; con espacios');",
+                      "  pm.expect(devuelto).to.match(/^[A-Za-z0-9._:-]{1,64}$/);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "X-Correlation-Id",
+                    "value": "valor inseguro; con espacios",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones"
+                  ]
+                },
+                "description": "Un valor con caracteres fuera de `[A-Za-z0-9._:-]` no se acepta: el servicio genera uno nuevo y lo devuelve.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cliente_id\": \"{{cliente_id}}\",\n  \"producto\": \"microseguro_vida\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Crear cotización - producto inexistente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                      "const error = pm.response.json().error;",
+                      "pm.test('error.code es VALIDATION_ERROR', () => pm.expect(error.code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('incluye trace_id', () => pm.expect(error.trace_id).to.be.a('string').and.not.empty);",
+                      "pm.test('señala el campo producto', () => pm.expect(pm.response.json().error.details.map(d => d.campo)).to.include('producto'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones"
+                  ]
+                },
+                "description": "Un producto fuera del catálogo responde 422 y lista los disponibles.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cliente_id\": \"{{cliente_id}}\",\n  \"producto\": \"seguro_que_no_existe\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Crear cotización - edad fuera de rango",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                      "const error = pm.response.json().error;",
+                      "pm.test('error.code es VALIDATION_ERROR', () => pm.expect(error.code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('incluye trace_id', () => pm.expect(error.trace_id).to.be.a('string').and.not.empty);",
+                      "pm.test('señala datos.edad', () => pm.expect(pm.response.json().error.details.map(d => d.campo)).to.include('datos.edad'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones"
+                  ]
+                },
+                "description": "La edad mínima del microseguro de vida es 18.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cliente_id\": \"{{cliente_id}}\",\n  \"producto\": \"microseguro_vida\",\n  \"datos\": {\n    \"edad\": 17,\n    \"suma_asegurada\": 50000000\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Crear cotización - campo requerido ausente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                      "const error = pm.response.json().error;",
+                      "pm.test('error.code es VALIDATION_ERROR', () => pm.expect(error.code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('incluye trace_id', () => pm.expect(error.trace_id).to.be.a('string').and.not.empty);",
+                      "pm.test('señala datos.suma_asegurada', () => pm.expect(pm.response.json().error.details.map(d => d.campo)).to.include('datos.suma_asegurada'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones"
+                  ]
+                },
+                "description": "Falta `suma_asegurada`.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cliente_id\": \"{{cliente_id}}\",\n  \"producto\": \"microseguro_vida\",\n  \"datos\": {\n    \"edad\": 35\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Crear cotización - campo no reconocido",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                      "const error = pm.response.json().error;",
+                      "pm.test('error.code es VALIDATION_ERROR', () => pm.expect(error.code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('incluye trace_id', () => pm.expect(error.trace_id).to.be.a('string').and.not.empty);",
+                      "pm.test('señala datos.color_favorito', () => pm.expect(pm.response.json().error.details.map(d => d.campo)).to.include('datos.color_favorito'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones"
+                  ]
+                },
+                "description": "Los campos fuera del producto se rechazan.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cliente_id\": \"{{cliente_id}}\",\n  \"producto\": \"microseguro_vida\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000,\n    \"color_favorito\": \"azul\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Crear cotización - sin cliente_id",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                      "const error = pm.response.json().error;",
+                      "pm.test('error.code es VALIDATION_ERROR', () => pm.expect(error.code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('incluye trace_id', () => pm.expect(error.trace_id).to.be.a('string').and.not.empty);",
+                      "pm.test('señala cliente_id', () => pm.expect(pm.response.json().error.details.map(d => d.campo)).to.include('cliente_id'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones"
+                  ]
+                },
+                "description": "Error de forma del cuerpo: también usa el formato estándar de error.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"producto\": \"microseguro_vida\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Consultar cotización",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const c = pm.response.json();",
+                      "pm.test('es la cotización emitida', () => {",
+                      "  pm.expect(c.id).to.eql(pm.collectionVariables.get('cotizacion_id'));",
+                      "  pm.expect(c.estado).to.eql('EMITIDA');",
+                      "  pm.expect(c.vigente_hasta).to.be.a('string');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones/{{cotizacion_id}}",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones",
+                    "{{cotizacion_id}}"
+                  ]
+                },
+                "description": "Recupera la cotización emitida. Requiere haber ejecutado antes «Crear cotización - microseguro de vida»."
+              }
+            },
+            {
+              "name": "Consultar cotización - inexistente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                      "const error = pm.response.json().error;",
+                      "pm.test('error.code es COTIZACION_NO_ENCONTRADA', () => pm.expect(error.code).to.eql('COTIZACION_NO_ENCONTRADA'));",
+                      "pm.test('incluye trace_id', () => pm.expect(error.trace_id).to.be.a('string').and.not.empty);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones/00000000-0000-0000-0000-000000000000",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones",
+                    "00000000-0000-0000-0000-000000000000"
+                  ]
+                },
+                "description": "Un id desconocido responde 404 con el formato estándar de error."
+              }
+            },
+            {
+              "name": "Registrar latencia del cliente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 204', () => pm.response.to.have.status(204));",
+                      "pm.test('sin cuerpo', () => pm.expect(pm.response.text()).to.eql(''));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones/{{cotizacion_id}}/latencia-cliente",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones",
+                    "{{cotizacion_id}}",
+                    "latencia-cliente"
+                  ]
+                },
+                "description": "El canal reporta la latencia que percibió el usuario (ms). Responde 204 sin cuerpo.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"latencia_cliente_ms\": 182.5\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Registrar latencia del cliente - valor no positivo",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                      "const error = pm.response.json().error;",
+                      "pm.test('error.code es VALIDATION_ERROR', () => pm.expect(error.code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('incluye trace_id', () => pm.expect(error.trace_id).to.be.a('string').and.not.empty);",
+                      "pm.test('señala latencia_cliente_ms', () => pm.expect(pm.response.json().error.details.map(d => d.campo)).to.include('latencia_cliente_ms'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones/{{cotizacion_id}}/latencia-cliente",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones",
+                    "{{cotizacion_id}}",
+                    "latencia-cliente"
+                  ]
+                },
+                "description": "`latencia_cliente_ms` debe ser mayor que 0.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"latencia_cliente_ms\": 0\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Registrar latencia del cliente - cotización inexistente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                      "const error = pm.response.json().error;",
+                      "pm.test('error.code es COTIZACION_NO_ENCONTRADA', () => pm.expect(error.code).to.eql('COTIZACION_NO_ENCONTRADA'));",
+                      "pm.test('incluye trace_id', () => pm.expect(error.trace_id).to.be.a('string').and.not.empty);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones/00000000-0000-0000-0000-000000000000/latencia-cliente",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones",
+                    "00000000-0000-0000-0000-000000000000",
+                    "latencia-cliente"
+                  ]
+                },
+                "description": "Una cotización desconocida responde 404.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"latencia_cliente_ms\": 182.5\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Consultar cotización - id demasiado largo",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                      "const error = pm.response.json().error;",
+                      "pm.test('error.code es VALIDATION_ERROR', () => pm.expect(error.code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('incluye trace_id', () => pm.expect(error.trace_id).to.be.a('string').and.not.empty);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones",
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                  ]
+                },
+                "description": "El id admite de 1 a 36 caracteres; uno más largo es un error de validación, no un 404."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Auditoría - desglose y consultas externas (HU14, HU11)",
+          "item": [
+            {
+              "name": "Consultar desglose - como auditor",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const d = pm.response.json();",
+                      "pm.test('corresponde a la cotización', () => {",
+                      "  pm.expect(d.cotizacion_id).to.eql(pm.collectionVariables.get('cotizacion_id'));",
+                      "  pm.expect(d.producto).to.eql('microseguro_vida');",
+                      "  pm.expect(d.moneda).to.eql('COP');",
+                      "});",
+                      "pm.test('los componentes suman la prima anual', () => {",
+                      "  const suma = d.componentes.reduce((acc, x) => acc + x.monto, 0);",
+                      "  pm.expect(suma).to.eql(d.prima_anual);",
+                      "});",
+                      "pm.test('incluye factores y referencia al perfil sin datos personales', () => {",
+                      "  pm.expect(d.factores).to.be.an('array');",
+                      "  pm.expect(d.perfil.fuentes).to.be.an('array');",
+                      "  pm.expect(d.perfil.completitud).to.be.a('number');",
+                      "  pm.expect(d.prima_base).to.be.a('number').and.above(0);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{auditor_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones/{{cotizacion_id}}/desglose",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones",
+                    "{{cotizacion_id}}",
+                    "desglose"
+                  ]
+                },
+                "description": "Explica cómo se calculó la prima. Requiere `X-Service-Key` con una clave de `AUDITOR_API_KEYS` del servicio de Cotización."
+              }
+            },
+            {
+              "name": "Consultar desglose - sin credencial",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                      "const error = pm.response.json().error;",
+                      "pm.test('error.code es NO_AUTENTICADO', () => pm.expect(error.code).to.eql('NO_AUTENTICADO'));",
+                      "pm.test('incluye trace_id', () => pm.expect(error.trace_id).to.be.a('string').and.not.empty);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones/{{cotizacion_id}}/desglose",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones",
+                    "{{cotizacion_id}}",
+                    "desglose"
+                  ]
+                },
+                "description": "Sin `X-Service-Key`."
+              }
+            },
+            {
+              "name": "Consultar desglose - clave sin permiso",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 403', () => pm.response.to.have.status(403));",
+                      "const error = pm.response.json().error;",
+                      "pm.test('error.code es SIN_PERMISO', () => pm.expect(error.code).to.eql('SIN_PERMISO'));",
+                      "pm.test('incluye trace_id', () => pm.expect(error.trace_id).to.be.a('string').and.not.empty);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "clave-sin-permiso",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones/{{cotizacion_id}}/desglose",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones",
+                    "{{cotizacion_id}}",
+                    "desglose"
+                  ]
+                },
+                "description": "Una clave que no está en `AUDITOR_API_KEYS`. Con la variable vacía nadie accede (falla cerrado)."
+              }
+            },
+            {
+              "name": "Consultar desglose - cotización inexistente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                      "const error = pm.response.json().error;",
+                      "pm.test('error.code es COTIZACION_NO_ENCONTRADA', () => pm.expect(error.code).to.eql('COTIZACION_NO_ENCONTRADA'));",
+                      "pm.test('incluye trace_id', () => pm.expect(error.trace_id).to.be.a('string').and.not.empty);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{auditor_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones/00000000-0000-0000-0000-000000000000/desglose",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones",
+                    "00000000-0000-0000-0000-000000000000",
+                    "desglose"
+                  ]
+                },
+                "description": "Un auditor consulta un id que no existe."
+              }
+            },
+            {
+              "name": "Consultar consultas externas - como auditor",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const d = pm.response.json();",
+                      "pm.test('corresponde a la cotización y tiene consultas', () => {",
+                      "  pm.expect(d.cotizacion_id).to.eql(pm.collectionVariables.get('cotizacion_id'));",
+                      "  pm.expect(d.consultas).to.be.an('array').that.is.not.empty;",
+                      "  d.consultas.forEach(c => pm.expect(c.cotizacion_id).to.eql(d.cotizacion_id));",
+                      "});",
+                      "const RESULTADOS = ['OK', 'TIMEOUT', 'DEGRADADO', 'SIN_CONSENTIMIENTO'];",
+                      "pm.test('cada consulta trae solo metadatos (sin payload ni datos del cliente)', () => {",
+                      "  d.consultas.forEach(c => {",
+                      "    pm.expect(c.proveedor).to.be.a('string').and.not.empty;",
+                      "    pm.expect(c.categorias).to.be.an('array');",
+                      "    pm.expect(c.resultado).to.be.oneOf(RESULTADOS);",
+                      "    pm.expect(c.latencia_ms).to.be.a('number');",
+                      "    pm.expect(c.hit_cache).to.be.a('boolean');",
+                      "    pm.expect(c.consultado_en).to.be.a('string');",
+                      "    pm.expect(c).to.not.have.property('payload');",
+                      "  });",
+                      "});",
+                      "pm.test('van en orden temporal', () => {",
+                      "  const t = d.consultas.map(c => Date.parse(c.consultado_en));",
+                      "  pm.expect(t).to.eql([...t].sort((a, b) => a - b));",
+                      "});",
+                      "pm.test('con consentimiento, la consulta referencia el id otorgado en Identidad', () => {",
+                      "  if (pm.variables.get('identidad_integrada') !== 'true') { return; }",
+                      "  d.consultas.forEach(c => {",
+                      "    pm.expect(c.resultado).to.not.eql('SIN_CONSENTIMIENTO');",
+                      "    pm.expect(c.consentimiento_id).to.eql(pm.collectionVariables.get('consentimiento_id'));",
+                      "  });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{auditor_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones/{{cotizacion_id}}/consultas-externas",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones",
+                    "{{cotizacion_id}}",
+                    "consultas-externas"
+                  ]
+                },
+                "description": "Qué proveedores se consultaron para la cotización, cuándo, con qué consentimiento y con qué resultado (HU11). La escritura es asíncrona, así que el registro puede tardar un instante en aparecer: por eso esta petición va después de las demás. Si Cotización no está conectada a Identidad (sin `IDENTIDAD_URL`), pon la variable `identidad_integrada` en `false`."
+              }
+            },
+            {
+              "name": "Consultar consultas externas - enlazadas por X-Correlation-Id",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const d = pm.response.json();",
+                      "pm.test('todas las consultas llevan la correlación enviada', () => {",
+                      "  pm.expect(d.consultas).to.be.an('array').that.is.not.empty;",
+                      "  d.consultas.forEach(c => pm.expect(c.correlacion_id).to.eql(pm.collectionVariables.get('correlacion_id')));",
+                      "});",
+                      "const RESULTADOS = ['OK', 'TIMEOUT', 'DEGRADADO', 'SIN_CONSENTIMIENTO'];",
+                      "pm.test('cada consulta trae solo metadatos (sin payload ni datos del cliente)', () => {",
+                      "  d.consultas.forEach(c => {",
+                      "    pm.expect(c.proveedor).to.be.a('string').and.not.empty;",
+                      "    pm.expect(c.categorias).to.be.an('array');",
+                      "    pm.expect(c.resultado).to.be.oneOf(RESULTADOS);",
+                      "    pm.expect(c.latencia_ms).to.be.a('number');",
+                      "    pm.expect(c.hit_cache).to.be.a('boolean');",
+                      "    pm.expect(c.consultado_en).to.be.a('string');",
+                      "    pm.expect(c).to.not.have.property('payload');",
+                      "  });",
+                      "});",
+                      "pm.test('van en orden temporal', () => {",
+                      "  const t = d.consultas.map(c => Date.parse(c.consultado_en));",
+                      "  pm.expect(t).to.eql([...t].sort((a, b) => a - b));",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{auditor_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones/{{cotizacion_correlada_id}}/consultas-externas",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones",
+                    "{{cotizacion_correlada_id}}",
+                    "consultas-externas"
+                  ]
+                },
+                "description": "Los registros de la cotización creada con `X-Correlation-Id` llevan ese mismo valor en `correlacion_id`."
+              }
+            },
+            {
+              "name": "Consultar consultas externas - cliente sin consentimiento",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const d = pm.response.json();",
+                      "const RESULTADOS = ['OK', 'TIMEOUT', 'DEGRADADO', 'SIN_CONSENTIMIENTO'];",
+                      "pm.test('cada consulta trae solo metadatos (sin payload ni datos del cliente)', () => {",
+                      "  d.consultas.forEach(c => {",
+                      "    pm.expect(c.proveedor).to.be.a('string').and.not.empty;",
+                      "    pm.expect(c.categorias).to.be.an('array');",
+                      "    pm.expect(c.resultado).to.be.oneOf(RESULTADOS);",
+                      "    pm.expect(c.latencia_ms).to.be.a('number');",
+                      "    pm.expect(c.hit_cache).to.be.a('boolean');",
+                      "    pm.expect(c.consultado_en).to.be.a('string');",
+                      "    pm.expect(c).to.not.have.property('payload');",
+                      "  });",
+                      "});",
+                      "pm.test('van en orden temporal', () => {",
+                      "  const t = d.consultas.map(c => Date.parse(c.consultado_en));",
+                      "  pm.expect(t).to.eql([...t].sort((a, b) => a - b));",
+                      "});",
+                      "pm.test('las omisiones por falta de consentimiento quedan registradas', () => {",
+                      "  if (pm.variables.get('identidad_integrada') !== 'true') { return; }",
+                      "  pm.expect(d.consultas).to.be.an('array').that.is.not.empty;",
+                      "  pm.expect(d.consultas.map(c => c.proveedor)).to.have.members(['open_finance', 'open_data']);",
+                      "  d.consultas.forEach(c => {",
+                      "    pm.expect(c.resultado).to.eql('SIN_CONSENTIMIENTO');",
+                      "    pm.expect(c.latencia_ms).to.eql(0);",
+                      "  });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{auditor_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones/{{cotizacion_sin_consentimiento_id}}/consultas-externas",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones",
+                    "{{cotizacion_sin_consentimiento_id}}",
+                    "consultas-externas"
+                  ]
+                },
+                "description": "Sin consentimiento no se llama a los proveedores, pero cada omisión queda auditada: un registro `SIN_CONSENTIMIENTO` por proveedor, con latencia 0. Con el stub de desarrollo (sin `IDENTIDAD_URL`) el consentimiento siempre se otorga; en ese caso pon `identidad_integrada` en `false`."
+              }
+            },
+            {
+              "name": "Consultar consultas externas - sin credencial",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                      "const error = pm.response.json().error;",
+                      "pm.test('error.code es NO_AUTENTICADO', () => pm.expect(error.code).to.eql('NO_AUTENTICADO'));",
+                      "pm.test('incluye trace_id', () => pm.expect(error.trace_id).to.be.a('string').and.not.empty);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones/{{cotizacion_id}}/consultas-externas",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones",
+                    "{{cotizacion_id}}",
+                    "consultas-externas"
+                  ]
+                },
+                "description": "Sin `X-Service-Key`."
+              }
+            },
+            {
+              "name": "Consultar consultas externas - clave sin permiso",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 403', () => pm.response.to.have.status(403));",
+                      "const error = pm.response.json().error;",
+                      "pm.test('error.code es SIN_PERMISO', () => pm.expect(error.code).to.eql('SIN_PERMISO'));",
+                      "pm.test('incluye trace_id', () => pm.expect(error.trace_id).to.be.a('string').and.not.empty);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "clave-sin-permiso",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones/{{cotizacion_id}}/consultas-externas",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones",
+                    "{{cotizacion_id}}",
+                    "consultas-externas"
+                  ]
+                },
+                "description": "Una clave que no está en `AUDITOR_API_KEYS`."
+              }
+            },
+            {
+              "name": "Consultar consultas externas - cotización inexistente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                      "const error = pm.response.json().error;",
+                      "pm.test('error.code es COTIZACION_NO_ENCONTRADA', () => pm.expect(error.code).to.eql('COTIZACION_NO_ENCONTRADA'));",
+                      "pm.test('incluye trace_id', () => pm.expect(error.trace_id).to.be.a('string').and.not.empty);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{auditor_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones/00000000-0000-0000-0000-000000000000/consultas-externas",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones",
+                    "00000000-0000-0000-0000-000000000000",
+                    "consultas-externas"
+                  ]
+                },
+                "description": "Un auditor consulta un id que no existe."
+              }
+            },
+            {
+              "name": "Consultar desglose - id demasiado largo",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                      "const error = pm.response.json().error;",
+                      "pm.test('error.code es VALIDATION_ERROR', () => pm.expect(error.code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('incluye trace_id', () => pm.expect(error.trace_id).to.be.a('string').and.not.empty);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{auditor_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/desglose",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones",
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "desglose"
+                  ]
+                },
+                "description": "Con credencial de auditor válida, un id de más de 36 caracteres responde 422."
+              }
+            },
+            {
+              "name": "Consultar consultas externas - id demasiado largo",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                      "const error = pm.response.json().error;",
+                      "pm.test('error.code es VALIDATION_ERROR', () => pm.expect(error.code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('incluye trace_id', () => pm.expect(error.trace_id).to.be.a('string').and.not.empty);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{auditor_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/consultas-externas",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones",
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "consultas-externas"
+                  ]
+                },
+                "description": "Con credencial de auditor válida, un id de más de 36 caracteres responde 422."
+              }
+            }
+          ],
+          "description": "Solo lectura para el rol auditor (ADR-0006)."
+        },
+        {
+          "name": "Perfiles (HU09)",
+          "item": [
+            {
+              "name": "Consultar perfil crudo del cliente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const p = pm.response.json();",
+                      "pm.test('devuelve el perfil del cliente con sus fuentes', () => {",
+                      "  pm.expect(p.cliente_id).to.eql(pm.collectionVariables.get('cliente_id'));",
+                      "  pm.expect(p.fuentes).to.be.an('array');",
+                      "  p.fuentes.forEach(f => {",
+                      "    pm.expect(f.fuente).to.be.a('string');",
+                      "    pm.expect(f.hit_cache).to.be.a('boolean');",
+                      "  });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{perfiles_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/perfiles/{{cliente_id}}",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "perfiles",
+                    "{{cliente_id}}"
+                  ]
+                },
+                "description": "Endpoint interno: perfil crudo por fuente (Open Finance / Open Data simulados), con datos financieros. Exige `X-Service-Key` con una clave de `PERFILES_API_KEYS` (distinta de la del auditor). Si no hay consentimiento o un proveedor falla, la fuente viene `degradado` o `por_defecto`."
+              }
+            },
+            {
+              "name": "Consultar perfil crudo - sin clave de servicio",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                      "pm.test('no expone fuentes', () => pm.expect(pm.response.json()).to.not.have.property('fuentes'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{cotizacion_url}}/perfiles/{{cliente_id}}",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "perfiles",
+                    "{{cliente_id}}"
+                  ]
+                },
+                "description": "Sin `X-Service-Key` el perfil crudo no se entrega."
+              }
+            },
+            {
+              "name": "Consultar perfil crudo - clave sin permiso",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 403', () => pm.response.to.have.status(403));",
+                      "pm.test('no expone fuentes', () => pm.expect(pm.response.json()).to.not.have.property('fuentes'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{auditor_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/perfiles/{{cliente_id}}",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "perfiles",
+                    "{{cliente_id}}"
+                  ]
+                },
+                "description": "Una clave que no está en `PERFILES_API_KEYS`. La clave del auditor tampoco sirve aquí: cada rol tiene las suyas."
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Motor de rating, desglose de precio y perfil. Ejecuta primero MS Identidad para tener un `cliente_id` real."
+    }
+  ],
+  "variable": [
+    {
+      "key": "identidad_url",
+      "value": "http://localhost:8001",
+      "type": "string"
+    },
+    {
+      "key": "cotizacion_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "service_key",
+      "value": "dev-service-key",
+      "type": "string"
+    },
+    {
+      "key": "auditor_key",
+      "value": "dev-auditor-key",
+      "type": "string"
+    },
+    {
+      "key": "perfiles_key",
+      "value": "dev-perfiles-key",
+      "type": "string"
+    },
+    {
+      "key": "identidad_integrada",
+      "value": "true",
+      "type": "string"
+    },
+    {
+      "key": "cliente_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "otro_cliente_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "otro_access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cotizacion_id",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
