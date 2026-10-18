@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     UniqueConstraint,
     event,
@@ -108,3 +109,19 @@ class VerificacionKyc(Base):
 @event.listens_for(ConsentimientoRegistro, "before_delete")
 def _registro_inmutable(mapper, connection, target):
     raise ValueError("El registro de consentimiento es inmutable: solo admite inserciones")
+
+
+class IdempotenciaCliente(Base):
+    """Resultado de un POST /v1/clientes con `Idempotency-Key`, compartido por todas las réplicas.
+
+    No guarda la clave ni el token de sesión: la clave va con hash y un reintento exitoso recibe una
+    sesión nueva sobre el mismo cliente. La fila se escribe en la misma transacción que el cliente.
+    """
+
+    __tablename__ = "idempotencia_clientes"
+
+    clave_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    status_code: Mapped[int] = mapped_column(Integer)  # 201 (alta) o 409 (duplicado)
+    cliente_id: Mapped[str | None] = mapped_column(ForeignKey("identidad.clientes.id"), nullable=True)
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    expira_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
