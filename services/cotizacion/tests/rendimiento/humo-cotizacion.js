@@ -2,7 +2,8 @@
 //  - interno  (latencia_interna_ms, que devuelve el servicio): p95 <= 150 ms
 //  - cliente  (medida por k6 desde el generador de carga):     p95 <= 250 ms (RQ-L1)
 // Cada cotización reporta su latencia medida por k6 al servicio (criterio 9).
-// Ejecutar con el servicio levantado (docker compose up -d && alembic upgrade head && uvicorn ...):
+// Ejecutar con el servicio levantado (docker compose up -d && alembic upgrade head && uvicorn ...,
+// con COTIZACION_DATABASE_URL, REDIS_URL y SOLVENTA_MODO_DESARROLLO=1 definidos; ver docker-compose.yml):
 //   k6 run -e BASE_URL=http://localhost:8000 tests/rendimiento/humo-cotizacion.js
 import http from 'k6/http';
 import { check } from 'k6';
