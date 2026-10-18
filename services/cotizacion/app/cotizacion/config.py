@@ -6,12 +6,15 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+SQLITE_LOCAL = "sqlite:///./solventa.db"
+
 
 @dataclass(frozen=True)
 class ConfigCotizacion:
     reglas_version: str = "v1"
     reglas_dir: Path | None = None
-    database_url: str = "sqlite:///./solventa.db"
+    # None = sin configurar; solo en modo desarrollo se sustituye por SQLITE_LOCAL.
+    database_url: str | None = None
     # Claves de servicio con permiso de auditoría (HU14). Vacío = nadie audita.
     auditor_api_keys: tuple[str, ...] = ()
     # Escritura asíncrona de la trazabilidad de consultas (HU11).

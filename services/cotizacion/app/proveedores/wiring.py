@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from app.configuracion import permitir_sustituto_local
 from app.proveedores.cache import CacheMemoria, CachePerfil, CacheRedis
 from app.proveedores.config import ConfigProveedores
 from app.proveedores.consentimiento import ConsentimientoHttp, ConsentimientoStub
@@ -37,11 +38,12 @@ def construir_servicio(config: ConfigProveedores | None = None) -> ServicioPerfi
 
         cache = CacheRedis(from_url(config.redis_url))
     else:
+        permitir_sustituto_local("REDIS_URL", "una caché en memoria por proceso")
         cache = CacheMemoria()
     consentimiento = ConsentimientoHttp.desde_entorno()
     if consentimiento is None:
-        log.warning(
-            "IDENTIDAD_URL no está definido: se usa el stub de consentimiento (solo desarrollo)"
+        permitir_sustituto_local(
+            "IDENTIDAD_URL", "el stub de consentimiento (siempre otorgado)"
         )
         consentimiento = ConsentimientoStub(EstadoConsentimiento.OTORGADO)
     return ServicioPerfil(

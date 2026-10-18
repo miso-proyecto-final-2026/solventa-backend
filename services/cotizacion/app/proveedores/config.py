@@ -16,6 +16,8 @@ class ConfigProveedores:
     jitter_max: float = 0.15
     ttl_respaldo_s: int = 86400
     redis_url: str | None = None
+    # Claves de servicio con permiso para consultar el perfil crudo. Vacío = nadie accede.
+    perfiles_api_keys: tuple[str, ...] = ()
 
     @classmethod
     def desde_entorno(cls, env: dict[str, str] | None = None) -> ConfigProveedores:
@@ -31,4 +33,7 @@ class ConfigProveedores:
             jitter_max=float(e.get("PROVEEDORES_JITTER_MAX", cls.jitter_max)),
             ttl_respaldo_s=int(e.get("PROVEEDORES_TTL_RESPALDO_S", cls.ttl_respaldo_s)),
             redis_url=e.get("REDIS_URL"),
+            perfiles_api_keys=tuple(
+                k.strip() for k in e.get("PERFILES_API_KEYS", "").split(",") if k.strip()
+            ),
         )
