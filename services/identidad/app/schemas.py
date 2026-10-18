@@ -106,6 +106,8 @@ class ConsentimientoCreate(BaseModel):
 
 
 class ConsentimientoOut(BaseModel):
+    # Referencia al consentimiento vigente; la usa Cotización para la trazabilidad (HU11).
+    id: str | None = None
     cliente_id: str
     tipo: TipoConsentimiento
     estado: EstadoConsentimiento

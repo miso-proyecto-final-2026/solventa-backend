@@ -13,10 +13,16 @@ from app.cotizacion.modelos_db import SCHEMA, BaseCotizacion
 pytestmark = pytest.mark.contenedores
 
 
-def test_la_migracion_crea_el_esquema_y_las_cuatro_tablas(base_migrada):
+def test_la_migracion_crea_el_esquema_y_sus_tablas(base_migrada):
     tablas = set(inspect(base_migrada).get_table_names(schema=SCHEMA))
 
-    assert {"cotizaciones", "coberturas", "log_latencia", "desgloses_precio"} <= tablas
+    assert {
+        "cotizaciones",
+        "coberturas",
+        "log_latencia",
+        "desgloses_precio",
+        "trazabilidad_consultas",
+    } <= tablas
 
 
 def test_la_migracion_coincide_con_los_modelos_sin_deriva(base_migrada):
@@ -64,3 +70,15 @@ def test_se_puede_bajar_solo_el_desglose_y_volver_a_subir(engine_pg, alembic):
     assert "desgloses_precio" not in tablas and "cotizaciones" in tablas
     alembic("upgrade", "head")
     assert "desgloses_precio" in set(inspect(engine_pg).get_table_names(schema=SCHEMA))
+
+
+def test_se_puede_bajar_solo_la_trazabilidad_y_volver_a_subir(engine_pg, alembic):
+    alembic("upgrade", "head")
+    alembic("downgrade", "0002")
+
+    tablas = set(inspect(engine_pg).get_table_names(schema=SCHEMA))
+    assert "trazabilidad_consultas" not in tablas and "desgloses_precio" in tablas
+    alembic("upgrade", "head")
+    assert "trazabilidad_consultas" in set(
+        inspect(engine_pg).get_table_names(schema=SCHEMA)
+    )

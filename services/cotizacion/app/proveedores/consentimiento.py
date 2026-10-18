@@ -14,7 +14,7 @@ from urllib.parse import quote
 
 import httpx
 
-from app.proveedores.dominio import EstadoConsentimiento
+from app.proveedores.dominio import EstadoConsentimiento, VerificacionConsentimiento
 
 log = logging.getLogger("solventa.consentimiento")
 
@@ -32,8 +32,15 @@ class ConsentimientoStub:
         self._por_defecto = por_defecto
         self._estados = estados or {}
 
+    async def verificar(self, cliente_id: str) -> VerificacionConsentimiento:
+        estado = self._estados.get(cliente_id, self._por_defecto)
+        referencia = (
+            f"stub-{cliente_id}" if estado is EstadoConsentimiento.OTORGADO else None
+        )
+        return VerificacionConsentimiento(estado, referencia)
+
     async def estado(self, cliente_id: str) -> EstadoConsentimiento:
-        return self._estados.get(cliente_id, self._por_defecto)
+        return (await self.verificar(cliente_id)).estado
 
 
 class ConsentimientoHttp:
@@ -68,7 +75,9 @@ class ConsentimientoHttp:
         self._abierto_desde: float | None = None
 
     @classmethod
-    def desde_entorno(cls, env: dict[str, str] | None = None) -> ConsentimientoHttp | None:
+    def desde_entorno(
+        cls, env: dict[str, str] | None = None
+    ) -> ConsentimientoHttp | None:
         e = os.environ if env is None else env
         url = e.get("IDENTIDAD_URL")
         if not url:
@@ -105,8 +114,13 @@ class ConsentimientoHttp:
         self._abierto_desde = None
 
     async def estado(self, cliente_id: str) -> EstadoConsentimiento:
+        return (await self.verificar(cliente_id)).estado
+
+    async def verificar(self, cliente_id: str) -> VerificacionConsentimiento:
+        """Estado vigente y, si Identidad lo informa, el id del consentimiento verificado."""
+        no_otorgado = VerificacionConsentimiento(EstadoConsentimiento.NO_OTORGADO)
         if not self._permite_llamada():
-            return EstadoConsentimiento.NO_OTORGADO
+            return no_otorgado
         ruta = (
             f"/v1/clientes/{quote(cliente_id, safe='')}"
             f"/consentimientos/{TIPO_OPEN_FINANCE_OPEN_DATA}"
@@ -116,23 +130,30 @@ class ConsentimientoHttp:
         except httpx.HTTPError as exc:
             self._registrar_fallo()
             log.warning("identidad_no_disponible error=%s", type(exc).__name__)
-            return EstadoConsentimiento.NO_OTORGADO
+            return no_otorgado
         if respuesta.status_code >= 500:
             self._registrar_fallo()
             log.warning("identidad_respuesta_5xx status=%s", respuesta.status_code)
-            return EstadoConsentimiento.NO_OTORGADO
+            return no_otorgado
         # Identidad respondió: el servicio está sano aunque la respuesta sea 404 o 401.
         self._registrar_exito()
         if respuesta.status_code == 404:
-            return EstadoConsentimiento.NO_OTORGADO
+            return no_otorgado
         if respuesta.status_code != 200:
-            log.warning("identidad_respuesta_inesperada status=%s", respuesta.status_code)
-            return EstadoConsentimiento.NO_OTORGADO
+            log.warning(
+                "identidad_respuesta_inesperada status=%s", respuesta.status_code
+            )
+            return no_otorgado
         try:
-            return EstadoConsentimiento(respuesta.json()["estado"])
-        except (ValueError, KeyError, TypeError):
+            cuerpo = respuesta.json()
+            estado = EstadoConsentimiento(cuerpo["estado"])
+            referencia = cuerpo.get("id")
+        except (ValueError, KeyError, TypeError, AttributeError):
             log.warning("identidad_cuerpo_invalido")
-            return EstadoConsentimiento.NO_OTORGADO
+            return no_otorgado
+        if not isinstance(referencia, str) or not referencia:
+            referencia = None
+        return VerificacionConsentimiento(estado, referencia)
 
     async def cerrar(self) -> None:
         await self._http.aclose()
