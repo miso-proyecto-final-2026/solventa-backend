@@ -21,7 +21,7 @@ Cada petición lleva pruebas (`pm.test`) y guarda las variables que necesita la 
 | MS Cotización / Salud | `GET /health` (y cabecera `X-Correlation-Id`) |
 | MS Cotización / Cotizaciones | `POST /v1/cotizaciones`, `GET /v1/cotizaciones/{id}`, `PUT /v1/cotizaciones/{id}/latencia-cliente` (ambos productos, validaciones, `X-Correlation-Id`, 404) |
 | MS Cotización / Auditoría | `GET /v1/cotizaciones/{id}/desglose` y `GET /v1/cotizaciones/{id}/consultas-externas` (auditor; 401/403/404/422) |
-| MS Cotización / Perfiles | `GET /perfiles/{cliente_id}` |
+| MS Cotización / Perfiles | `GET /perfiles/{cliente_id}` (exige clave de servicio; 401/403) |
 
 Cada ruta de ambas apps tiene al menos una petición, y cada código de respuesta que alcanza un cliente tiene un caso que
 lo provoca. Quedan fuera, porque dependen de configuración que la colección no cambia:
@@ -45,7 +45,7 @@ SERVICE_API_KEYS=dev-service-key uvicorn app.main:app --port 8001
 cd services/cotizacion
 SOLVENTA_MODO_DESARROLLO=1 \
 IDENTIDAD_URL=http://localhost:8001 IDENTIDAD_SERVICE_KEY=dev-service-key \
-AUDITOR_API_KEYS=dev-auditor-key \
+AUDITOR_API_KEYS=dev-auditor-key PERFILES_API_KEYS=dev-perfiles-key \
 uvicorn app.main:app --port 8000
 ```
 
@@ -76,6 +76,7 @@ npx newman run solventa-backend.postman_collection.json \
 | `identidad_url`, `cotizacion_url` | Entorno | URL base de cada servicio (por defecto `localhost:8001` y `localhost:8000`). |
 | `service_key` | Entorno | `X-Service-Key`; debe estar en `SERVICE_API_KEYS` de Identidad. |
 | `auditor_key` | Entorno | `X-Service-Key` del auditor; debe estar en `AUDITOR_API_KEYS` de Cotización. |
+| `perfiles_key` | Entorno | `X-Service-Key` del perfil crudo; debe estar en `PERFILES_API_KEYS` de Cotización. Es independiente de la del auditor. |
 | `identidad_integrada` | Entorno | `true` si Cotización corre con `IDENTIDAD_URL`; `false` con el stub de consentimiento. |
 | `cliente_id`, `access_token` | «Registrar cliente» | Cliente principal y su sesión. |
 | `otro_cliente_id`, `otro_access_token` | «Registrar segundo cliente» | Para las pruebas 403 y los casos negativos de KYC; no otorga consentimiento. |

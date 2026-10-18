@@ -3493,6 +3493,45 @@
                   "type": "noauth"
                 },
                 "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{perfiles_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/perfiles/{{cliente_id}}",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "perfiles",
+                    "{{cliente_id}}"
+                  ]
+                },
+                "description": "Endpoint interno: perfil crudo por fuente (Open Finance / Open Data simulados), con datos financieros. Exige `X-Service-Key` con una clave de `PERFILES_API_KEYS` (distinta de la del auditor). Si no hay consentimiento o un proveedor falla, la fuente viene `degradado` o `por_defecto`."
+              }
+            },
+            {
+              "name": "Consultar perfil crudo - sin clave de servicio",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                      "pm.test('no expone fuentes', () => pm.expect(pm.response.json()).to.not.have.property('fuentes'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
                 "header": [],
                 "url": {
                   "raw": "{{cotizacion_url}}/perfiles/{{cliente_id}}",
@@ -3504,7 +3543,46 @@
                     "{{cliente_id}}"
                   ]
                 },
-                "description": "Endpoint interno: perfil crudo por fuente (Open Finance / Open Data simulados). Si no hay consentimiento o un proveedor falla, la fuente viene `degradado` o `por_defecto`."
+                "description": "Sin `X-Service-Key` el perfil crudo no se entrega."
+              }
+            },
+            {
+              "name": "Consultar perfil crudo - clave sin permiso",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 403', () => pm.response.to.have.status(403));",
+                      "pm.test('no expone fuentes', () => pm.expect(pm.response.json()).to.not.have.property('fuentes'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{auditor_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/perfiles/{{cliente_id}}",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "perfiles",
+                    "{{cliente_id}}"
+                  ]
+                },
+                "description": "Una clave que no está en `PERFILES_API_KEYS`. La clave del auditor tampoco sirve aquí: cada rol tiene las suyas."
               }
             }
           ]
@@ -3532,6 +3610,11 @@
     {
       "key": "auditor_key",
       "value": "dev-auditor-key",
+      "type": "string"
+    },
+    {
+      "key": "perfiles_key",
+      "value": "dev-perfiles-key",
       "type": "string"
     },
     {
