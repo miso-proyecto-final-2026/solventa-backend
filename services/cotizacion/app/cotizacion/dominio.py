@@ -8,7 +8,6 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-MONEDA = "COP"
 ESTADO_EMITIDA = "EMITIDA"
 AVISO_APROXIMADA = "Este valor es aproximado y puede cambiar al momento de la compra."
 
@@ -106,12 +105,15 @@ class ResultadoRating:
     prima_anual: Decimal
     prima_mensual: Decimal
     coberturas: tuple[CoberturaCalculada, ...]
-    componentes: tuple[Componente, ...]
     version_reglas: str
     vigencia_dias: int
     degradado: bool
     aproximada: bool
     desglose: DesglosePrecio
+
+    @property
+    def componentes(self) -> tuple[Componente, ...]:
+        return self.desglose.componentes
 
     @property
     def aviso(self) -> str | None:
@@ -129,8 +131,8 @@ class SolicitudCotizacion:
 class CotizacionEmitida:
     """Cotización ya persistida, tal como se entrega a los canales.
 
-    `componentes` y `desglose` salen del desglose persistido (HU14); en
-    cotizaciones anteriores a HU14 vienen vacíos.
+    `componentes` se deriva del desglose persistido (HU14); en cotizaciones
+    anteriores a HU14 no hay desglose y `componentes` es vacío.
     """
 
     id: str
@@ -141,7 +143,6 @@ class CotizacionEmitida:
     prima_anual: Decimal
     prima_mensual: Decimal
     coberturas: tuple[CoberturaCalculada, ...]
-    componentes: tuple[Componente, ...]
     version_reglas: str
     degradado: bool
     aproximada: bool
@@ -150,6 +151,11 @@ class CotizacionEmitida:
     hit_cache: bool = False
     latencia_interna_ms: float | None = None
     desglose: DesglosePrecio | None = None
+
+    @property
+    def componentes(self) -> tuple[Componente, ...]:
+        # Vacío en cotizaciones anteriores a HU14, que no tienen desglose persistido.
+        return self.desglose.componentes if self.desglose else ()
 
     @property
     def aviso(self) -> str | None:

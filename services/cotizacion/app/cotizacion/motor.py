@@ -21,7 +21,6 @@ from app.cotizacion.dominio import (
     ETAPA_DATO,
     ETAPA_RIESGO_BASE,
     ETAPA_SENAL,
-    MONEDA,
     PRIMA_BASE,
     RECARGO_DEGRADADO,
     VERSION_DESGLOSE,
@@ -196,11 +195,10 @@ def calcular_prima(
 
     return ResultadoRating(
         producto=producto,
-        moneda=MONEDA,
+        moneda=reglas.moneda,
         prima_anual=prima_anual,
         prima_mensual=_redondear(prima_anual / _MESES),
         coberturas=tuple(coberturas),
-        componentes=componentes,
         version_reglas=reglas.version,
         vigencia_dias=reglas.vigencia_dias,
         degradado=perfil.degradado,
@@ -209,7 +207,7 @@ def calcular_prima(
             version_esquema=VERSION_DESGLOSE,
             version_reglas=reglas.version,
             producto=producto,
-            moneda=MONEDA,
+            moneda=reglas.moneda,
             prima_base=base,
             factores=tuple(factores),
             recargo_degradado_pct=(

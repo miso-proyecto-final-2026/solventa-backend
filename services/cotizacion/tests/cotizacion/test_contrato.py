@@ -5,6 +5,7 @@ pruebas aseguran que el YAML es válido, que sus ejemplos son coherentes y que
 las respuestas reales lo cumplen, para que no se desvíen.
 """
 
+import json
 from pathlib import Path
 
 import pytest
@@ -262,6 +263,14 @@ def test_los_ejemplos_de_error_del_desglose_coinciden_con_los_mensajes_reales(en
             real["error"]["code"],
             real["error"]["message"],
         )
+
+
+def test_openapi_json_publicado_esta_al_dia_con_la_aplicacion():
+    """`docs/api/openapi.json` es el esquema que genera FastAPI; si cambia un endpoint hay
+    que regenerarlo (json.dumps(app.openapi(), indent=2, ensure_ascii=False))."""
+    publicado = json.loads((RUTA.parent / "openapi.json").read_text(encoding="utf-8"))
+
+    assert publicado == app.openapi()
 
 
 # --- HU11: consultas externas de auditoría --------------------------------------
