@@ -49,6 +49,7 @@ El CI corre `test` y `build` en matriz por servicio.
 | `IDENTIDAD_TIMEOUT_S` | cotizacion | Timeout de la consulta (por defecto 0,3 s, dentro del presupuesto de HA01). |
 | `IDENTIDAD_UMBRAL_FALLOS`, `IDENTIDAD_ENFRIAMIENTO_S` | cotizacion | Circuit breaker de la consulta (5 fallos seguidos; 15 s de enfriamiento). |
 | `AUDITOR_API_KEYS` | cotizacion | Claves (separadas por coma) con permiso de auditoría en `X-Service-Key` para `GET /v1/cotizaciones/{id}/desglose` (HU14, ADR-0006). Vacía = nadie accede. Debe venir de un secreto; admite varias claves para rotarla. |
+| `TRAZA_COLA_MAX`, `TRAZA_REINTENTOS` | cotizacion | Cola en memoria de la trazabilidad de consultas (10.000 por defecto) y reintentos de escritura (3). Ver ADR-0007. |
 
 Patrones de comunicación (ADR-0002 y documento de arquitectura): la consulta de consentimiento es REST síncrono con timeout duro y circuit breaker; Kafka se reserva para los flujos de larga duración (suscripción, pagos, siniestros, notificaciones). Los contextos se relacionan por id, nunca por llave foránea ni por tabla compartida.
 

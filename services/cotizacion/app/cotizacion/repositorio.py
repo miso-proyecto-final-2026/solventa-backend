@@ -24,7 +24,9 @@ from app.cotizacion.modelos_db import (
     CotizacionDB,
     DesgloseDB,
     LogLatenciaDB,
+    TrazabilidadConsultaDB,
 )
+from app.proveedores.dominio import RegistroTrazabilidad, ResultadoConsulta
 
 
 def normalizar_url(url: str) -> str:
@@ -162,6 +164,10 @@ class RepositorioCotizaciones:
                 desglose=desglose,
             )
 
+    def existe(self, cotizacion_id: str) -> bool:
+        with self._fabrica() as sesion:
+            return sesion.get(CotizacionDB, cotizacion_id) is not None
+
     def obtener_desglose(self, cotizacion_id: str) -> DesglosePrecio | None:
         """Desglose persistido, o None si la cotización no lo tiene (anterior a HU14)."""
         with self._fabrica() as sesion:
@@ -180,3 +186,56 @@ class RepositorioCotizaciones:
             )
             if resultado.rowcount == 0:
                 raise CotizacionNoEncontrada(cotizacion_id)
+
+
+def _fila_trazabilidad(r: RegistroTrazabilidad) -> TrazabilidadConsultaDB:
+    return TrazabilidadConsultaDB(
+        id=r.id,
+        cliente_id=r.cliente_id[:64],
+        proveedor=r.proveedor,
+        categorias=list(r.categorias),
+        consultado_en=r.consultado_en,
+        consentimiento_id=r.consentimiento_id[:64] if r.consentimiento_id else None,
+        resultado=r.resultado.value,
+        latencia_ms=r.latencia_ms,
+        hit_cache=r.hit_cache,
+        cotizacion_id=r.cotizacion_id,
+        correlacion_id=r.correlacion_id,
+    )
+
+
+class RepositorioTrazabilidad:
+    """Solo inserta y lee: la huella de las consultas es inmutable (HU11)."""
+
+    def __init__(self, fabrica: sessionmaker[Session]) -> None:
+        self._fabrica = fabrica
+
+    def insertar_lote(self, registros: list[RegistroTrazabilidad]) -> None:
+        with self._fabrica() as sesion, sesion.begin():
+            sesion.add_all([_fila_trazabilidad(r) for r in registros])
+
+    def listar_por_cotizacion(self, cotizacion_id: str) -> list[RegistroTrazabilidad]:
+        with self._fabrica() as sesion:
+            filas = sesion.scalars(
+                select(TrazabilidadConsultaDB)
+                .where(TrazabilidadConsultaDB.cotizacion_id == cotizacion_id)
+                .order_by(
+                    TrazabilidadConsultaDB.consultado_en, TrazabilidadConsultaDB.id
+                )
+            ).all()
+            return [
+                RegistroTrazabilidad(
+                    id=f.id,
+                    cliente_id=f.cliente_id,
+                    proveedor=f.proveedor,
+                    categorias=tuple(f.categorias),
+                    consultado_en=_utc(f.consultado_en),
+                    resultado=ResultadoConsulta(f.resultado),
+                    latencia_ms=f.latencia_ms,
+                    hit_cache=f.hit_cache,
+                    consentimiento_id=f.consentimiento_id,
+                    cotizacion_id=f.cotizacion_id,
+                    correlacion_id=f.correlacion_id,
+                )
+                for f in filas
+            ]

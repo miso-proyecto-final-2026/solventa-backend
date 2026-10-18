@@ -16,6 +16,7 @@ from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
+from app.contexto import cotizacion_en_curso
 from app.cotizacion.desglose import verificar_invariante
 from app.cotizacion.dominio import (
     ESTADO_EMITIDA,
@@ -31,7 +32,8 @@ from app.cotizacion.errores import (
 from app.cotizacion.motor import calcular_prima, validar_solicitud
 from app.cotizacion.perfil import PerfilPort
 from app.cotizacion.reglas import ReglasTarifarias
-from app.cotizacion.repositorio import RepositorioCotizaciones
+from app.cotizacion.repositorio import RepositorioCotizaciones, RepositorioTrazabilidad
+from app.proveedores.dominio import RegistroTrazabilidad
 
 log = logging.getLogger("cotizacion.latencia")
 
@@ -53,7 +55,9 @@ class ServicioCotizacion:
         reloj: Callable[[], datetime] = _ahora,
         generar_id: Callable[[], str] = _nuevo_id,
         cronometro: Callable[[], float] = time.perf_counter,
+        trazabilidad: RepositorioTrazabilidad | None = None,
     ) -> None:
+        self._trazabilidad = trazabilidad
         self._reglas = reglas
         self._perfiles = perfiles
         self._repo = repositorio
@@ -66,7 +70,14 @@ class ServicioCotizacion:
         # Se valida antes de cualquier consulta externa: un dato inválido no cuesta I/O.
         validar_solicitud(solicitud.producto, solicitud.datos, self._reglas)
 
-        perfil = await self._perfiles.obtener(solicitud.cliente_id)
+        # El id se fija antes de consultar al proveedor para que la trazabilidad (HU11)
+        # pueda enlazar cada consulta con esta cotización.
+        cotizacion_id = self._generar_id()
+        token = cotizacion_en_curso.set(cotizacion_id)
+        try:
+            perfil = await self._perfiles.obtener(solicitud.cliente_id)
+        finally:
+            cotizacion_en_curso.reset(token)
         resultado = calcular_prima(
             solicitud.producto, solicitud.datos, perfil, self._reglas
         )
@@ -85,7 +96,7 @@ class ServicioCotizacion:
 
         ahora = self._reloj()
         emitida = CotizacionEmitida(
-            id=self._generar_id(),
+            id=cotizacion_id,
             cliente_id=solicitud.cliente_id,
             producto=resultado.producto,
             estado=ESTADO_EMITIDA,
@@ -142,6 +153,18 @@ class ServicioCotizacion:
         # Sin desglose: o la cotización no existe, o es anterior a HU14.
         await self.obtener(cotizacion_id)
         raise DesgloseNoDisponible(cotizacion_id)
+
+    async def consultas_externas(
+        self, cotizacion_id: str
+    ) -> list[RegistroTrazabilidad]:
+        """Consultas a proveedores que alimentaron la cotización, en orden temporal."""
+        if self._trazabilidad is None:
+            return []
+        if not await asyncio.to_thread(self._repo.existe, cotizacion_id):
+            raise CotizacionNoEncontrada(cotizacion_id)
+        return await asyncio.to_thread(
+            self._trazabilidad.listar_por_cotizacion, cotizacion_id
+        )
 
     async def registrar_latencia_cliente(self, cotizacion_id: str, ms: float) -> None:
         await asyncio.to_thread(

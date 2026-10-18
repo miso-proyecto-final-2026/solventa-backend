@@ -271,3 +271,67 @@ def test_openapi_json_publicado_esta_al_dia_con_la_aplicacion():
     publicado = json.loads((RUTA.parent / "openapi.json").read_text(encoding="utf-8"))
 
     assert publicado == app.openapi()
+
+
+# --- HU11: consultas externas de auditoría --------------------------------------
+
+RUTA_CONSULTAS = "/v1/cotizaciones/{id}/consultas-externas"
+
+
+def test_el_ejemplo_de_consultas_externas_cumple_el_esquema():
+    ejemplo = _ejemplos_de_respuesta(RUTA_CONSULTAS, "get", "200")["example"]
+
+    _validador(_esquema_respuesta(RUTA_CONSULTAS, "get", "200")).validate(ejemplo)
+
+    assert SPEC["paths"][RUTA_CONSULTAS]["get"]["security"] == [{"claveAuditor": []}]
+    assert {c["cotizacion_id"] for c in ejemplo["consultas"]} == {
+        ejemplo["cotizacion_id"]
+    }
+
+
+def test_las_consultas_externas_reales_cumplen_el_contrato():
+    import asyncio
+
+    from tests.cotizacion.test_trazabilidad import Entorno, _cliente
+
+    async def escenario():
+        entorno = Entorno()
+        try:
+            from app.cotizacion.reglas import cargar_reglas
+
+            app = entorno.app(entorno.servicio_perfil(), cargar_reglas("v1"))
+            async with _cliente(app) as http:
+                c = (await http.post("/v1/cotizaciones", json=DISP)).json()
+                await entorno.escritor.vaciar()
+                ruta = f"/v1/cotizaciones/{c['id']}/consultas-externas"
+                cabecera = {"X-Service-Key": "clave-auditor"}
+                return (
+                    await http.get(ruta, headers=cabecera),
+                    await http.get(ruta),
+                    await http.get(ruta, headers={"X-Service-Key": "otra"}),
+                    await http.get(
+                        "/v1/cotizaciones/x/consultas-externas", headers=cabecera
+                    ),
+                )
+        finally:
+            entorno.engine.dispose()
+
+    ok, sin, mala, no_existe = asyncio.run(escenario())
+
+    assert (
+        ok.status_code,
+        sin.status_code,
+        mala.status_code,
+        no_existe.status_code,
+    ) == (
+        200,
+        401,
+        403,
+        404,
+    )
+    _validador(_esquema_respuesta(RUTA_CONSULTAS, "get", "200")).validate(ok.json())
+    for codigo, respuesta in (("401", sin), ("403", mala), ("404", no_existe)):
+        _validador(_esquema_respuesta(RUTA_CONSULTAS, "get", codigo)).validate(
+            respuesta.json()
+        )
+    assert len(ok.json()["consultas"]) == 2

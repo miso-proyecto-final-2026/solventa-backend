@@ -25,6 +25,7 @@ def _salida(
             cliente_id=cliente_id, tipo=tipo, estado=EstadoConsentimiento.NO_OTORGADO
         )
     return ConsentimientoOut(
+        id=c.id,
         cliente_id=cliente_id,
         tipo=tipo,
         estado=EstadoConsentimiento(c.estado),
