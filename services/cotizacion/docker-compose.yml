@@ -3,6 +3,7 @@
 #   docker compose up -d
 #   export COTIZACION_DATABASE_URL=postgresql://solventa:solventa@localhost:5432/solventa
 #   export REDIS_URL=redis://localhost:6379/0
+#   export SOLVENTA_MODO_DESARROLLO=1   # sin IDENTIDAD_URL: consentimiento siempre otorgado (solo local)
 #   alembic upgrade head && uvicorn app.main:app --reload
 services:
   postgres:

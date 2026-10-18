@@ -5,7 +5,8 @@ from __future__ import annotations
 from sqlalchemy import Engine
 from sqlalchemy.orm import sessionmaker
 
-from app.cotizacion.config import ConfigCotizacion
+from app.configuracion import permitir_sustituto_local
+from app.cotizacion.config import SQLITE_LOCAL, ConfigCotizacion
 from app.cotizacion.perfil import AdaptadorPerfilProveedores, PerfilPort
 from app.cotizacion.reglas import cargar_reglas
 from app.cotizacion.repositorio import (
@@ -25,7 +26,13 @@ def construir_servicio_cotizacion(
     """Falla al arrancar si las reglas no existen o son inválidas (fail-fast)."""
     config = config or ConfigCotizacion.desde_entorno()
     reglas = cargar_reglas(config.reglas_version, config.reglas_dir)
-    engine = crear_engine(config.database_url)
+    url = config.database_url
+    if url is None:
+        permitir_sustituto_local(
+            "COTIZACION_DATABASE_URL", f"la base SQLite local ({SQLITE_LOCAL})"
+        )
+        url = SQLITE_LOCAL
+    engine = crear_engine(url)
     if engine.dialect.name == "sqlite":
         crear_tablas_locales(engine)  # en PostgreSQL el esquema lo crea Alembic
     repositorio = RepositorioCotizaciones(sessionmaker(engine, expire_on_commit=False))

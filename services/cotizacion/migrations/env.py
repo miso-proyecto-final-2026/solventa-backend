@@ -22,7 +22,12 @@ def _incluir(name, type_, parent_names):
 
 
 def run_migrations_online() -> None:
-    url = normalizar_url(ConfigCotizacion.desde_entorno().database_url)
+    url = ConfigCotizacion.desde_entorno().database_url
+    if url is None:
+        raise RuntimeError(
+            "Defina COTIZACION_DATABASE_URL (o DATABASE_URL) con la URL de PostgreSQL."
+        )
+    url = normalizar_url(url)
     if url.startswith("sqlite"):
         raise RuntimeError(
             "Las migraciones requieren PostgreSQL (esquema 'cotizacion')."
