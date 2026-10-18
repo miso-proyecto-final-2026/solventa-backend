@@ -39,24 +39,24 @@ def upgrade() -> None:
 
     # Los clientes registrados antes de separar el esquema vivían en public.clientes. La copia es de mejor
     # esfuerzo: en staging esa tabla pertenece al rol del servicio anterior y este rol puede no tener
-    # permiso de lectura; en ese caso se omite en lugar de bloquear el despliegue.
+    # permiso de lectura; en ese caso se omite en lugar de bloquear el despliegue. También puede faltar el
+    # USAGE del esquema public (db-access lo restringe por servicio): entonces falla ya to_regclass, por eso
+    # el manejo envuelve la comprobación completa.
     op.execute(
         f"""
         DO $$
         BEGIN
             IF to_regclass('public.clientes') IS NOT NULL THEN
-                BEGIN
-                    INSERT INTO "{SCHEMA}".clientes
-                        (id, nombre, apellido, tipo_documento, numero_documento, email, celular,
-                         password_hash, estado_kyc, creado_en, actualizado_en)
-                    SELECT id, nombre, apellido, tipo_documento, numero_documento, email, celular,
-                           password_hash, estado_kyc, creado_en, actualizado_en
-                    FROM public.clientes
-                    ON CONFLICT DO NOTHING;
-                EXCEPTION WHEN insufficient_privilege THEN
-                    RAISE NOTICE 'Sin permiso sobre public.clientes: no se copian los clientes previos';
-                END;
+                INSERT INTO "{SCHEMA}".clientes
+                    (id, nombre, apellido, tipo_documento, numero_documento, email, celular,
+                     password_hash, estado_kyc, creado_en, actualizado_en)
+                SELECT id, nombre, apellido, tipo_documento, numero_documento, email, celular,
+                       password_hash, estado_kyc, creado_en, actualizado_en
+                FROM public.clientes
+                ON CONFLICT DO NOTHING;
             END IF;
+        EXCEPTION WHEN insufficient_privilege THEN
+            RAISE NOTICE 'Sin permiso sobre public.clientes: no se copian los clientes previos';
         END $$;
         """
     )

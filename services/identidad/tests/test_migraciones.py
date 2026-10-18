@@ -146,8 +146,13 @@ def test_la_migracion_copia_los_clientes_que_vivian_en_public(engine_pg, alembic
     assert ids == ["viejo"]
 
 
-def test_la_migracion_no_falla_si_el_rol_no_puede_leer_public_clientes(engine_pg, postgres_url):
-    """En staging public.clientes es del rol del servicio anterior: el rol de Identidad no la lee."""
+@pytest.mark.parametrize("sin_usage_en_public", [False, True], ids=["sin_select_en_tabla", "sin_usage_en_esquema"])
+def test_la_migracion_no_falla_si_el_rol_no_puede_leer_public_clientes(engine_pg, postgres_url, sin_usage_en_public):
+    """En staging public.clientes es del rol del servicio anterior: el rol de Identidad no la lee.
+
+    En staging además db-access quita el USAGE del esquema public a los demás roles: ahí falla hasta
+    `to_regclass('public.clientes')` con "permission denied for schema public".
+    """
     with engine_pg.begin() as c:
         # Debe tener las columnas reales: con menos, PostgreSQL falla al analizar el SELECT
         # (UndefinedColumn) antes de comprobar permisos y no se ejercita el caso de staging.
@@ -161,6 +166,8 @@ def test_la_migracion_no_falla_si_el_rol_no_puede_leer_public_clientes(engine_pg
         c.execute(text("CREATE ROLE ident_sin_permiso LOGIN PASSWORD 'ident_sin_permiso'"))
         base = c.execute(text("SELECT current_database()")).scalar_one()
         c.execute(text(f'GRANT CREATE ON DATABASE "{base}" TO ident_sin_permiso'))
+        if sin_usage_en_public:
+            c.execute(text("REVOKE USAGE ON SCHEMA public FROM PUBLIC"))
 
     url = engine_pg.url.set(username="ident_sin_permiso", password="ident_sin_permiso")
     cfg = Config(str(RAIZ / "alembic.ini"))
@@ -179,6 +186,7 @@ def test_la_migracion_no_falla_si_el_rol_no_puede_leer_public_clientes(engine_pg
         else:
             os.environ["DATABASE_URL"] = previo
         with engine_pg.begin() as c:
+            c.execute(text("GRANT USAGE ON SCHEMA public TO PUBLIC"))
             c.execute(text(f'DROP SCHEMA IF EXISTS "{SCHEMA}" CASCADE'))
             c.execute(text("DROP OWNED BY ident_sin_permiso"))
             c.execute(text("DROP ROLE ident_sin_permiso"))
