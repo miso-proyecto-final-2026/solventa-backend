@@ -154,7 +154,6 @@ class RepositorioCotizaciones:
                     CoberturaCalculada(c.tipo, Decimal(c.monto), Decimal(c.deducible))
                     for c in fila.coberturas
                 ),
-                componentes=desglose.componentes if desglose else (),
                 version_reglas=fila.version_reglas,
                 degradado=fila.degradado,
                 aproximada=fila.aproximada,
