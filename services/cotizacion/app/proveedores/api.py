@@ -4,13 +4,32 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 
 from app.proveedores.dominio import PerfilCrudo
 from app.proveedores.servicio import ServicioPerfil
+from app.seguridad import clave_valida
 
-router = APIRouter(prefix="/perfiles", tags=["perfiles"])
+
+def exigir_clave_de_servicio(
+    request: Request,
+    x_service_key: Annotated[str | None, Header()] = None,
+) -> None:
+    """El perfil crudo trae datos financieros: solo lo consultan servicios u operadores
+    con una clave dedicada (`PERFILES_API_KEYS`). Falla cerrado: sin claves, nadie accede."""
+    if not x_service_key:
+        raise HTTPException(status_code=401, detail="Se requiere la clave de servicio")
+    claves = request.app.state.servicio_perfil.config.perfiles_api_keys
+    if not clave_valida(x_service_key, claves):
+        raise HTTPException(status_code=403, detail="La clave no tiene permiso")
+
+
+router = APIRouter(
+    prefix="/perfiles",
+    tags=["perfiles"],
+    dependencies=[Depends(exigir_clave_de_servicio)],
+)
 
 
 class FuenteOut(BaseModel):
