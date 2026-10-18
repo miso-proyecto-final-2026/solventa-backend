@@ -24,6 +24,13 @@ VARIABLES = (
 )
 
 
+class PerfilFalso:
+    """Lo único que `construir_servicio_cotizacion` usa del servicio de perfiles."""
+
+    def conectar_trazabilidad(self, _encolar) -> None:
+        pass
+
+
 @pytest.fixture
 def produccion(monkeypatch):
     """Entorno sin modo desarrollo y sin ninguna de las URL de infraestructura."""
@@ -97,17 +104,16 @@ def test_en_desarrollo_se_avisa_de_cada_sustituto(monkeypatch, caplog):
 
 def test_sin_base_de_datos_no_arranca_fuera_de_desarrollo(produccion):
     config = ConfigCotizacion.desde_entorno()
-    servicio_perfil = object()  # no se llega a usarlo: falla antes de ensamblar
 
     with pytest.raises(ErrorConfiguracion, match="COTIZACION_DATABASE_URL"):
-        construir_servicio_cotizacion(servicio_perfil, config)  # type: ignore[arg-type]
+        construir_servicio_cotizacion(PerfilFalso(), config)  # type: ignore[arg-type]
 
 
 def test_con_base_de_datos_explicita_arranca_fuera_de_desarrollo(produccion):
     produccion.setenv("COTIZACION_DATABASE_URL", "sqlite:///:memory:")
     config = ConfigCotizacion.desde_entorno()
 
-    servicio, engine = construir_servicio_cotizacion(object(), config)  # type: ignore[arg-type]
+    servicio, engine, _escritor = construir_servicio_cotizacion(PerfilFalso(), config)  # type: ignore[arg-type]
 
     assert servicio is not None
     engine.dispose()
@@ -119,8 +125,8 @@ def test_en_desarrollo_la_base_por_defecto_es_sqlite_local(monkeypatch, tmp_path
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.chdir(tmp_path)
 
-    _, engine = construir_servicio_cotizacion(
-        object(),  # type: ignore[arg-type]
+    _, engine, _escritor = construir_servicio_cotizacion(
+        PerfilFalso(),  # type: ignore[arg-type]
         ConfigCotizacion.desde_entorno(),
     )
 

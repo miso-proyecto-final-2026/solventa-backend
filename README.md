@@ -73,6 +73,7 @@ Qué debe proveer el ambiente (staging, producción) para que cada servicio arra
 | `AUDITOR_API_KEYS` | No | Secreto | Sin ella nadie accede al desglose (`GET /v1/cotizaciones/{id}/desglose`). |
 | `REGLAS_VERSION`, `REGLAS_DIR` | No | Config | Por defecto `v1`, incluida en la imagen. `REGLAS_DIR` permite montar reglas externas. |
 | `PROVEEDORES_*`, `IDENTIDAD_TIMEOUT_S`, `IDENTIDAD_UMBRAL_FALLOS`, `IDENTIDAD_ENFRIAMIENTO_S` | No | Config | Timeouts, circuit breaker y TTL de la caché; los valores por defecto están alineados con el presupuesto de HA01. |
+| `TRAZA_COLA_MAX`, `TRAZA_REINTENTOS` | No | Config | Cola en memoria y reintentos de la trazabilidad de consultas (HU11, ADR-0007). |
 | `SOLVENTA_MODO_DESARROLLO` | **No definirla** | — | Habilita sustitutos locales (consentimiento siempre otorgado, caché en memoria, SQLite). Nunca en staging ni en producción. |
 
 ### MS Identidad
