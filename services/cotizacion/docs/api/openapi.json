@@ -248,6 +248,96 @@
         }
       }
     },
+    "/v1/cotizaciones/{id}/consultas-externas": {
+      "get": {
+        "tags": [
+          "cotizaciones"
+        ],
+        "summary": "Consultas a proveedores que alimentaron la cotización (solo auditor)",
+        "operationId": "obtener_consultas_externas_v1_cotizaciones__id__consultas_externas_get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "title": "Id"
+            }
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsultasExternasOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta la credencial.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin permiso de auditoría.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "La cotización no existe o no tiene desglose.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/cotizaciones/{id}/latencia-cliente": {
       "put": {
         "tags": [
@@ -370,6 +460,115 @@
           "monto"
         ],
         "title": "ComponenteOut"
+      },
+      "ConsultaExternaOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "proveedor": {
+            "type": "string",
+            "title": "Proveedor"
+          },
+          "categorias": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Categorias"
+          },
+          "consultado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Consultado En"
+          },
+          "resultado": {
+            "type": "string",
+            "title": "Resultado"
+          },
+          "latencia_ms": {
+            "type": "number",
+            "title": "Latencia Ms"
+          },
+          "hit_cache": {
+            "type": "boolean",
+            "title": "Hit Cache"
+          },
+          "consentimiento_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consentimiento Id"
+          },
+          "cotizacion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cotizacion Id"
+          },
+          "correlacion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlacion Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "cliente_id",
+          "proveedor",
+          "categorias",
+          "consultado_en",
+          "resultado",
+          "latencia_ms",
+          "hit_cache",
+          "consentimiento_id",
+          "cotizacion_id",
+          "correlacion_id"
+        ],
+        "title": "ConsultaExternaOut"
+      },
+      "ConsultasExternasOut": {
+        "properties": {
+          "cotizacion_id": {
+            "type": "string",
+            "title": "Cotizacion Id"
+          },
+          "consultas": {
+            "items": {
+              "$ref": "#/components/schemas/ConsultaExternaOut"
+            },
+            "type": "array",
+            "title": "Consultas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cotizacion_id",
+          "consultas"
+        ],
+        "title": "ConsultasExternasOut"
       },
       "CotizacionOut": {
         "properties": {

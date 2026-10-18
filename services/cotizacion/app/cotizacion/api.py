@@ -129,6 +129,25 @@ class DesgloseOut(BaseModel):
     perfil: PerfilUsadoOut
 
 
+class ConsultaExternaOut(BaseModel):
+    id: str
+    cliente_id: str
+    proveedor: str
+    categorias: list[str]
+    consultado_en: datetime
+    resultado: str
+    latencia_ms: float
+    hit_cache: bool
+    consentimiento_id: str | None
+    cotizacion_id: str | None
+    correlacion_id: str | None
+
+
+class ConsultasExternasOut(BaseModel):
+    cotizacion_id: str
+    consultas: list[ConsultaExternaOut]
+
+
 class LatenciaClienteIn(BaseModel):
     latencia_cliente_ms: float = Field(gt=0)
 
@@ -293,6 +312,37 @@ async def obtener_desglose(
 ) -> DesgloseOut:
     return a_salida_desglose(
         cotizacion_id, await servicio.obtener_desglose(cotizacion_id)
+    )
+
+
+@router.get(
+    "/{id}/consultas-externas",
+    response_model=ConsultasExternasOut,
+    summary="Consultas a proveedores que alimentaron la cotización (solo auditor)",
+    responses=_ERRORES_DESGLOSE,
+)
+async def obtener_consultas_externas(
+    cotizacion_id: CotizacionId, servicio: Servicio, _auditor: Auditor
+) -> ConsultasExternasOut:
+    registros = await servicio.consultas_externas(cotizacion_id)
+    return ConsultasExternasOut(
+        cotizacion_id=cotizacion_id,
+        consultas=[
+            ConsultaExternaOut(
+                id=r.id,
+                cliente_id=r.cliente_id,
+                proveedor=r.proveedor,
+                categorias=list(r.categorias),
+                consultado_en=r.consultado_en,
+                resultado=r.resultado.value,
+                latencia_ms=r.latencia_ms,
+                hit_cache=r.hit_cache,
+                consentimiento_id=r.consentimiento_id,
+                cotizacion_id=r.cotizacion_id,
+                correlacion_id=r.correlacion_id,
+            )
+            for r in registros
+        ],
     )
 
 

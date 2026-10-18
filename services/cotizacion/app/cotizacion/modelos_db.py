@@ -90,6 +90,33 @@ class DesgloseDB(BaseCotizacion):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class TrazabilidadConsultaDB(BaseCotizacion):
+    """Huella de cada consulta a un proveedor externo (HU11). Solo inserción.
+
+    Sin llave foránea a `cotizaciones`: se escribe de forma asíncrona y puede quedar
+    antes (o sin) la cotización. Sin payloads ni datos personales: solo referencias.
+    """
+
+    __tablename__ = "trazabilidad_consultas"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    cliente_id: Mapped[str] = mapped_column(String(64))  # referencia por id
+    proveedor: Mapped[str] = mapped_column(String(30))
+    categorias: Mapped[list[str]] = mapped_column(JSON)
+    consultado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    consentimiento_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    resultado: Mapped[str] = mapped_column(String(20))
+    latencia_ms: Mapped[float] = mapped_column(Float)
+    hit_cache: Mapped[bool] = mapped_column(Boolean)
+    cotizacion_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    correlacion_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    __table_args__ = (
+        Index("ix_trazabilidad_cotizacion_id", "cotizacion_id", "consultado_en"),
+        Index("ix_trazabilidad_cliente_id", "cliente_id"),
+    )
+
+
 class LogLatenciaDB(BaseCotizacion):
     """Registro técnico por cotización (modelo ajustado tras HA01)."""
 
