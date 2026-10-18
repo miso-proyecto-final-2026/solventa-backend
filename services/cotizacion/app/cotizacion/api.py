@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hmac
 from collections.abc import Callable, Coroutine
 from datetime import datetime
 from typing import Annotated, Any
@@ -25,6 +24,7 @@ from app.cotizacion.errores import (
     cuerpo_error,
 )
 from app.cotizacion.servicio import ServicioCotizacion
+from app.seguridad import clave_valida
 
 
 class RutaCotizacion(APIRoute):
@@ -202,9 +202,7 @@ def exigir_auditor(
     if not x_service_key:
         raise NoAutenticado
     claves = getattr(request.app.state, "auditor_api_keys", ())
-    # Se recorren todas para no revelar por tiempo cuál coincidió.
-    coincide = [hmac.compare_digest(x_service_key.encode(), k.encode()) for k in claves]
-    if not any(coincide):
+    if not clave_valida(x_service_key, claves):
         raise SinPermiso
 
 
