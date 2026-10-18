@@ -8,7 +8,6 @@ from sqlalchemy.orm import sessionmaker
 
 from app import db
 from app.db import crear_engine
-from app.idempotency import _cache
 from app.main import app
 
 
@@ -28,13 +27,19 @@ def _base_de_datos_limpia():
     from app.routers.clientes import get_db as get_db_dependencia
 
     app.dependency_overrides[get_db_dependencia] = _get_db_de_prueba
-    _cache.clear()
-    yield
+    yield SessionDePrueba
     app.dependency_overrides.clear()
-    _cache.clear()
     engine.dispose()
 
 
 @pytest.fixture
 def client():
     return TestClient(app)
+
+
+@pytest.fixture
+def sesion_bd(_base_de_datos_limpia):
+    """Sesión sobre la misma base en memoria que usa la API, para inspeccionar lo que se persistió."""
+    sesion = _base_de_datos_limpia()
+    yield sesion
+    sesion.close()
