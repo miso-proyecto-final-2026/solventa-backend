@@ -16,12 +16,20 @@ Cada petición lleva pruebas (`pm.test`) y guarda las variables que necesita la 
 |---|---|
 | MS Identidad / Salud | `GET /health` |
 | MS Identidad / Clientes | `POST /v1/clientes` (alta, idempotencia, duplicado, validaciones) |
-| MS Identidad / Consentimientos | `POST /v1/clientes/{id}/consentimientos`, `GET /v1/clientes/{id}/consentimientos/{tipo}` (cliente y servicio; 401/403/404/422) |
-| MS Identidad / KYC | `POST /v1/clientes/{id}/verificaciones` (multipart), `GET /v1/clientes/{id}/verificacion` (idempotencia, 401/403/415/422) |
-| MS Cotización / Salud | `GET /health` |
-| MS Cotización / Cotizaciones | `POST /v1/cotizaciones`, `GET /v1/cotizaciones/{id}`, `PUT /v1/cotizaciones/{id}/latencia-cliente` (ambos productos, validaciones, 404) |
-| MS Cotización / Desglose | `GET /v1/cotizaciones/{id}/desglose` (auditor; 401/403/404) |
+| MS Identidad / Consentimientos | `POST /v1/clientes/{id}/consentimientos`, `GET /v1/clientes/{id}/consentimientos/{tipo}` (cliente y servicio; `id` del consentimiento; 401/403/404/422) |
+| MS Identidad / KYC | `POST /v1/clientes/{id}/verificaciones` (multipart), `GET /v1/clientes/{id}/verificacion` (idempotencia, 401/403/404/415/422) |
+| MS Cotización / Salud | `GET /health` (y cabecera `X-Correlation-Id`) |
+| MS Cotización / Cotizaciones | `POST /v1/cotizaciones`, `GET /v1/cotizaciones/{id}`, `PUT /v1/cotizaciones/{id}/latencia-cliente` (ambos productos, validaciones, `X-Correlation-Id`, 404) |
+| MS Cotización / Auditoría | `GET /v1/cotizaciones/{id}/desglose` y `GET /v1/cotizaciones/{id}/consultas-externas` (auditor; 401/403/404/422) |
 | MS Cotización / Perfiles | `GET /perfiles/{cliente_id}` |
+
+Cada ruta de ambas apps tiene al menos una petición, y cada código de respuesta que alcanza un cliente tiene un caso que
+lo provoca. Quedan fuera, porque dependen de configuración que la colección no cambia:
+
+- `429` y `RECHAZADO` en KYC (requieren `KYC_SIMULADOR_MODO=rechazo` para agotar los intentos).
+- `413` en KYC (imagen de más de 5 MB; no se versiona un archivo así).
+- `400` «Se requiere HTTPS» en KYC (solo con `KYC_EXIGIR_HTTPS=true`).
+- Caídas de proveedores (`TIMEOUT`, `DEGRADADO` en consultas externas; `degradado: true`), que requieren los modos de falla de los simuladores de Cotización.
 
 ## Levantar los servicios en local
 
@@ -42,8 +50,10 @@ uvicorn app.main:app --port 8000
 ```
 
 Con `IDENTIDAD_URL` definida, Cotización consulta el consentimiento real en Identidad (si el cliente no lo otorgó,
-cotiza con perfil por defecto: `degradado` y `aproximada`). Si la omites, `SOLVENTA_MODO_DESARROLLO=1` usa un stub que
-siempre otorga el consentimiento. En PowerShell define las variables con `$env:NOMBRE = "valor"` antes de `uvicorn`.
+cotiza con el perfil por defecto: la cotización sale `aproximada` con `aviso`, y cada proveedor omitido queda auditado como
+`SIN_CONSENTIMIENTO`). Si la omites, `SOLVENTA_MODO_DESARROLLO=1` usa un stub que siempre otorga el consentimiento; en ese
+caso pon `identidad_integrada` en `false` para que las pruebas que dependen de Identidad no se evalúen.
+En PowerShell define las variables con `$env:NOMBRE = "valor"` antes de `uvicorn`.
 
 ## Usarla
 
@@ -66,9 +76,13 @@ npx newman run solventa-backend.postman_collection.json \
 | `identidad_url`, `cotizacion_url` | Entorno | URL base de cada servicio (por defecto `localhost:8001` y `localhost:8000`). |
 | `service_key` | Entorno | `X-Service-Key`; debe estar en `SERVICE_API_KEYS` de Identidad. |
 | `auditor_key` | Entorno | `X-Service-Key` del auditor; debe estar en `AUDITOR_API_KEYS` de Cotización. |
+| `identidad_integrada` | Entorno | `true` si Cotización corre con `IDENTIDAD_URL`; `false` con el stub de consentimiento. |
 | `cliente_id`, `access_token` | «Registrar cliente» | Cliente principal y su sesión. |
-| `otro_cliente_id`, `otro_access_token` | «Registrar segundo cliente» | Para las pruebas 403 y los casos negativos de KYC. |
-| `cotizacion_id` | «Crear cotización - microseguro de vida» | Consultas, latencia y desglose. |
+| `otro_cliente_id`, `otro_access_token` | «Registrar segundo cliente» | Para las pruebas 403 y los casos negativos de KYC; no otorga consentimiento. |
+| `consentimiento_id` | «Otorgar consentimiento» | Se compara con el `consentimiento_id` que Cotización deja en la trazabilidad. |
+| `cotizacion_id` | «Crear cotización - microseguro de vida» | Consultas, latencia, desglose y consultas externas. |
+| `correlacion_id`, `cotizacion_correlada_id` | «Crear cotización - con X-Correlation-Id» | Verifican que la correlación llega a los registros de auditoría. |
+| `cotizacion_sin_consentimiento_id` | «Crear cotización - cliente sin consentimiento» | Verifica las omisiones auditadas. |
 
 El documento, correo y celular de los clientes se generan en cada ejecución, así que la colección se puede repetir sin
 chocar con registros previos.
@@ -80,6 +94,9 @@ chocar con registros previos.
 - **Resultado del KYC:** depende del simulador de Identidad (`KYC_SIMULADOR_MODO`): `exito` (por defecto) → `VERIFICADO`;
   `rechazo` → `RECHAZADO`; `timeout` o `error_5xx` → `EN_REVISION`. Las pruebas aceptan los tres estados, salvo
   «cliente ya verificado», que espera 409 solo si el cliente quedó `VERIFICADO`.
+- **Consistencia eventual:** la trazabilidad de consultas externas se escribe de forma asíncrona; por eso esas peticiones
+  van después de las que generan los registros. Si ejecutas «Consultar consultas externas» justo tras cotizar y sale
+  vacía, repite la petición.
 - **Idempotencia del alta:** la caché de `Idempotency-Key` de Identidad vive en memoria del proceso (5 min); reiniciar el
   servicio la vacía.
 - **Sin secretos:** las claves del entorno son valores de desarrollo local. Para otro ambiente, crea un entorno aparte y
