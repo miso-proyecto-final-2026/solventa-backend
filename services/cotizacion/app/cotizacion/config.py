@@ -17,6 +17,9 @@ class ConfigCotizacion:
     database_url: str | None = None
     # Claves de servicio con permiso de auditoría (HU14). Vacío = nadie audita.
     auditor_api_keys: tuple[str, ...] = ()
+    # Escritura asíncrona de la trazabilidad de consultas (HU11).
+    traza_cola_max: int = 10_000
+    traza_reintentos: int = 3
 
     @classmethod
     def desde_entorno(cls, env: dict[str, str] | None = None) -> ConfigCotizacion:
@@ -28,6 +31,8 @@ class ConfigCotizacion:
             database_url=e.get("COTIZACION_DATABASE_URL")
             or e.get("DATABASE_URL")
             or cls.database_url,
+            traza_cola_max=int(e.get("TRAZA_COLA_MAX", cls.traza_cola_max)),
+            traza_reintentos=int(e.get("TRAZA_REINTENTOS", cls.traza_reintentos)),
             auditor_api_keys=tuple(
                 k.strip() for k in e.get("AUDITOR_API_KEYS", "").split(",") if k.strip()
             ),

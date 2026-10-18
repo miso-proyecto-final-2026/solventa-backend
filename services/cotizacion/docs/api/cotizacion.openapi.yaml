@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
-  title: Solventa - API de cotización (HU12, HU14)
-  version: 1.1.0
+  title: Solventa - API de cotización (HU12, HU14, HU11)
+  version: 1.2.0
   description: |
     Contrato del motor de rating de MS Cotización, compartido por los canales
     móvil, web y API de socios. Se diseña antes que el código (contract-first) y
@@ -26,6 +26,14 @@ info:
     servicio dedicada en la cabecera `X-Service-Key` (solución provisional hasta
     que exista la gestión de roles internos). Sin cabecera responde 401; con una
     clave sin permiso, 403; si ninguna clave está configurada nadie accede.
+
+    **Trazabilidad de datos externos (HU11).** Cada consulta a un proveedor (y su
+    omisión por falta de consentimiento) deja un registro inmutable con solo
+    metadatos y referencias: nunca la respuesta del proveedor ni datos personales.
+    `GET /v1/cotizaciones/{id}/consultas-externas` las lista en orden temporal con
+    la misma credencial de auditor. El registro se escribe de forma asíncrona: puede
+    tardar un instante en aparecer tras emitir la cotización. La solicitud acepta y
+    devuelve `X-Correlation-Id` para enlazar registros con trazas y logs.
 
     **Datos del producto.** `datos` es un objeto cuyos campos dependen del
     producto y viven en las reglas versionadas, no en este contrato: agregar un
@@ -255,6 +263,60 @@ paths:
                 $ref: '#/components/schemas/ErrorRespuesta'
         '422':
           $ref: '#/components/responses/ErrorValidacion'
+  /v1/cotizaciones/{id}/consultas-externas:
+    get:
+      tags: [auditoria]
+      operationId: obtenerConsultasExternas
+      summary: Consultas a proveedores externos de una cotización (solo auditor)
+      description: |
+        Qué se consultó, a quién, cuándo, con qué consentimiento y con qué
+        resultado (`OK`, `TIMEOUT`, `DEGRADADO`, `SIN_CONSENTIMIENTO`), en orden
+        temporal. `consentimiento_id` es `null` cuando Identidad no lo informa.
+      security:
+        - claveAuditor: []
+      parameters:
+        - $ref: '#/components/parameters/CotizacionId'
+      responses:
+        '200':
+          description: Consultas que alimentaron la cotización (puede ser una lista vacía).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsultasExternas'
+              example:
+                cotizacion_id: 3f1c9a52-6b1e-4f0a-9d44-0a7b1c2d3e4f
+                consultas:
+                  - id: 0b9c1f0e-5c1d-4c0e-8a52-6f0f8c0a1a11
+                    cliente_id: cli-1
+                    proveedor: open_finance
+                    categorias: [ingresos, endeudamiento, antiguedad_financiera]
+                    consultado_en: '2026-10-18T12:00:00.120Z'
+                    resultado: OK
+                    latencia_ms: 41.5
+                    hit_cache: false
+                    consentimiento_id: 9d2a6a2e-0c3b-4d55-9d0b-2b6a1c9e7f10
+                    cotizacion_id: 3f1c9a52-6b1e-4f0a-9d44-0a7b1c2d3e4f
+                    correlacion_id: 7f6c2f5e-0e4d-4d61-9a3e-2d1f0b7c8e55
+        '401':
+          description: Falta la cabecera `X-Service-Key`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+        '403':
+          description: La clave no tiene permiso de auditoría.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+        '404':
+          description: La cotización no existe.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
   /v1/cotizaciones/{id}/latencia-cliente:
     put:
       tags: [cotizaciones]
@@ -470,6 +532,45 @@ components:
           minimum: 0
           description: Igual a la suma exacta de `componentes`.
         perfil: {$ref: '#/components/schemas/PerfilUsado'}
+    ConsultaExterna:
+      type: object
+      required:
+        - id
+        - cliente_id
+        - proveedor
+        - categorias
+        - consultado_en
+        - resultado
+        - latencia_ms
+        - hit_cache
+        - consentimiento_id
+        - cotizacion_id
+        - correlacion_id
+      properties:
+        id: {type: string}
+        cliente_id: {type: string, description: Referencia al cliente, no sus datos.}
+        proveedor: {type: string, enum: [open_finance, open_data]}
+        categorias:
+          type: array
+          items: {type: string}
+          description: Categorías de datos consultadas.
+        consultado_en: {type: string, format: date-time}
+        resultado: {type: string, enum: [OK, TIMEOUT, DEGRADADO, SIN_CONSENTIMIENTO]}
+        latencia_ms: {type: number, minimum: 0}
+        hit_cache:
+          type: boolean
+          description: La respuesta vigente salió de la caché.
+        consentimiento_id: {type: [string, 'null']}
+        cotizacion_id: {type: [string, 'null']}
+        correlacion_id: {type: [string, 'null']}
+    ConsultasExternas:
+      type: object
+      required: [cotizacion_id, consultas]
+      properties:
+        cotizacion_id: {type: string}
+        consultas:
+          type: array
+          items: {$ref: '#/components/schemas/ConsultaExterna'}
     LatenciaCliente:
       type: object
       required: [latencia_cliente_ms]
