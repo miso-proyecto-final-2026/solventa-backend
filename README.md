@@ -8,6 +8,7 @@ por separado, tiene su propio paquete `app`, su `Dockerfile` y su propio esquema
 services/
   identidad/     MS Identidad    HU01–HU08 (registro, KYC, consentimiento)
   cotizacion/    MS Cotización   HU09–HU14, HU37–HU38 (proveedores de datos, perfil, motor de rating)
+  perfilamiento/ MS Perfilamiento HU23 (enriquecimiento del perfil de riesgo, linaje)
 docs/adr/        decisiones de arquitectura (compartidas)
 pyproject.toml   configuración de ruff
 requirements-dev.txt   dependencias de prueba comunes
@@ -26,7 +27,7 @@ Los demás servicios del ADR (Perfilamiento, Suscripción, Pagos, Siniestros, So
 ## Trabajar con un servicio
 
 ```bash
-cd services/identidad          # o services/cotizacion
+cd services/identidad          # o services/cotizacion, services/perfilamiento
 pip install -r requirements.txt -r ../../requirements-dev.txt
 pytest                         # pruebas de ese servicio
 uvicorn app.main:app --reload
@@ -53,6 +54,10 @@ El CI corre `test` y `build` en matriz por servicio.
 | `IDENTIDAD_UMBRAL_FALLOS`, `IDENTIDAD_ENFRIAMIENTO_S` | cotizacion | Circuit breaker de la consulta (5 fallos seguidos; 15 s de enfriamiento). |
 | `PERFILES_API_KEYS` | cotizacion | Claves (separadas por coma) con permiso para consultar `GET /perfiles/{cliente_id}` (perfil crudo de HU09, con datos financieros) en `X-Service-Key`. Vacía = nadie accede. Es independiente de `AUDITOR_API_KEYS`: cada rol tiene sus claves. Debe venir de un secreto. |
 | `AUDITOR_API_KEYS` | cotizacion | Claves (separadas por coma) con permiso de auditoría en `X-Service-Key` para `GET /v1/cotizaciones/{id}/desglose` (HU14, ADR-0006). Vacía = nadie accede. Debe venir de un secreto; admite varias claves para rotarla. |
+| `PERFILAMIENTO_DATABASE_URL` | perfilamiento | Base de datos PostgreSQL (esquema `perfilamiento`, Alembic). Obligatoria fuera de desarrollo; admite `DATABASE_URL`. |
+| `PERFILAMIENTO_API_KEYS` | perfilamiento | Claves de servicio en `X-Service-Key`, como pares `nombre=clave` separados por coma; el nombre queda como «origen» de los intentos bloqueados. Vacía = nadie accede. Debe venir de un secreto. |
+| `REDIS_URL`, `IDENTIDAD_URL`, `IDENTIDAD_SERVICE_KEY` | perfilamiento | Igual que en cotización: caché de fuentes y consulta de consentimiento; obligatorias fuera de desarrollo. |
+| `PROVEEDORES_TTL_OPEN_FINANCE_S`, `PROVEEDORES_TTL_OPEN_DATA_S` | perfilamiento | TTL por tipo de dato (3.600 s y 86.400 s por defecto), con dispersión de ±10–15 %. Ver ADR-0009. |
 | `TRAZA_COLA_MAX`, `TRAZA_REINTENTOS` | cotizacion | Cola en memoria de la trazabilidad de consultas (10.000 por defecto) y reintentos de escritura (3). Ver ADR-0007. |
 | `ASESOR_JWT_SECRETO` | identidad, cotizacion | Secreto HS256 con el que Identidad firma y Cotización valida el token del asesor (HU38, ADR-0008). **Debe ser el mismo en ambos** y venir de un secreto. Sin él solo arranca con `SOLVENTA_MODO_DESARROLLO=1` (secreto fijo de desarrollo). |
 | `ASESOR_JWT_TTL_MIN` | identidad | Vida del token del asesor en minutos (30 por defecto). |

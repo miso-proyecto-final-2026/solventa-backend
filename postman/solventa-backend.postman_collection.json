@@ -4380,6 +4380,304 @@
         }
       ],
       "description": "Motor de rating, desglose de precio y perfil. Ejecuta primero MS Identidad para tener un `cliente_id` real."
+    },
+    {
+      "name": "MS Perfilamiento (HU23)",
+      "item": [
+        {
+          "name": "Enriquecer perfil - con consentimiento",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json();",
+                  "pm.test('combina Open Finance y Open Data', () => {",
+                  "  pm.expect(d.campos).to.have.property('score_crediticio');",
+                  "  pm.expect(d.campos).to.have.property('zona_riesgo');",
+                  "  pm.expect(d.completitud).to.be.within(0, 1);",
+                  "});",
+                  "pm.test('no copia identificadores del proveedor', () => pm.expect(JSON.stringify(d)).to.not.include('customerId'));",
+                  "pm.collectionVariables.set('perfil_id', d.perfil_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{perfilamiento_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{perfilamiento_url}}/v1/perfilamiento/{{perfil_cliente_id}}/enriquecer",
+              "host": [
+                "{{perfilamiento_url}}"
+              ],
+              "path": [
+                "v1",
+                "perfilamiento",
+                "{{perfil_cliente_id}}",
+                "enriquecer"
+              ]
+            },
+            "description": "Consulta Open Finance y Open Data (o la caché), normaliza al esquema canónico y guarda el perfil con su linaje. Requiere consentimiento vigente."
+          }
+        },
+        {
+          "name": "Consultar perfil vigente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('es el perfil enriquecido más reciente', () => pm.expect(pm.response.json().perfil_id).to.eql(pm.collectionVariables.get('perfil_id')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{perfilamiento_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{perfilamiento_url}}/v1/perfilamiento/{{perfil_cliente_id}}/perfil",
+              "host": [
+                "{{perfilamiento_url}}"
+              ],
+              "path": [
+                "v1",
+                "perfilamiento",
+                "{{perfil_cliente_id}}",
+                "perfil"
+              ]
+            },
+            "description": "Devuelve el perfil enriquecido vigente. Verifica el consentimiento en cada llamada: tras una revocación responde 403."
+          }
+        },
+        {
+          "name": "Consultar linaje",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('una línea por fuente con su TTL y fecha de consulta', () => {",
+                  "  pm.expect(d.fuentes).to.have.length(2);",
+                  "  d.fuentes.forEach(f => { pm.expect(f.ttl_s).to.be.a('number'); pm.expect(f.campos).to.be.an('array'); });",
+                  "});",
+                  "pm.test('solo metadatos: sin valores de los datos', () => pm.expect(JSON.stringify(d)).to.not.include('4500000'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{perfilamiento_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{perfilamiento_url}}/v1/perfilamiento/{{perfil_cliente_id}}/linaje",
+              "host": [
+                "{{perfilamiento_url}}"
+              ],
+              "path": [
+                "v1",
+                "perfilamiento",
+                "{{perfil_cliente_id}}",
+                "linaje"
+              ]
+            },
+            "description": "Para auditoría: de qué fuente salió cada campo, cuándo se consultó, su TTL y el consentimiento vigente en ese momento."
+          }
+        },
+        {
+          "name": "Perfil - sin credencial",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('formato estándar de error', () => pm.expect(pm.response.json().error.code).to.eql('NO_AUTENTICADO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{perfilamiento_url}}/v1/perfilamiento/{{perfil_cliente_id}}/perfil",
+              "host": [
+                "{{perfilamiento_url}}"
+              ],
+              "path": [
+                "v1",
+                "perfilamiento",
+                "{{perfil_cliente_id}}",
+                "perfil"
+              ]
+            },
+            "description": "Sin `X-Service-Key`."
+          }
+        },
+        {
+          "name": "Perfil - clave sin permiso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 403', () => pm.response.to.have.status(403));",
+                  "pm.test('SIN_PERMISO', () => pm.expect(pm.response.json().error.code).to.eql('SIN_PERMISO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "clave-sin-permiso",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{perfilamiento_url}}/v1/perfilamiento/{{perfil_cliente_id}}/perfil",
+              "host": [
+                "{{perfilamiento_url}}"
+              ],
+              "path": [
+                "v1",
+                "perfilamiento",
+                "{{perfil_cliente_id}}",
+                "perfil"
+              ]
+            },
+            "description": "Clave que no está en `PERFILAMIENTO_API_KEYS`."
+          }
+        },
+        {
+          "name": "Perfil - cliente sin perfil enriquecido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('PERFIL_NO_ENCONTRADO', () => pm.expect(pm.response.json().error.code).to.eql('PERFIL_NO_ENCONTRADO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{perfilamiento_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{perfilamiento_url}}/v1/perfilamiento/sin-perfil-hu23/perfil",
+              "host": [
+                "{{perfilamiento_url}}"
+              ],
+              "path": [
+                "v1",
+                "perfilamiento",
+                "sin-perfil-hu23",
+                "perfil"
+              ]
+            },
+            "description": "Cliente con consentimiento pero que nunca se enriqueció."
+          }
+        },
+        {
+          "name": "Enriquecer - identificador inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('VALIDATION_ERROR', () => pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{perfilamiento_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{perfilamiento_url}}/v1/perfilamiento/a%20b;c/enriquecer",
+              "host": [
+                "{{perfilamiento_url}}"
+              ],
+              "path": [
+                "v1",
+                "perfilamiento",
+                "a%20b;c",
+                "enriquecer"
+              ]
+            },
+            "description": "El identificador debe tener entre 1 y 64 letras, dígitos o `. _ : -`."
+          }
+        }
+      ]
     }
   ],
   "variable": [
@@ -4460,6 +4758,26 @@
     },
     {
       "key": "catalogo_etag",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "perfilamiento_url",
+      "value": "http://localhost:8002",
+      "type": "string"
+    },
+    {
+      "key": "perfilamiento_key",
+      "value": "dev-perfilamiento-key",
+      "type": "string"
+    },
+    {
+      "key": "perfil_cliente_id",
+      "value": "cliente-demo-hu23",
+      "type": "string"
+    },
+    {
+      "key": "perfil_id",
       "value": "",
       "type": "string"
     }

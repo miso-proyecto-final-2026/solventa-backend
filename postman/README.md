@@ -21,6 +21,7 @@ Cada petición lleva pruebas (`pm.test`) y guarda las variables que necesita la 
 | MS Cotización / Salud | `GET /health` (y cabecera `X-Correlation-Id`) |
 | MS Cotización / Cotizaciones | `POST /v1/cotizaciones`, `GET /v1/cotizaciones/{id}`, `PUT /v1/cotizaciones/{id}/latencia-cliente` (ambos productos, validaciones, `X-Correlation-Id`, 404) |
 | MS Cotización / Auditoría | `GET /v1/cotizaciones/{id}/desglose` y `GET /v1/cotizaciones/{id}/consultas-externas` (auditor; 401/403/404/422) |
+| MS Perfilamiento (HU23) | `POST /v1/perfilamiento/{id}/enriquecer`, `GET …/perfil` y `GET …/linaje` (con credencial; 401/403/404/422) |
 | MS Cotización / Perfiles | `GET /perfiles/{cliente_id}` (exige clave de servicio; 401/403) |
 | MS Identidad / Asesor - login y búsqueda (HU38) | `POST /v1/sesiones-internas`, `GET /v1/clientes/busqueda` (200/401/404/422) |
 | MS Cotización / Cotización asistida (HU38) | `GET /v1/productos` (200/304), `GET /v1/asesor/clientes/{id}/perfil`, `POST /v1/asesor/cotizaciones` (cliente existente, sin cuenta, 401/422) |
@@ -53,7 +54,14 @@ SOLVENTA_MODO_DESARROLLO=1 \
 IDENTIDAD_URL=http://localhost:8001 IDENTIDAD_SERVICE_KEY=dev-service-key \
 AUDITOR_API_KEYS=dev-auditor-key PERFILES_API_KEYS=dev-perfiles-key \
 uvicorn app.main:app --port 8000
+
+# MS Perfilamiento (puerto 8002, HU23) — en otra terminal
+cd services/perfilamiento
+SOLVENTA_MODO_DESARROLLO=1 PERFILAMIENTO_API_KEYS=postman=dev-perfilamiento-key \
+uvicorn app.main:app --port 8002
 ```
+
+Sin `IDENTIDAD_URL`, Perfilamiento usa el consentimiento «siempre otorgado» (solo desarrollo). Con ella, un cliente sin consentimiento vigente recibe 403 `CONSENTIMIENTO_NO_VIGENTE` y el intento queda registrado con el nombre de la clave (`postman`) como origen.
 
 Con `IDENTIDAD_URL` definida, Cotización consulta el consentimiento real en Identidad (si el cliente no lo otorgó,
 cotiza con el perfil por defecto: la cotización sale `aproximada` con `aviso`, y cada proveedor omitido queda auditado como
