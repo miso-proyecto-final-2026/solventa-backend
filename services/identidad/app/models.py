@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -42,6 +43,20 @@ class Cliente(Base):
     actualizado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_now, onupdate=_now
     )
+
+
+class UsuarioInterno(Base):
+    """Personal de Solventa (HU38): hoy solo asesores. Provisional hasta la gestión de usuarios internos (E11)."""
+
+    __tablename__ = "usuarios_internos"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    nombre: Mapped[str] = mapped_column(String(200))
+    password_hash: Mapped[str] = mapped_column(String(200))
+    rol: Mapped[str] = mapped_column(String(20))  # ASESOR
+    activo: Mapped[bool] = mapped_column(Boolean, default=True)
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
 class Sesion(Base):

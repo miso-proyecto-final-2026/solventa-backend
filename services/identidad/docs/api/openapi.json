@@ -64,6 +64,74 @@
         }
       }
     },
+    "/v1/clientes/busqueda": {
+      "get": {
+        "tags": [
+          "clientes"
+        ],
+        "summary": "Buscar Cliente Por Documento",
+        "description": "Identifica a un cliente para la venta asistida (HU38). Solo asesores.",
+        "operationId": "buscar_cliente_por_documento_v1_clientes_busqueda_get",
+        "parameters": [
+          {
+            "name": "tipo_documento",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tipo Documento"
+            }
+          },
+          {
+            "name": "numero_documento",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Numero Documento"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClienteBusquedaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/clientes/{cliente_id}/consentimientos": {
       "post": {
         "tags": [
@@ -230,6 +298,216 @@
         }
       }
     },
+    "/v1/clientes/{cliente_id}/verificaciones": {
+      "post": {
+        "tags": [
+          "verificacion"
+        ],
+        "summary": "Enviar Verificacion",
+        "operationId": "enviar_verificacion_v1_clientes__cliente_id__verificaciones_post",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cliente Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 100,
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_enviar_verificacion_v1_clientes__cliente_id__verificaciones_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificacionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/clientes/{cliente_id}/verificacion": {
+      "get": {
+        "tags": [
+          "verificacion"
+        ],
+        "summary": "Consultar Verificacion",
+        "operationId": "consultar_verificacion_v1_clientes__cliente_id__verificacion_get",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cliente Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EstadoKycOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sesiones-internas": {
+      "post": {
+        "tags": [
+          "sesiones-internas"
+        ],
+        "summary": "Iniciar Sesion",
+        "operationId": "iniciar_sesion_v1_sesiones_internas_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginInternoIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SesionInternaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -255,6 +533,37 @@
   },
   "components": {
     "schemas": {
+      "Body_enviar_verificacion_v1_clientes__cliente_id__verificaciones_post": {
+        "properties": {
+          "reto": {
+            "type": "string",
+            "title": "Reto"
+          },
+          "documento_anverso": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "Documento Anverso"
+          },
+          "documento_reverso": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "Documento Reverso"
+          },
+          "selfie": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "Selfie"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reto",
+          "documento_anverso",
+          "documento_reverso",
+          "selfie"
+        ],
+        "title": "Body_enviar_verificacion_v1_clientes__cliente_id__verificaciones_post"
+      },
       "CanalConsentimiento": {
         "type": "string",
         "enum": [
@@ -262,6 +571,49 @@
           "WEB"
         ],
         "title": "CanalConsentimiento"
+      },
+      "ClienteBusquedaOut": {
+        "properties": {
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "apellido_inicial": {
+            "type": "string",
+            "title": "Apellido Inicial"
+          },
+          "tipo_documento": {
+            "type": "string",
+            "title": "Tipo Documento"
+          },
+          "numero_documento": {
+            "type": "string",
+            "title": "Numero Documento"
+          },
+          "estado_kyc": {
+            "type": "string",
+            "title": "Estado Kyc"
+          },
+          "consentimiento": {
+            "$ref": "#/components/schemas/ConsentimientoResumenOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cliente_id",
+          "nombre",
+          "apellido_inicial",
+          "tipo_documento",
+          "numero_documento",
+          "estado_kyc",
+          "consentimiento"
+        ],
+        "title": "ClienteBusquedaOut",
+        "description": "Lo mínimo que necesita un asesor para identificar al cliente (sin email ni celular)."
       },
       "ClienteCreate": {
         "properties": {
@@ -378,6 +730,17 @@
       },
       "ConsentimientoOut": {
         "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
           "cliente_id": {
             "type": "string",
             "title": "Cliente Id"
@@ -432,6 +795,41 @@
         ],
         "title": "ConsentimientoOut"
       },
+      "ConsentimientoResumenOut": {
+        "properties": {
+          "estado": {
+            "$ref": "#/components/schemas/EstadoConsentimiento"
+          },
+          "version_texto": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Texto"
+          },
+          "fecha_otorgamiento": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Otorgamiento"
+          }
+        },
+        "type": "object",
+        "required": [
+          "estado"
+        ],
+        "title": "ConsentimientoResumenOut"
+      },
       "EstadoConsentimiento": {
         "type": "string",
         "enum": [
@@ -440,6 +838,64 @@
           "NO_OTORGADO"
         ],
         "title": "EstadoConsentimiento"
+      },
+      "EstadoKycOut": {
+        "properties": {
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "estado_kyc": {
+            "type": "string",
+            "title": "Estado Kyc"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          },
+          "intentos_restantes": {
+            "type": "integer",
+            "title": "Intentos Restantes"
+          },
+          "bloqueado_hasta": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bloqueado Hasta"
+          },
+          "ultima_verificacion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultima Verificacion Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cliente_id",
+          "estado_kyc",
+          "intentos_restantes"
+        ],
+        "title": "EstadoKycOut",
+        "description": "Resultado que consume HU03: estado vigente, motivo genérico e intentos restantes."
       },
       "HTTPValidationError": {
         "properties": {
@@ -454,12 +910,80 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "LoginInternoIn": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginInternoIn"
+      },
+      "SesionInternaOut": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "expira_en": {
+            "type": "integer",
+            "title": "Expira En"
+          },
+          "usuario": {
+            "$ref": "#/components/schemas/UsuarioInternoOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "expira_en",
+          "usuario"
+        ],
+        "title": "SesionInternaOut"
+      },
       "TipoConsentimiento": {
         "type": "string",
         "enum": [
           "OPEN_FINANCE_OPEN_DATA"
         ],
         "title": "TipoConsentimiento"
+      },
+      "UsuarioInternoOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "rol": {
+            "type": "string",
+            "title": "Rol"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nombre",
+          "rol"
+        ],
+        "title": "UsuarioInternoOut"
       },
       "ValidationError": {
         "properties": {
@@ -500,6 +1024,46 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VerificacionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          },
+          "intentos_restantes": {
+            "type": "integer",
+            "title": "Intentos Restantes"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "estado",
+          "intentos_restantes",
+          "creado_en"
+        ],
+        "title": "VerificacionOut"
       }
     }
   }
