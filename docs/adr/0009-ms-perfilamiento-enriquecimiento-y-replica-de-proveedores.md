@@ -26,7 +26,7 @@ HU23 crea MS Perfilamiento, que combina señales de Open Finance y Open Data en 
 ## Consecuencias
 
 - **Rendimiento (criterio 8):** no está medido. Hay un humo k6 (`tests/rendimiento/humo-enriquecimiento.js`) pero la corrida de 20.000 perfilamientos/hora, y confirmar que la cotización en línea conserve su p95, requiere el servicio desplegado en staging. Cada enriquecimiento escribe 1 perfil + 2 filas de linaje.
-- **Despliegue pendiente:** falta la entrada en `solventa-infra/environments/staging/services.yaml` (puerto, esquema `perfilamiento` ya reservado, secretos `PERFILAMIENTO_API_KEYS`, `IDENTIDAD_SERVICE_KEY`), el repositorio ECR y el job de despliegue; hoy `deploy-staging` solo publica `solventa-backend`.
+- **Despliegue:** `solventa-infra` registra el servicio como interno (sin `edge`) y el job `deploy-staging-perfilamiento` del CI lo publica en su propio repositorio ECR, corre la migración desde la plantilla `solventa-perfilamiento-migrate` y hace el rollout, con su propio rol OIDC (variable de repositorio `AWS_ROLE_ARN_PERFILAMIENTO`). Solo corre en `main` y si la variable existe. Hasta que staging esté encendido y el baseline aplicado, el job no tiene a qué desplegar.
 - **Duplicación:** la copia del breaker, la caché y el cliente de consentimiento puede divergir de la de Cotización. Las pruebas de cada copia viajan con ella.
 - **Retención:** no se define; las tres tablas crecen sin límite hasta acordar la política de datos.
 - **Pendiente:** los simuladores devuelven valores fijos; la integración con proveedores reales (T4) y la oferta personalizada (HU24–HU26) quedan fuera de esta historia.
