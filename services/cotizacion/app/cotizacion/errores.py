@@ -42,11 +42,21 @@ class ErrorDesglose(Exception):
 
 
 class NoAutenticado(Exception):
-    """Falta la credencial de auditoría."""
+    """Falta la credencial o no es válida (auditor por clave de servicio, asesor por token)."""
+
+    def __init__(self, mensaje: str = "Se requiere la credencial de auditoría.") -> None:
+        super().__init__(mensaje)
+        self.mensaje = mensaje
 
 
 class SinPermiso(Exception):
-    """La credencial no tiene permiso de auditoría."""
+    """La credencial es válida pero no tiene el permiso requerido."""
+
+    def __init__(
+        self, mensaje: str = "La credencial no tiene permiso de auditoría."
+    ) -> None:
+        super().__init__(mensaje)
+        self.mensaje = mensaje
 
 
 class ErrorReglas(Exception):
@@ -111,19 +121,13 @@ def registrar_errores(app: FastAPI) -> None:
         )
 
     @app.exception_handler(NoAutenticado)
-    async def _no_autenticado(_req: Request, _exc: NoAutenticado) -> JSONResponse:
+    async def _no_autenticado(_req: Request, exc: NoAutenticado) -> JSONResponse:
         return JSONResponse(
-            status_code=401,
-            content=cuerpo_error(
-                "NO_AUTENTICADO", "Se requiere la credencial de auditoría."
-            ),
+            status_code=401, content=cuerpo_error("NO_AUTENTICADO", exc.mensaje)
         )
 
     @app.exception_handler(SinPermiso)
-    async def _sin_permiso(_req: Request, _exc: SinPermiso) -> JSONResponse:
+    async def _sin_permiso(_req: Request, exc: SinPermiso) -> JSONResponse:
         return JSONResponse(
-            status_code=403,
-            content=cuerpo_error(
-                "SIN_PERMISO", "La credencial no tiene permiso de auditoría."
-            ),
+            status_code=403, content=cuerpo_error("SIN_PERMISO", exc.mensaje)
         )

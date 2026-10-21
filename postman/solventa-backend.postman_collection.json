@@ -1983,6 +1983,358 @@
             }
           ],
           "description": "Los archivos viven en `postman/fixtures/`. En la app de Postman, abre Settings > General > Working directory y apúntalo a la carpeta `postman/`; con Newman, ejecuta desde esa carpeta o pasa `--working-dir postman`."
+        },
+        {
+          "name": "Asesor - login y búsqueda (HU38)",
+          "item": [
+            {
+              "name": "Login del asesor",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const r = pm.response.json();",
+                      "pm.test('token Bearer con rol ASESOR', () => {",
+                      "  pm.expect(r.token_type).to.eql('bearer');",
+                      "  pm.expect(r.access_token).to.be.a('string').and.not.empty;",
+                      "  pm.expect(r.usuario.rol).to.eql('ASESOR');",
+                      "  pm.expect(r.expira_en).to.be.above(0);",
+                      "});",
+                      "pm.collectionVariables.set('asesor_token', r.access_token);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/sesiones-internas",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "sesiones-internas"
+                  ]
+                },
+                "description": "Requiere el asesor demo sembrado con `services/identidad/scripts/sembrar_demo.py`. Guarda `asesor_token`.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{asesor_email}}\",\n  \"password\": \"{{asesor_password}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Login con credenciales incorrectas",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                      "pm.test('mensaje genérico', () => pm.expect(pm.response.json().detail).to.eql('Correo o contraseña incorrectos'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/sesiones-internas",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "sesiones-internas"
+                  ]
+                },
+                "description": "El mismo mensaje si falla el correo o la contraseña.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{asesor_email}}\",\n  \"password\": \"clave-incorrecta-1\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Buscar cliente por documento",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const c = pm.response.json();",
+                      "pm.test('datos mínimos y consentimiento', () => {",
+                      "  pm.expect(c.cliente_id).to.be.a('string').and.not.empty;",
+                      "  pm.expect(c.consentimiento.estado).to.be.oneOf(['OTORGADO', 'REVOCADO', 'NO_OTORGADO']);",
+                      "  pm.expect(c).to.not.have.property('email');",
+                      "  pm.expect(c).to.not.have.property('celular');",
+                      "});",
+                      "pm.collectionVariables.set('cliente_demo_id', c.cliente_id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{asesor_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/busqueda?tipo_documento=CC&numero_documento=1000000001",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "busqueda"
+                  ],
+                  "query": [
+                    {
+                      "key": "tipo_documento",
+                      "value": "CC"
+                    },
+                    {
+                      "key": "numero_documento",
+                      "value": "1000000001"
+                    }
+                  ]
+                },
+                "description": "Cliente demo A (consentimiento OTORGADO). Guarda `cliente_demo_id`."
+              }
+            },
+            {
+              "name": "Buscar cliente inexistente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 404', () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{asesor_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/busqueda?tipo_documento=CC&numero_documento=99999999",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "busqueda"
+                  ],
+                  "query": [
+                    {
+                      "key": "tipo_documento",
+                      "value": "CC"
+                    },
+                    {
+                      "key": "numero_documento",
+                      "value": "99999999"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Buscar con documento inválido",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{asesor_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/busqueda?tipo_documento=XX&numero_documento=12",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "busqueda"
+                  ],
+                  "query": [
+                    {
+                      "key": "tipo_documento",
+                      "value": "XX"
+                    },
+                    {
+                      "key": "numero_documento",
+                      "value": "12"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Buscar sin token",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/busqueda?tipo_documento=CC&numero_documento=1000000001",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "busqueda"
+                  ],
+                  "query": [
+                    {
+                      "key": "tipo_documento",
+                      "value": "CC"
+                    },
+                    {
+                      "key": "numero_documento",
+                      "value": "1000000001"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Buscar con el token de un cliente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/busqueda?tipo_documento=CC&numero_documento=1000000001",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "busqueda"
+                  ],
+                  "query": [
+                    {
+                      "key": "tipo_documento",
+                      "value": "CC"
+                    },
+                    {
+                      "key": "numero_documento",
+                      "value": "1000000001"
+                    }
+                  ]
+                },
+                "description": "El token opaco de un cliente no sirve como sesión de asesor."
+              }
+            }
+          ]
         }
       ],
       "description": "Registro, consentimiento y KYC. Cada carpeta depende de las variables que deja la anterior: ejecútalas en orden (Runner / Newman)."
@@ -3586,6 +3938,445 @@
               }
             }
           ]
+        },
+        {
+          "name": "Cotización asistida (HU38)",
+          "item": [
+            {
+              "name": "Catálogo de productos",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const c = pm.response.json();",
+                      "pm.test('productos con sus campos', () => {",
+                      "  pm.expect(c.productos).to.be.an('array').that.is.not.empty;",
+                      "  pm.expect(c.productos[0].campos).to.be.an('array').that.is.not.empty;",
+                      "});",
+                      "pm.test('ETag = versión de reglas', () => pm.expect(pm.response.headers.get('ETag')).to.eql('\"' + c.version_reglas + '\"'));",
+                      "pm.collectionVariables.set('catalogo_etag', pm.response.headers.get('ETag'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/productos",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "productos"
+                  ]
+                },
+                "description": "Público y de solo lectura. Guarda `catalogo_etag`."
+              }
+            },
+            {
+              "name": "Catálogo sin cambios (304)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 304', () => pm.response.to.have.status(304));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "If-None-Match",
+                    "value": "{{catalogo_etag}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/productos",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "productos"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Perfil del cliente para el asesor",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const p = pm.response.json();",
+                      "pm.test('niveles, nunca cifras', () => {",
+                      "  pm.expect(p.perfil_fuente).to.be.oneOf(['REAL', 'POR_DEFECTO', 'DEGRADADO']);",
+                      "  p.senales.forEach(s => pm.expect(s.nivel).to.be.oneOf(['BAJO', 'MEDIO', 'ALTO']));",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{asesor_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/asesor/clientes/{{cliente_demo_id}}/perfil",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "asesor",
+                    "clientes",
+                    "{{cliente_demo_id}}",
+                    "perfil"
+                  ]
+                },
+                "description": "Con consentimiento y `SIMULADOR_PERFILES_DEMO`, el cliente demo A sale `REAL`. Deja el perfil en caché."
+              }
+            },
+            {
+              "name": "Perfil sin token",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                      "pm.test('código NO_AUTENTICADO', () => pm.expect(pm.response.json().error.code).to.eql('NO_AUTENTICADO'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/asesor/clientes/{{cliente_demo_id}}/perfil",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "asesor",
+                    "clientes",
+                    "{{cliente_demo_id}}",
+                    "perfil"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Cotizar a un cliente (asesor)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "const c = pm.response.json();",
+                      "pm.test('canal web y perfil real', () => {",
+                      "  pm.expect(c.canal).to.eql('WEB_ASESOR');",
+                      "  pm.expect(c.sin_cuenta).to.eql(false);",
+                      "  pm.expect(c.perfil_fuente).to.be.oneOf(['REAL', 'POR_DEFECTO', 'DEGRADADO']);",
+                      "});",
+                      "pm.test('el desglose suma exactamente la prima anual', () => {",
+                      "  const suma = c.componentes.reduce((acc, x) => acc + x.monto, 0);",
+                      "  pm.expect(suma).to.eql(c.prima_anual);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{asesor_token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/asesor/cotizaciones",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "asesor",
+                    "cotizaciones"
+                  ]
+                },
+                "description": "Mismo motor que `POST /v1/cotizaciones`: para la misma entrada, el mismo precio.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cliente_id\": \"{{cliente_demo_id}}\",\n  \"producto\": \"microseguro_vida\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Cotizar sin cuenta (documento)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "const c = pm.response.json();",
+                      "pm.test('perfil por defecto y aviso', () => {",
+                      "  pm.expect(c.sin_cuenta).to.eql(true);",
+                      "  pm.expect(c.aproximada).to.eql(true);",
+                      "  pm.expect(c.perfil_fuente).to.eql('POR_DEFECTO');",
+                      "  pm.expect(c.aviso).to.be.a('string').and.not.empty;",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{asesor_token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/asesor/cotizaciones",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "asesor",
+                    "cotizaciones"
+                  ]
+                },
+                "description": "Prospecto sin cuenta: no se consulta el perfil.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"documento\": {\n    \"tipo\": \"CC\",\n    \"numero\": \"55667788\"\n  },\n  \"producto\": \"microseguro_vida\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Cotizar con cliente_id y documento a la vez",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                      "pm.test('VALIDATION_ERROR', () => pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{asesor_token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/asesor/cotizaciones",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "asesor",
+                    "cotizaciones"
+                  ]
+                },
+                "description": "Debe venir exactamente uno de los dos.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cliente_id\": \"{{cliente_demo_id}}\",\n  \"documento\": {\n    \"tipo\": \"CC\",\n    \"numero\": \"55667788\"\n  },\n  \"producto\": \"microseguro_vida\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Cotizar con datos fuera de rango",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                      "pm.test('detalle por campo', () => pm.expect(pm.response.json().error.details.some(d => d.campo.endsWith('edad'))).to.eql(true));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{asesor_token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/asesor/cotizaciones",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "asesor",
+                    "cotizaciones"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cliente_id\": \"{{cliente_demo_id}}\",\n  \"producto\": \"microseguro_vida\",\n  \"datos\": {\n    \"edad\": 5,\n    \"suma_asegurada\": 50000000\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Cotizar sin token",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/asesor/cotizaciones",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "asesor",
+                    "cotizaciones"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cliente_id\": \"{{cliente_demo_id}}\",\n  \"producto\": \"microseguro_vida\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
         }
       ],
       "description": "Motor de rating, desglose de precio y perfil. Ejecuta primero MS Identidad para tener un `cliente_id` real."
@@ -3644,6 +4435,31 @@
     },
     {
       "key": "cotizacion_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "asesor_email",
+      "value": "asesor@solventa.test",
+      "type": "string"
+    },
+    {
+      "key": "asesor_password",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "asesor_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cliente_demo_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "catalogo_etag",
       "value": "",
       "type": "string"
     }

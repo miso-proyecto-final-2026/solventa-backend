@@ -54,6 +54,11 @@ El CI corre `test` y `build` en matriz por servicio.
 | `PERFILES_API_KEYS` | cotizacion | Claves (separadas por coma) con permiso para consultar `GET /perfiles/{cliente_id}` (perfil crudo de HU09, con datos financieros) en `X-Service-Key`. Vacía = nadie accede. Es independiente de `AUDITOR_API_KEYS`: cada rol tiene sus claves. Debe venir de un secreto. |
 | `AUDITOR_API_KEYS` | cotizacion | Claves (separadas por coma) con permiso de auditoría en `X-Service-Key` para `GET /v1/cotizaciones/{id}/desglose` (HU14, ADR-0006). Vacía = nadie accede. Debe venir de un secreto; admite varias claves para rotarla. |
 | `TRAZA_COLA_MAX`, `TRAZA_REINTENTOS` | cotizacion | Cola en memoria de la trazabilidad de consultas (10.000 por defecto) y reintentos de escritura (3). Ver ADR-0007. |
+| `ASESOR_JWT_SECRETO` | identidad, cotizacion | Secreto HS256 con el que Identidad firma y Cotización valida el token del asesor (HU38, ADR-0008). **Debe ser el mismo en ambos** y venir de un secreto. Sin él solo arranca con `SOLVENTA_MODO_DESARROLLO=1` (secreto fijo de desarrollo). |
+| `ASESOR_JWT_TTL_MIN` | identidad | Vida del token del asesor en minutos (30 por defecto). |
+| `ASESOR_JWT_EMISOR` | cotizacion | `iss` esperado en el token (`solventa-identidad` por defecto). |
+| `SIMULADOR_PERFILES_DEMO` | cotizacion | Ruta del YAML con perfiles financieros demo por `cliente_id` (`app/proveedores/perfiles_demo.yaml`). **Solo desarrollo y demostración.** Sin ella los simuladores devuelven el perfil neutro de siempre. |
+| `ASESOR_DEMO_EMAIL`, `ASESOR_DEMO_PASSWORD` | identidad | Entrada de `scripts/sembrar_demo.py`, que crea el asesor demo y cinco clientes demo (CC `1000000001` a `1000000005`). Nunca en git. |
 
 Patrones de comunicación (ADR-0002 y documento de arquitectura): la consulta de consentimiento es REST síncrono con timeout duro y circuit breaker; Kafka se reserva para los flujos de larga duración (suscripción, pagos, siniestros, notificaciones). Los contextos se relacionan por id, nunca por llave foránea ni por tabla compartida.
 
@@ -72,6 +77,9 @@ Qué debe proveer el ambiente (staging, producción) para que cada servicio arra
 | `IDENTIDAD_URL` | Sí | Config | URL interna de MS Identidad (consulta de consentimiento). |
 | `IDENTIDAD_SERVICE_KEY` | Sí | Secreto | Debe ser una de las claves de `SERVICE_API_KEYS` de Identidad. |
 | `AUDITOR_API_KEYS` | No | Secreto | Sin ella nadie accede al desglose (`GET /v1/cotizaciones/{id}/desglose`). |
+| `ASESOR_JWT_SECRETO` | Sí | Secreto | Mismo valor que en Identidad. Valida el token del asesor (HU38, ADR-0008). Sin él, el servicio no arranca fuera de desarrollo. |
+| `ASESOR_JWT_EMISOR` | No | Config | `solventa-identidad` por defecto. |
+| `SIMULADOR_PERFILES_DEMO` | **No definirla** | — | Perfiles demo por cliente; solo desarrollo y demostración. |
 | `REGLAS_VERSION`, `REGLAS_DIR` | No | Config | Por defecto `v1`, incluida en la imagen. `REGLAS_DIR` permite montar reglas externas. |
 | `PROVEEDORES_*`, `IDENTIDAD_TIMEOUT_S`, `IDENTIDAD_UMBRAL_FALLOS`, `IDENTIDAD_ENFRIAMIENTO_S` | No | Config | Timeouts, circuit breaker y TTL de la caché; los valores por defecto están alineados con el presupuesto de HA01. |
 | `TRAZA_COLA_MAX`, `TRAZA_REINTENTOS` | No | Config | Cola en memoria y reintentos de la trazabilidad de consultas (HU11, ADR-0007). |
@@ -83,6 +91,8 @@ Qué debe proveer el ambiente (staging, producción) para que cada servicio arra
 |---|---|---|---|
 | `DATABASE_URL` | Sí | Secreto | PostgreSQL, esquema `identidad`. |
 | `SERVICE_API_KEYS` | Sí | Secreto | Claves aceptadas en `X-Service-Key`; incluye la que usa Cotización. |
+| `ASESOR_JWT_SECRETO` | Sí | Secreto | Firma el token del asesor (HU38, ADR-0008); el mismo valor que en Cotización. |
+| `ASESOR_JWT_TTL_MIN` | No | Config | Vida del token en minutos (30 por defecto). |
 | `KYC_PROVEEDOR` | No | Config | `simulado` (por defecto) o `proveedor_b`. |
 | `KYC_PROVEEDOR_B_URL`, `KYC_PROVEEDOR_B_API_KEY` | Si `KYC_PROVEEDOR=proveedor_b` | Config / secreto | La clave nunca va en git. |
 
@@ -94,7 +104,7 @@ Qué debe proveer el ambiente (staging, producción) para que cada servicio arra
 
 ### Migraciones
 
-La imagen incluye `alembic.ini` y `migrations/`, pero **no ejecuta las migraciones al iniciar**. Hay que correr `alembic upgrade head` (con `COTIZACION_DATABASE_URL` definida) antes de promover una versión que cambie el esquema, por ejemplo como Job previo al rollout. Alembic solo corre contra PostgreSQL (rechaza SQLite); la migración `0002` (HU14) crea un trigger que hace el desglose de solo inserción.
+La imagen incluye `alembic.ini` y `migrations/`, pero **no ejecuta las migraciones al iniciar**. Hay que correr `alembic upgrade head` (con `COTIZACION_DATABASE_URL` definida) antes de promover una versión que cambie el esquema, por ejemplo como Job previo al rollout. Alembic solo corre contra PostgreSQL (rechaza SQLite); la migración `0002` (HU14) crea un trigger que hace el desglose de solo inserción. HU38 agrega la `0004` en **ambos** servicios (`usuarios_internos` en Identidad; columnas de origen en `cotizaciones`): corren antes del rollout.
 
 ### Puntos a confirmar en `solventa-infra`
 

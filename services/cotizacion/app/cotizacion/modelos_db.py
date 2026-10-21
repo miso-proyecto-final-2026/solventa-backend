@@ -20,6 +20,7 @@ from sqlalchemy import (
     MetaData,
     Numeric,
     String,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -46,6 +47,14 @@ class CotizacionDB(BaseCotizacion):
     datos: Mapped[dict[str, Any]] = mapped_column(JSON)
     vigente_hasta: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Origen de la cotización (HU38); las anteriores quedan como canal API.
+    canal: Mapped[str] = mapped_column(String(20), default="API", server_default="API")
+    asesor_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    sin_cuenta: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false")
+    )
+    documento_tipo: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    documento_numero: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     coberturas: Mapped[list[CoberturaDB]] = relationship(
         back_populates="cotizacion",

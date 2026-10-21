@@ -9,12 +9,14 @@ import hashlib
 import os
 import secrets
 from dataclasses import dataclass
+from functools import lru_cache
 
 from fastapi import Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import Sesion
+from app.tokens import ClaimsInternos, EmisorToken, emisor_desde_entorno
 
 
 @dataclass(frozen=True)
@@ -63,3 +65,32 @@ def exigir_cliente(cliente_id: str, acceso: Acceso) -> None:
     """Un cliente solo accede a sus propios datos."""
     if acceso.cliente_id != cliente_id:
         raise HTTPException(status_code=403, detail="No autorizado para este cliente")
+
+
+@lru_cache
+def obtener_emisor() -> EmisorToken:
+    """Emisor y verificador del token interno; las pruebas lo reemplazan con `dependency_overrides`."""
+    return emisor_desde_entorno()
+
+
+def exigir_rol(rol: str):
+    """Dependencia que exige un Bearer JWT interno con el rol dado (HU38).
+
+    401 si falta o no es válido (el front lo trata como sesión vencida); 403 si el rol no alcanza.
+    El token opaco de un cliente nunca pasa por aquí.
+    """
+
+    def dependencia(
+        authorization: str | None = Header(default=None),
+        emisor: EmisorToken = Depends(obtener_emisor),
+    ) -> ClaimsInternos:
+        if not authorization or not authorization.lower().startswith("bearer "):
+            raise HTTPException(status_code=401, detail="Se requiere iniciar sesión")
+        claims = emisor.verificar(authorization[7:].strip())
+        if claims is None:
+            raise HTTPException(status_code=401, detail="Sesión inválida o vencida")
+        if claims.rol != rol:
+            raise HTTPException(status_code=403, detail="No autorizado para esta operación")
+        return claims
+
+    return dependencia

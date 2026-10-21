@@ -61,7 +61,7 @@ def test_las_rutas_y_metodos_del_contrato_son_los_de_la_implementacion():
     implementadas = {
         (m, p)
         for p, ops in app.openapi()["paths"].items()
-        if p.startswith("/v1/cotizaciones")
+        if p.startswith(("/v1/cotizaciones", "/v1/asesor", "/v1/productos"))
         for m in ops
         if m in METODOS
     }
@@ -335,3 +335,19 @@ def test_las_consultas_externas_reales_cumplen_el_contrato():
             respuesta.json()
         )
     assert len(ok.json()["consultas"]) == 2
+
+
+def test_los_ejemplos_de_cotizacion_asistida_cumplen_el_esquema_y_suman_la_prima():
+    ruta = "/v1/asesor/cotizaciones"
+    ejemplos = _ejemplos_de_respuesta(ruta, "post", "201")
+    assert set(ejemplos) == {"cliente_con_perfil_real", "sin_cuenta"}
+    validador = _validador(_esquema_respuesta(ruta, "post", "201"))
+
+    for nombre, ejemplo in ejemplos.items():
+        validador.validate(ejemplo)
+        assert (
+            sum(c["monto"] for c in ejemplo["componentes"]) == ejemplo["prima_anual"]
+        ), nombre
+    assert ejemplos["sin_cuenta"]["aproximada"] is True
+    assert ejemplos["sin_cuenta"]["perfil_fuente"] == "POR_DEFECTO"
+    assert ejemplos["cliente_con_perfil_real"]["aviso"] is None

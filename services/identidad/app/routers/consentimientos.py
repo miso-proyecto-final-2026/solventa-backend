@@ -35,7 +35,7 @@ def _salida(
     )
 
 
-def _vigente(db: Session, cliente_id: str, tipo: TipoConsentimiento) -> Consentimiento | None:
+def consentimiento_vigente(db: Session, cliente_id: str, tipo: TipoConsentimiento) -> Consentimiento | None:
     return (
         db.query(Consentimiento)
         .filter(Consentimiento.cliente_id == cliente_id, Consentimiento.tipo == tipo.value)
@@ -55,7 +55,7 @@ def otorgar_consentimiento(
     if db.get(Cliente, cliente_id) is None:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
-    existente = _vigente(db, cliente_id, payload.tipo)
+    existente = consentimiento_vigente(db, cliente_id, payload.tipo)
     if existente is not None and existente.estado == EstadoConsentimiento.OTORGADO.value:
         # Idempotencia: reintentar no crea otro consentimiento vigente ni otro registro.
         response.status_code = 200
@@ -85,7 +85,7 @@ def otorgar_consentimiento(
         # Otro reintento concurrente ganó la inserción: se responde con el vigente.
         db.rollback()
         response.status_code = 200
-        return _salida(cliente_id, payload.tipo, _vigente(db, cliente_id, payload.tipo))
+        return _salida(cliente_id, payload.tipo, consentimiento_vigente(db, cliente_id, payload.tipo))
     db.refresh(existente)
     return _salida(cliente_id, payload.tipo, existente)
 
@@ -101,4 +101,4 @@ def consultar_consentimiento(
         exigir_cliente(cliente_id, acceso)
     if db.get(Cliente, cliente_id) is None:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
-    return _salida(cliente_id, tipo, _vigente(db, cliente_id, tipo))
+    return _salida(cliente_id, tipo, consentimiento_vigente(db, cliente_id, tipo))

@@ -8,6 +8,7 @@ from app.configuracion import permitir_sustituto_local
 from app.proveedores.cache import CacheMemoria, CachePerfil, CacheRedis
 from app.proveedores.config import ConfigProveedores
 from app.proveedores.consentimiento import ConsentimientoHttp, ConsentimientoStub
+from app.proveedores.demo import CatalogoPerfilesDemo
 from app.proveedores.dominio import EstadoConsentimiento, Fuente, RegistroLlamada
 from app.proveedores.servicio import ServicioPerfil
 from app.proveedores.simuladores import (
@@ -46,13 +47,14 @@ def construir_servicio(config: ConfigProveedores | None = None) -> ServicioPerfi
             "IDENTIDAD_URL", "el stub de consentimiento (siempre otorgado)"
         )
         consentimiento = ConsentimientoStub(EstadoConsentimiento.OTORGADO)
+    demo = CatalogoPerfilesDemo.desde_entorno()
     return ServicioPerfil(
         proveedores={
             Fuente.OPEN_FINANCE: SimuladorOpenFinance(
-                ConfigSimulador.desde_entorno("OPEN_FINANCE_SIM")
+                ConfigSimulador.desde_entorno("OPEN_FINANCE_SIM"), perfiles_demo=demo
             ),
             Fuente.OPEN_DATA: SimuladorOpenData(
-                ConfigSimulador.desde_entorno("OPEN_DATA_SIM")
+                ConfigSimulador.desde_entorno("OPEN_DATA_SIM"), perfiles_demo=demo
             ),
         },
         cache=cache,

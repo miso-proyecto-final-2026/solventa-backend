@@ -133,3 +133,39 @@ class EstadoKycOut(BaseModel):
     intentos_restantes: int
     bloqueado_hasta: datetime | None = None
     ultima_verificacion_id: str | None = None
+
+
+class LoginInternoIn(BaseModel):
+    email: str
+    password: str
+
+
+class UsuarioInternoOut(BaseModel):
+    id: str
+    nombre: str
+    rol: str
+
+
+class SesionInternaOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expira_en: int  # segundos
+    usuario: UsuarioInternoOut
+
+
+class ConsentimientoResumenOut(BaseModel):
+    estado: EstadoConsentimiento
+    version_texto: str | None = None
+    fecha_otorgamiento: datetime | None = None
+
+
+class ClienteBusquedaOut(BaseModel):
+    """Lo mínimo que necesita un asesor para identificar al cliente (sin email ni celular)."""
+
+    cliente_id: str
+    nombre: str
+    apellido_inicial: str
+    tipo_documento: str
+    numero_documento: str
+    estado_kyc: str
+    consentimiento: ConsentimientoResumenOut

@@ -1,0 +1,24 @@
+# Perfiles financieros simulados para probar HU38 en local. Datos ficticios.
+# Los cliente_id son los que siembra services/identidad/scripts/sembrar_demo.py.
+# Uso: SIMULADOR_PERFILES_DEMO=app/proveedores/perfiles_demo.yaml
+#
+# Efecto en microseguro_vida con edad 35 y suma asegurada 50.000.000 (base 175.000):
+#   favorable -> 0.95 x 1.00 x 0.95 = 0.9025   (aprox. -10 %)
+#   riesgoso  -> 1.25 x 1.15 x 1.10 = 1.5813   (aprox. +58 %)
+#   neutro    -> 1.00                           (igual a la base)
+perfiles:
+  favorable:
+    open_finance: {monthlyIncomeCop: 7000000, debtRatio: 0.15, accountsOpenYears: 10}
+    open_data: {ocupacion: empleado, estrato: 4, reportes_negativos: 0}
+  riesgoso:
+    open_finance: {monthlyIncomeCop: 1500000, debtRatio: 0.55, accountsOpenYears: 1}
+    open_data: {ocupacion: independiente, estrato: 2, reportes_negativos: 2}
+  neutro:
+    open_finance: {monthlyIncomeCop: 4500000, debtRatio: 0.32, accountsOpenYears: 6}
+    open_data: {ocupacion: empleado, estrato: 3, reportes_negativos: 0}
+
+clientes:
+  "00000000-0000-4000-8000-0000000000a1": favorable
+  "00000000-0000-4000-8000-0000000000b2": riesgoso
+  "00000000-0000-4000-8000-0000000000c3": neutro
+  # d4 (consentimiento REVOCADO) y e5 (sin consentimiento) no se consultan: no necesitan perfil.

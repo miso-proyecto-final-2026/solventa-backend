@@ -17,6 +17,9 @@ class ConfigCotizacion:
     database_url: str | None = None
     # Claves de servicio con permiso de auditoría (HU14). Vacío = nadie audita.
     auditor_api_keys: tuple[str, ...] = ()
+    # Validación del token del asesor (HU38). Sin secreto solo se acepta el de desarrollo.
+    asesor_jwt_secreto: str | None = None
+    asesor_jwt_emisor: str = "solventa-identidad"
     # Escritura asíncrona de la trazabilidad de consultas (HU11).
     traza_cola_max: int = 10_000
     traza_reintentos: int = 3
@@ -33,6 +36,8 @@ class ConfigCotizacion:
             or cls.database_url,
             traza_cola_max=int(e.get("TRAZA_COLA_MAX", cls.traza_cola_max)),
             traza_reintentos=int(e.get("TRAZA_REINTENTOS", cls.traza_reintentos)),
+            asesor_jwt_secreto=e.get("ASESOR_JWT_SECRETO") or None,
+            asesor_jwt_emisor=e.get("ASESOR_JWT_EMISOR", cls.asesor_jwt_emisor),
             auditor_api_keys=tuple(
                 k.strip() for k in e.get("AUDITOR_API_KEYS", "").split(",") if k.strip()
             ),

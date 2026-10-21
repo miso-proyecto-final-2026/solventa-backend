@@ -1,0 +1,10 @@
+# Niveles de riesgo con los que el asesor ve el perfil del cliente (HU38).
+#
+# SUPUESTOS DE PROTOTIPO, alineados con los cortes de v1.yaml. Solo se muestra el nivel,
+# nunca el valor de la señal (ADR-0006).
+# directo: crece el riesgo con el valor -> ALTO si valor >= alto, MEDIO si valor >= medio.
+# inverso: crece el riesgo cuando el valor baja -> ALTO si valor < alto, MEDIO si valor < medio.
+senales:
+  ratio_endeudamiento: {sentido: directo, medio: 0.35, alto: 0.50}
+  reportes_negativos: {sentido: directo, medio: 1, alto: 3}
+  ingresos_mensuales_cop: {sentido: inverso, medio: 6000000, alto: 2000000}

@@ -22,6 +22,8 @@ Cada petición lleva pruebas (`pm.test`) y guarda las variables que necesita la 
 | MS Cotización / Cotizaciones | `POST /v1/cotizaciones`, `GET /v1/cotizaciones/{id}`, `PUT /v1/cotizaciones/{id}/latencia-cliente` (ambos productos, validaciones, `X-Correlation-Id`, 404) |
 | MS Cotización / Auditoría | `GET /v1/cotizaciones/{id}/desglose` y `GET /v1/cotizaciones/{id}/consultas-externas` (auditor; 401/403/404/422) |
 | MS Cotización / Perfiles | `GET /perfiles/{cliente_id}` (exige clave de servicio; 401/403) |
+| MS Identidad / Asesor - login y búsqueda (HU38) | `POST /v1/sesiones-internas`, `GET /v1/clientes/busqueda` (200/401/404/422) |
+| MS Cotización / Cotización asistida (HU38) | `GET /v1/productos` (200/304), `GET /v1/asesor/clientes/{id}/perfil`, `POST /v1/asesor/cotizaciones` (cliente existente, sin cuenta, 401/422) |
 
 Cada ruta de ambas apps tiene al menos una petición, y cada código de respuesta que alcanza un cliente tiene un caso que
 lo provoca. Quedan fuera, porque dependen de configuración que la colección no cambia:
@@ -29,6 +31,7 @@ lo provoca. Quedan fuera, porque dependen de configuración que la colección no
 - `429` y `RECHAZADO` en KYC (requieren `KYC_SIMULADOR_MODO=rechazo` para agotar los intentos).
 - `413` en KYC (imagen de más de 5 MB; no se versiona un archivo así).
 - `400` «Se requiere HTTPS» en KYC (solo con `KYC_EXIGIR_HTTPS=true`).
+- `403` de las rutas del asesor (HU38): exige un token válido con otro rol, y Identidad solo emite el de asesor.
 - Caídas de proveedores (`TIMEOUT`, `DEGRADADO` en consultas externas; `degradado: true`), que requieren los modos de falla de los simuladores de Cotización.
 
 ## Levantar los servicios en local
@@ -39,7 +42,10 @@ Desde la raíz del repo, con las dependencias de cada servicio instaladas
 ```bash
 # MS Identidad (puerto 8001) — SQLite local por defecto
 cd services/identidad
-SERVICE_API_KEYS=dev-service-key uvicorn app.main:app --port 8001
+SERVICE_API_KEYS=dev-service-key ASESOR_JWT_SECRETO=dev-secreto-asesor-de-al-menos-32-bytes \nuvicorn app.main:app --port 8001
+
+# Una vez (HU38): asesor demo y cinco clientes demo (CC 1000000001 a 1000000005)
+ASESOR_DEMO_EMAIL=asesor@solventa.test ASESOR_DEMO_PASSWORD=<clave-de-desarrollo> python scripts/sembrar_demo.py
 
 # MS Cotización (puerto 8000) — en otra terminal
 cd services/cotizacion
@@ -77,6 +83,8 @@ npx newman run solventa-backend.postman_collection.json \
 | `service_key` | Entorno | `X-Service-Key`; debe estar en `SERVICE_API_KEYS` de Identidad. |
 | `auditor_key` | Entorno | `X-Service-Key` del auditor; debe estar en `AUDITOR_API_KEYS` de Cotización. |
 | `perfiles_key` | Entorno | `X-Service-Key` del perfil crudo; debe estar en `PERFILES_API_KEYS` de Cotización. Es independiente de la del auditor. |
+| `asesor_email`, `asesor_password` | Entorno | Credenciales del asesor demo (las de `sembrar_demo.py`). La clave se escribe en el entorno de Postman, nunca en git. |
+| `asesor_token`, `cliente_demo_id`, `catalogo_etag` | Colección | Las deja la carpeta de HU38 para las peticiones siguientes. |
 | `identidad_integrada` | Entorno | `true` si Cotización corre con `IDENTIDAD_URL`; `false` con el stub de consentimiento. |
 | `cliente_id`, `access_token` | «Registrar cliente» | Cliente principal y su sesión. |
 | `otro_cliente_id`, `otro_access_token` | «Registrar segundo cliente» | Para las pruebas 403 y los casos negativos de KYC; no otorga consentimiento. |
