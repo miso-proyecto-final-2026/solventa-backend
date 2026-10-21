@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
-  title: Solventa - API de cotización (HU12, HU14, HU11)
-  version: 1.2.0
+  title: Solventa - API de cotización (HU12, HU14, HU11, HU38)
+  version: 1.3.0
   description: |
     Contrato del motor de rating de MS Cotización, compartido por los canales
     móvil, web y API de socios. Se diseña antes que el código (contract-first) y
@@ -35,6 +35,18 @@ info:
     tardar un instante en aparecer tras emitir la cotización. La solicitud acepta y
     devuelve `X-Correlation-Id` para enlazar registros con trazas y logs.
 
+    **Cotización asistida (HU38).** Un asesor cotiza a nombre de un cliente con
+    `POST /v1/asesor/cotizaciones`; usa el mismo motor, así que para la misma entrada
+    el precio es idéntico al de `POST /v1/cotizaciones`. Se autentica con un token
+    Bearer (JWT) emitido por MS Identidad con rol `ASESOR` (solución provisional hasta
+    OIDC): sin token o vencido responde 401 y con otro rol, 403. Se indica exactamente
+    uno de `cliente_id` (cliente existente) o `documento` (prospecto sin cuenta: se
+    cotiza con el perfil por defecto, `aproximada = true`). La respuesta agrega
+    `perfil_fuente` (`REAL`, `POR_DEFECTO` o `DEGRADADO`), `canal` y `sin_cuenta`.
+    `GET /v1/asesor/clientes/{cliente_id}/perfil` resume el perfil en niveles
+    (`BAJO`, `MEDIO`, `ALTO`), nunca con las cifras del cliente. `GET /v1/productos`
+    lista los productos y los campos de `datos` (con `ETag`), para armar el formulario.
+
     **Datos del producto.** `datos` es un objeto cuyos campos dependen del
     producto y viven en las reglas versionadas, no en este contrato: agregar un
     ramo no cambia la API. Los campos de los productos iniciales están en los ejemplos.
@@ -44,6 +56,8 @@ servers:
 tags:
   - name: cotizaciones
   - name: auditoria
+  - name: asesor
+  - name: productos
 paths:
   /v1/cotizaciones:
     post:
@@ -345,8 +359,157 @@ paths:
                 $ref: '#/components/schemas/ErrorRespuesta'
         '422':
           $ref: '#/components/responses/ErrorValidacion'
+  /v1/productos:
+    get:
+      tags: [productos]
+      operationId: listarProductos
+      summary: Productos cotizables y los campos de cada uno
+      description: |
+        Se deriva de las reglas versionadas. `ETag` es la versión de las reglas: con
+        `If-None-Match` igual responde 304 sin cuerpo.
+      responses:
+        '200':
+          description: Catálogo vigente.
+          headers:
+            ETag: {schema: {type: string}}
+            Cache-Control: {schema: {type: string}}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Catalogo'
+        '304':
+          description: El catálogo no cambió.
+  /v1/asesor/clientes/{cliente_id}/perfil:
+    get:
+      tags: [asesor]
+      operationId: perfilDelCliente
+      summary: Resumen del perfil del cliente para la venta asistida
+      security:
+        - tokenAsesor: []
+      parameters:
+        - name: cliente_id
+          in: path
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 36}
+      responses:
+        '200':
+          description: Perfil en niveles. Sin consentimiento, `perfil_fuente` es `POR_DEFECTO` y no hay señales.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerfilAsesor'
+              example:
+                cliente_id: 00000000-0000-4000-8000-0000000000a1
+                con_consentimiento: true
+                perfil_fuente: REAL
+                fuentes: [open_finance, open_data]
+                completitud: 1.0
+                senales:
+                  - {nombre: ratio_endeudamiento, nivel: BAJO}
+                  - {nombre: reportes_negativos, nivel: BAJO}
+                  - {nombre: ingresos_mensuales_cop, nivel: BAJO}
+                obtenido_en: '2026-10-20T15:00:00Z'
+        '401':
+          $ref: '#/components/responses/ErrorAsesorNoAutenticado'
+        '403':
+          $ref: '#/components/responses/ErrorAsesorSinPermiso'
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+  /v1/asesor/cotizaciones:
+    post:
+      tags: [asesor]
+      operationId: crearCotizacionAsistida
+      summary: Calcula y emite una cotización a nombre de un cliente (asesor)
+      security:
+        - tokenAsesor: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolicitudAsistida'
+            examples:
+              cliente_existente:
+                value:
+                  cliente_id: 00000000-0000-4000-8000-0000000000a1
+                  producto: microseguro_vida
+                  datos: {edad: 35, suma_asegurada: 50000000}
+              sin_cuenta:
+                value:
+                  documento: {tipo: CC, numero: '55667788'}
+                  producto: microseguro_vida
+                  datos: {edad: 35, suma_asegurada: 50000000}
+      responses:
+        '201':
+          description: Cotización emitida.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CotizacionAsistida'
+              examples:
+                cliente_con_perfil_real:
+                  value:
+                    id: 3c6f5a52-7d0e-4b1c-9d52-0a7f6a9c1b11
+                    cliente_id: 00000000-0000-4000-8000-0000000000a1
+                    producto: microseguro_vida
+                    estado: EMITIDA
+                    moneda: COP
+                    prima_anual: 157938
+                    prima_mensual: 13162
+                    coberturas:
+                      - {tipo: muerte, monto: 50000000, deducible: 0}
+                      - {tipo: incapacidad_total, monto: 25000000, deducible: 0}
+                    vigente_hasta: '2026-11-19T15:00:00Z'
+                    version_reglas: 2026.10.1-prototipo
+                    degradado: false
+                    aproximada: false
+                    aviso: null
+                    componentes:
+                      - {concepto: prima_base, monto: 175000}
+                      - {concepto: ajuste_datos, monto: 0}
+                      - {concepto: ajuste_riesgo, monto: -17062}
+                      - {concepto: recargo_degradado, monto: 0}
+                    perfil_fuente: REAL
+                    canal: WEB_ASESOR
+                    sin_cuenta: false
+                sin_cuenta:
+                  value:
+                    id: 9a1d3c2e-5b7f-4e08-8c36-1f2e4d6a7b90
+                    cliente_id: 5e0c1a44-2f6b-4d7a-9b3e-8c1d2a3b4c5d
+                    producto: microseguro_vida
+                    estado: EMITIDA
+                    moneda: COP
+                    prima_anual: 175000
+                    prima_mensual: 14583
+                    coberturas:
+                      - {tipo: muerte, monto: 50000000, deducible: 0}
+                      - {tipo: incapacidad_total, monto: 25000000, deducible: 0}
+                    vigente_hasta: '2026-11-19T15:00:00Z'
+                    version_reglas: 2026.10.1-prototipo
+                    degradado: false
+                    aproximada: true
+                    aviso: Este valor es aproximado y puede cambiar al momento de la compra.
+                    componentes:
+                      - {concepto: prima_base, monto: 175000}
+                      - {concepto: ajuste_datos, monto: 0}
+                      - {concepto: ajuste_riesgo, monto: 0}
+                      - {concepto: recargo_degradado, monto: 0}
+                    perfil_fuente: POR_DEFECTO
+                    canal: WEB_ASESOR
+                    sin_cuenta: true
+        '401':
+          $ref: '#/components/responses/ErrorAsesorNoAutenticado'
+        '403':
+          $ref: '#/components/responses/ErrorAsesorSinPermiso'
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
 components:
   securitySchemes:
+    tokenAsesor:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token emitido por MS Identidad (`POST /v1/sesiones-internas`) con rol `ASESOR`.
     claveAuditor:
       type: apiKey
       in: header
@@ -384,6 +547,30 @@ components:
                   details:
                     - {campo: producto, motivo: 'producto no existe; disponibles: microseguro_vida, proteccion_dispositivos'}
                   trace_id: 7f6c2f5e-0e4d-4d61-9a3e-2d1f0b7c8e55
+    ErrorAsesorNoAutenticado:
+      description: Falta el token del asesor, no es válido o venció (el cliente lo trata como sesión vencida).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorRespuesta'
+          example:
+            error:
+              code: NO_AUTENTICADO
+              message: La sesión no es válida o venció.
+              details: []
+              trace_id: 7f6c2f5e-0e4d-4d61-9a3e-2d1f0b7c8e55
+    ErrorAsesorSinPermiso:
+      description: El token es válido pero no es de un asesor.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorRespuesta'
+          example:
+            error:
+              code: SIN_PERMISO
+              message: Se requiere el rol de asesor.
+              details: []
+              trace_id: 7f6c2f5e-0e4d-4d61-9a3e-2d1f0b7c8e55
   schemas:
     SolicitudCotizacion:
       type: object
@@ -596,3 +783,75 @@ components:
               type: array
               items: {$ref: '#/components/schemas/DetalleError'}
             trace_id: {type: string}
+    Catalogo:
+      type: object
+      required: [version_reglas, moneda, productos]
+      properties:
+        version_reglas: {type: string}
+        moneda: {type: string, enum: [COP]}
+        productos:
+          type: array
+          items:
+            type: object
+            required: [codigo, nombre, campos]
+            properties:
+              codigo: {type: string}
+              nombre: {type: string}
+              campos:
+                type: array
+                items:
+                  type: object
+                  required: [nombre, tipo, requerido]
+                  properties:
+                    nombre: {type: string}
+                    tipo: {type: string, enum: [entero, texto]}
+                    requerido: {type: boolean}
+                    min: {type: [integer, 'null']}
+                    max: {type: [integer, 'null']}
+                    valores:
+                      type: [array, 'null']
+                      items: {type: string}
+    PerfilAsesor:
+      type: object
+      required: [cliente_id, con_consentimiento, perfil_fuente, fuentes, completitud, senales, obtenido_en]
+      properties:
+        cliente_id: {type: string}
+        con_consentimiento: {type: boolean}
+        perfil_fuente: {type: string, enum: [REAL, POR_DEFECTO, DEGRADADO]}
+        fuentes:
+          type: array
+          items: {type: string}
+        completitud: {type: number, minimum: 0, maximum: 1}
+        senales:
+          type: array
+          items:
+            type: object
+            required: [nombre, nivel]
+            properties:
+              nombre: {type: string}
+              nivel: {type: string, enum: [BAJO, MEDIO, ALTO]}
+        obtenido_en: {type: string, format: date-time}
+    SolicitudAsistida:
+      type: object
+      required: [producto, datos]
+      description: Exactamente uno de `cliente_id` o `documento`.
+      properties:
+        cliente_id: {type: string, minLength: 1, maxLength: 36}
+        documento:
+          type: object
+          required: [tipo, numero]
+          description: Documento de un prospecto sin cuenta; se cotiza con el perfil por defecto.
+          properties:
+            tipo: {type: string, minLength: 1, maxLength: 20}
+            numero: {type: string, minLength: 1, maxLength: 20}
+        producto: {type: string}
+        datos: {type: object, additionalProperties: true}
+    CotizacionAsistida:
+      allOf:
+        - $ref: '#/components/schemas/Cotizacion'
+        - type: object
+          required: [perfil_fuente, canal, sin_cuenta]
+          properties:
+            perfil_fuente: {type: string, enum: [REAL, POR_DEFECTO, DEGRADADO]}
+            canal: {type: string, enum: [WEB_ASESOR]}
+            sin_cuenta: {type: boolean}

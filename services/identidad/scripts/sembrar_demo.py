@@ -5,7 +5,7 @@ Uso (desde services/identidad):
 
 La clave no tiene valor por defecto ni se guarda en el repositorio. Los `cliente_id` son fijos
 porque Cotización los usa para asignarles un perfil financiero simulado
-(`app/proveedores/demo/perfiles_demo.yaml`).
+(`app/proveedores/perfiles_demo.yaml`).
 """
 
 import os

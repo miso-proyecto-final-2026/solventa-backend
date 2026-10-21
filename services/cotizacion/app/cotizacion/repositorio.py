@@ -12,9 +12,11 @@ from sqlalchemy.pool import StaticPool
 
 from app.cotizacion.desglose import a_json, desde_json
 from app.cotizacion.dominio import (
+    CANAL_API,
     CoberturaCalculada,
     CotizacionEmitida,
     DesglosePrecio,
+    OrigenCotizacion,
 )
 from app.cotizacion.errores import CotizacionNoEncontrada
 from app.cotizacion.modelos_db import (
@@ -92,6 +94,11 @@ class RepositorioCotizaciones:
                     datos=datos,
                     vigente_hasta=c.vigente_hasta,
                     created_at=c.creada_en,
+                    canal=c.origen.canal if c.origen else CANAL_API,
+                    asesor_id=c.origen.asesor_id if c.origen else None,
+                    sin_cuenta=c.origen.sin_cuenta if c.origen else False,
+                    documento_tipo=c.origen.documento_tipo if c.origen else None,
+                    documento_numero=c.origen.documento_numero if c.origen else None,
                     coberturas=[
                         CoberturaDB(
                             orden=i,
@@ -162,6 +169,13 @@ class RepositorioCotizaciones:
                 hit_cache=log.hit_cache if log else False,
                 latencia_interna_ms=log.latencia_interna_ms if log else None,
                 desglose=desglose,
+                origen=OrigenCotizacion(
+                    canal=fila.canal,
+                    asesor_id=fila.asesor_id,
+                    sin_cuenta=fila.sin_cuenta,
+                    documento_tipo=fila.documento_tipo,
+                    documento_numero=fila.documento_numero,
+                ),
             )
 
     def existe(self, cotizacion_id: str) -> bool:

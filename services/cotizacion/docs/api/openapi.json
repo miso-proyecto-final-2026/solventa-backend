@@ -395,6 +395,189 @@
         }
       }
     },
+    "/v1/productos": {
+      "get": {
+        "tags": [
+          "productos"
+        ],
+        "summary": "Productos cotizables y los campos de cada uno",
+        "operationId": "listar_productos_v1_productos_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogoOut"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "El catálogo no cambió (If-None-Match)."
+          }
+        }
+      }
+    },
+    "/v1/asesor/clientes/{cliente_id}/perfil": {
+      "get": {
+        "tags": [
+          "asesor"
+        ],
+        "summary": "Resumen del perfil del cliente para la venta asistida",
+        "operationId": "perfil_del_cliente_v1_asesor_clientes__cliente_id__perfil_get",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "title": "Cliente Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerfilAsesorOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token del asesor, no es válido o venció.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de un asesor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/asesor/cotizaciones": {
+      "post": {
+        "tags": [
+          "asesor"
+        ],
+        "summary": "Calcula y emite una cotización a nombre de un cliente (asesor)",
+        "operationId": "crear_cotizacion_asistida_v1_asesor_cotizaciones_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitudAsistidaIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CotizacionAsistidaOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token del asesor, no es válido o venció.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de un asesor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Solicitud no válida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -420,6 +603,95 @@
   },
   "components": {
     "schemas": {
+      "CampoOut": {
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "entero",
+              "texto"
+            ],
+            "title": "Tipo"
+          },
+          "requerido": {
+            "type": "boolean",
+            "title": "Requerido"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "valores": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valores"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre",
+          "tipo",
+          "requerido"
+        ],
+        "title": "CampoOut"
+      },
+      "CatalogoOut": {
+        "properties": {
+          "version_reglas": {
+            "type": "string",
+            "title": "Version Reglas"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "productos": {
+            "items": {
+              "$ref": "#/components/schemas/ProductoOut"
+            },
+            "type": "array",
+            "title": "Productos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version_reglas",
+          "moneda",
+          "productos"
+        ],
+        "title": "CatalogoOut"
+      },
       "CoberturaOut": {
         "properties": {
           "tipo": {
@@ -569,6 +841,131 @@
           "consultas"
         ],
         "title": "ConsultasExternasOut"
+      },
+      "CotizacionAsistidaOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "producto": {
+            "type": "string",
+            "title": "Producto"
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "prima_anual": {
+            "type": "integer",
+            "title": "Prima Anual"
+          },
+          "prima_mensual": {
+            "type": "integer",
+            "title": "Prima Mensual"
+          },
+          "coberturas": {
+            "items": {
+              "$ref": "#/components/schemas/CoberturaOut"
+            },
+            "type": "array",
+            "title": "Coberturas"
+          },
+          "vigente_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Vigente Hasta"
+          },
+          "version_reglas": {
+            "type": "string",
+            "title": "Version Reglas"
+          },
+          "degradado": {
+            "type": "boolean",
+            "title": "Degradado"
+          },
+          "aproximada": {
+            "type": "boolean",
+            "title": "Aproximada"
+          },
+          "aviso": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aviso"
+          },
+          "componentes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ComponenteOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Componentes"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetadataOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "perfil_fuente": {
+            "type": "string",
+            "title": "Perfil Fuente"
+          },
+          "canal": {
+            "type": "string",
+            "title": "Canal"
+          },
+          "sin_cuenta": {
+            "type": "boolean",
+            "title": "Sin Cuenta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "cliente_id",
+          "producto",
+          "estado",
+          "moneda",
+          "prima_anual",
+          "prima_mensual",
+          "coberturas",
+          "vigente_hasta",
+          "version_reglas",
+          "degradado",
+          "aproximada",
+          "aviso",
+          "componentes",
+          "metadata",
+          "perfil_fuente",
+          "canal",
+          "sin_cuenta"
+        ],
+        "title": "CotizacionAsistidaOut"
       },
       "CotizacionOut": {
         "properties": {
@@ -773,6 +1170,28 @@
         ],
         "title": "DetalleErrorOut"
       },
+      "DocumentoIn": {
+        "properties": {
+          "tipo": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Tipo"
+          },
+          "numero": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Numero"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tipo",
+          "numero"
+        ],
+        "title": "DocumentoIn"
+      },
       "ErrorCuerpoOut": {
         "properties": {
           "code": {
@@ -950,6 +1369,57 @@
         ],
         "title": "MetadataOut"
       },
+      "PerfilAsesorOut": {
+        "properties": {
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "con_consentimiento": {
+            "type": "boolean",
+            "title": "Con Consentimiento"
+          },
+          "perfil_fuente": {
+            "type": "string",
+            "title": "Perfil Fuente"
+          },
+          "fuentes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fuentes"
+          },
+          "completitud": {
+            "type": "number",
+            "title": "Completitud"
+          },
+          "senales": {
+            "items": {
+              "$ref": "#/components/schemas/SenalNivelOut"
+            },
+            "type": "array",
+            "title": "Senales"
+          },
+          "obtenido_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Obtenido En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cliente_id",
+          "con_consentimiento",
+          "perfil_fuente",
+          "fuentes",
+          "completitud",
+          "senales",
+          "obtenido_en"
+        ],
+        "title": "PerfilAsesorOut",
+        "description": "Resumen del perfil para el asesor: niveles, nunca las cifras del cliente (ADR-0006)."
+      },
       "PerfilCrudoOut": {
         "properties": {
           "cliente_id": {
@@ -1011,6 +1481,95 @@
           "completitud"
         ],
         "title": "PerfilUsadoOut"
+      },
+      "ProductoOut": {
+        "properties": {
+          "codigo": {
+            "type": "string",
+            "title": "Codigo"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "campos": {
+            "items": {
+              "$ref": "#/components/schemas/CampoOut"
+            },
+            "type": "array",
+            "title": "Campos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "codigo",
+          "nombre",
+          "campos"
+        ],
+        "title": "ProductoOut"
+      },
+      "SenalNivelOut": {
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "nivel": {
+            "type": "string",
+            "title": "Nivel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre",
+          "nivel"
+        ],
+        "title": "SenalNivelOut"
+      },
+      "SolicitudAsistidaIn": {
+        "properties": {
+          "cliente_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 36,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Id"
+          },
+          "documento": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentoIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "producto": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Producto"
+          },
+          "datos": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Datos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "producto",
+          "datos"
+        ],
+        "title": "SolicitudAsistidaIn",
+        "description": "O un cliente existente (`cliente_id`) o un prospecto sin cuenta (`documento`)."
       },
       "SolicitudIn": {
         "properties": {

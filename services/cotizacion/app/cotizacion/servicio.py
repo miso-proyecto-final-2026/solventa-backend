@@ -22,6 +22,7 @@ from app.cotizacion.dominio import (
     ESTADO_EMITIDA,
     CotizacionEmitida,
     DesglosePrecio,
+    PerfilUnificado,
     SolicitudCotizacion,
 )
 from app.cotizacion.errores import (
@@ -75,7 +76,11 @@ class ServicioCotizacion:
         cotizacion_id = self._generar_id()
         token = cotizacion_en_curso.set(cotizacion_id)
         try:
-            perfil = await self._perfiles.obtener(solicitud.cliente_id)
+            if solicitud.origen is not None and solicitud.origen.sin_cuenta:
+                # Prospecto sin cuenta: no hay consentimiento ni proveedores que consultar.
+                perfil = PerfilUnificado(solicitud.cliente_id, con_consentimiento=False)
+            else:
+                perfil = await self._perfiles.obtener(solicitud.cliente_id)
         finally:
             cotizacion_en_curso.reset(token)
         resultado = calcular_prima(
@@ -110,6 +115,7 @@ class ServicioCotizacion:
             vigente_hasta=ahora + timedelta(days=resultado.vigencia_dias),
             creada_en=ahora,
             desglose=resultado.desglose,
+            origen=solicitud.origen,
         )
         await asyncio.to_thread(self._repo.guardar, emitida, dict(solicitud.datos))
 

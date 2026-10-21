@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from app.proveedores.demo import CatalogoPerfilesDemo
 from app.proveedores.dominio import ProveedorError
 
 
@@ -47,10 +48,14 @@ class ConfigSimulador:
 
 class _SimuladorBase:
     def __init__(
-        self, config: ConfigSimulador | None = None, rng: random.Random | None = None
+        self,
+        config: ConfigSimulador | None = None,
+        rng: random.Random | None = None,
+        perfiles_demo: CatalogoPerfilesDemo | None = None,
     ):
         self.config = config or ConfigSimulador()
         self._rng = rng or random.Random()
+        self._demo = perfiles_demo
 
     async def _simular(self) -> bool:
         """Aplica latencia/fallo. Devuelve False si la respuesta debe ser vacía."""
@@ -76,6 +81,9 @@ class SimuladorOpenFinance(_SimuladorBase):
         if not await self._simular():
             return {}
         # Contrato propio del proveedor simulado; HU10 lo mapea al esquema canónico.
+        asignado = self._demo.para(cliente_id, "open_finance") if self._demo else None
+        if asignado is not None:
+            return {"customerId": cliente_id, **asignado}
         return {
             "customerId": cliente_id,
             "monthlyIncomeCop": 4_500_000,
@@ -88,6 +96,9 @@ class SimuladorOpenData(_SimuladorBase):
     async def consultar_perfil(self, cliente_id: str) -> dict[str, Any]:
         if not await self._simular():
             return {}
+        asignado = self._demo.para(cliente_id, "open_data") if self._demo else None
+        if asignado is not None:
+            return {"documento_ref": cliente_id, **asignado}
         return {
             "documento_ref": cliente_id,
             "ocupacion": "empleado",

@@ -120,11 +120,39 @@ class ResultadoRating:
         return AVISO_APROXIMADA if self.aproximada else None
 
 
+CANAL_API = "API"
+CANAL_WEB_ASESOR = "WEB_ASESOR"
+
+PERFIL_REAL = "REAL"
+PERFIL_POR_DEFECTO = "POR_DEFECTO"
+PERFIL_DEGRADADO = "DEGRADADO"
+
+
+def fuente_de_perfil(*, degradado: bool, aproximada: bool) -> str:
+    """Qué perfil sustentó el precio: el real del cliente, el de por defecto o uno degradado."""
+    if degradado:
+        return PERFIL_DEGRADADO
+    return PERFIL_POR_DEFECTO if aproximada else PERFIL_REAL
+
+
+@dataclass(frozen=True)
+class OrigenCotizacion:
+    """Quién y por qué canal pidió la cotización (HU38). Sin origen, es el canal API."""
+
+    canal: str = CANAL_API
+    asesor_id: str | None = None
+    # Cotización a un prospecto que no tiene cuenta: no se consulta el perfil (Null Object).
+    sin_cuenta: bool = False
+    documento_tipo: str | None = None
+    documento_numero: str | None = None
+
+
 @dataclass(frozen=True)
 class SolicitudCotizacion:
     cliente_id: str
     producto: str
     datos: Mapping[str, Any]
+    origen: OrigenCotizacion | None = None
 
 
 @dataclass(frozen=True)
@@ -151,6 +179,11 @@ class CotizacionEmitida:
     hit_cache: bool = False
     latencia_interna_ms: float | None = None
     desglose: DesglosePrecio | None = None
+    origen: OrigenCotizacion | None = None
+
+    @property
+    def perfil_fuente(self) -> str:
+        return fuente_de_perfil(degradado=self.degradado, aproximada=self.aproximada)
 
     @property
     def componentes(self) -> tuple[Componente, ...]:
