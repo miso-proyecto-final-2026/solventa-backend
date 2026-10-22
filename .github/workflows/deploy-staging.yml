@@ -91,10 +91,17 @@ jobs:
       - id: ecr
         uses: aws-actions/amazon-ecr-login@v2
       - name: Construir y publicar imagen
+        # Los tags de ECR son inmutables: si este SHA ya se publicó (otro comentario sobre el mismo commit,
+        # o un reintento tras un fallo posterior), se reutiliza la imagen en lugar de volver a subirla.
         run: |
-          IMAGE=${{ steps.ecr.outputs.registry }}/${SERVICIO}:${{ needs.preparar.outputs.sha }}
-          docker build -t "$IMAGE" services/${{ matrix.carpeta }}
-          docker push "$IMAGE"
+          SHA=${{ needs.preparar.outputs.sha }}
+          IMAGE=${{ steps.ecr.outputs.registry }}/${SERVICIO}:${SHA}
+          if aws ecr describe-images --repository-name "$SERVICIO" --image-ids imageTag="$SHA" >/dev/null 2>&1; then
+            echo "La imagen ${SERVICIO}:${SHA} ya existe en ECR; se reutiliza."
+          else
+            docker build -t "$IMAGE" services/${{ matrix.carpeta }}
+            docker push "$IMAGE"
+          fi
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
       - name: Conectar con el clúster
         run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
