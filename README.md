@@ -113,6 +113,6 @@ La imagen incluye `alembic.ini` y `migrations/`, pero **no ejecuta las migracion
 
 ### Puntos a confirmar en `solventa-infra`
 
-- El pipeline (`ci.yml`, job `deploy-staging`) publica solo la imagen de `services/cotizacion` en el repositorio ECR `solventa-backend`; Identidad aún no se despliega.
+- El despliegue a staging es manual y por demanda: un colaborador comenta `cicd/deploy-staging` en un PR y `deploy-staging.yml` publica en ECR, migra y hace el rollout de cada servicio que el PR modifica (mapa en `.github/deploy-services.json`). Requiere la variable de repositorio `AWS_DEPLOY_ROLE_ARNS` (JSON `{servicio: arn}`, salida `service_deploy_role_arns` del bootstrap de solventa-infra).
 - Contenedor escucha en el puerto `8000`.
 - Los secretos deben llegar desde el gestor de secretos del ambiente (no ConfigMap ni git).
