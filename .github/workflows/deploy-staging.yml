@@ -1,0 +1,150 @@
+name: deploy-staging
+
+# Despliegue a staging por comentario: un colaborador escribe `cicd/deploy-staging` en un PR y se
+# despliegan los servicios cuyos archivos cambia ese PR (services/<carpeta>/, ver .github/deploy-services.json).
+# `issue_comment` ejecuta siempre el workflow de `main`, así que la lógica de este archivo y de
+# .github/scripts no la puede cambiar el PR que se está desplegando.
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  EKS_CLUSTER: solventa-staging
+
+jobs:
+  preparar:
+    name: preparar
+    if: github.event.issue.pull_request && github.event.comment.body == 'cicd/deploy-staging'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      matriz: ${{ steps.calcular.outputs.matriz }}
+      sha: ${{ steps.calcular.outputs.sha }}
+      motivo: ${{ steps.calcular.outputs.motivo }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.issue.number }}
+      AUTOR: ${{ github.event.comment.user.login }}
+      REPO: ${{ github.repository }}
+      ROLES: ${{ vars.AWS_DEPLOY_ROLE_ARNS }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirmar recepción
+        run: gh api "repos/$REPO/issues/comments/${{ github.event.comment.id }}/reactions" -f content=eyes >/dev/null
+      - id: calcular
+        name: Validar permisos, PR y servicios afectados
+        run: |
+          rechazar() { echo "matriz=" >> "$GITHUB_OUTPUT"; echo "motivo=$1" >> "$GITHUB_OUTPUT"; exit 0; }
+
+          PERMISO=$(gh api "repos/$REPO/collaborators/$AUTOR/permission" --jq .permission 2>/dev/null || echo ninguno)
+          case "$PERMISO" in admin|maintain|write) ;; *) rechazar "@$AUTOR no tiene permiso de escritura en este repositorio." ;; esac
+
+          read -r ESTADO SHA REPO_CABEZA < <(gh api "repos/$REPO/pulls/$PR" --jq '[.state, .head.sha, .head.repo.full_name] | @tsv')
+          [ "$ESTADO" = open ] || rechazar "El PR no está abierto."
+          [ "$REPO_CABEZA" = "$REPO" ] || rechazar "El PR viene de un fork (\`$REPO_CABEZA\`); no se despliega código externo."
+
+          [ -n "$ROLES" ] || rechazar "Falta la variable del repositorio \`AWS_DEPLOY_ROLE_ARNS\` (salida \`service_deploy_role_arns\` del bootstrap de solventa-infra)."
+
+          MATRIZ=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename' | python3 .github/scripts/servicios_afectados.py)
+          [ "$MATRIZ" != '{"include":[]}' ] || rechazar "El PR no modifica ningún servicio registrado en \`.github/deploy-services.json\`; no hay nada que desplegar."
+          for S in $(jq -r '.include[].servicio' <<<"$MATRIZ"); do
+            jq -e --arg s "$S" 'has($s)' <<<"$ROLES" >/dev/null || rechazar "\`AWS_DEPLOY_ROLE_ARNS\` no trae el rol de \`$S\`."
+          done
+
+          echo "matriz=$MATRIZ" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "motivo=" >> "$GITHUB_OUTPUT"
+
+  desplegar:
+    name: desplegar (${{ matrix.servicio }})
+    needs: preparar
+    if: needs.preparar.outputs.matriz != ''
+    runs-on: ubuntu-latest
+    # La confianza OIDC del rol de despliegue exige el environment `staging`.
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.preparar.outputs.matriz) }}
+    # Un despliegue por servicio a la vez; el siguiente espera en lugar de pisar la migración.
+    concurrency:
+      group: deploy-staging-${{ matrix.servicio }}
+      cancel-in-progress: false
+    env:
+      SERVICIO: ${{ matrix.servicio }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.preparar.outputs.sha }}
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ fromJSON(vars.AWS_DEPLOY_ROLE_ARNS)[matrix.servicio] }}
+          aws-region: ${{ env.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Construir y publicar imagen
+        run: |
+          IMAGE=${{ steps.ecr.outputs.registry }}/${SERVICIO}:${{ needs.preparar.outputs.sha }}
+          docker build -t "$IMAGE" services/${{ matrix.carpeta }}
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+      - name: Conectar con el clúster
+        run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
+      - name: Migrar el esquema (Alembic)
+        # El baseline deja una plantilla suspendida `<servicio>-migrate` (contrato C3): se le pone la imagen
+        # nueva y se lanza un Job a partir de ella. Si la migración falla, no se despliega la imagen.
+        run: |
+          JOB="${SERVICIO}-migrate-${GITHUB_RUN_ID}"
+          kubectl -n staging set image "cronjob/${SERVICIO}-migrate" app="$IMAGE"
+          kubectl -n staging create job "$JOB" --from="cronjob/${SERVICIO}-migrate"
+          if ! kubectl -n staging wait --for=condition=complete "job/$JOB" --timeout=180s; then
+            kubectl -n staging logs "job/$JOB" --tail=100 || true
+            exit 1
+          fi
+      - id: desplegar
+        name: Desplegar al namespace staging en EKS
+        run: |
+          kubectl -n staging set image "deployment/${SERVICIO}" app="$IMAGE"
+          kubectl -n staging rollout status "deployment/${SERVICIO}" --timeout=180s
+      - name: Revertir si el despliegue falló
+        # Solo si el propio despliegue falló: un fallo anterior (build, migración) no tocó el Deployment,
+        # y revertirlo deshacería un despliegue sano.
+        if: failure() && steps.desplegar.conclusion == 'failure'
+        run: kubectl -n staging rollout undo "deployment/${SERVICIO}" || true
+
+  informar:
+    name: informar
+    needs: [preparar, desplegar]
+    if: always() && needs.preparar.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.issue.number }}
+      MOTIVO: ${{ needs.preparar.outputs.motivo }}
+      RESULTADO: ${{ needs.desplegar.result }}
+      MATRIZ: ${{ needs.preparar.outputs.matriz }}
+      SHA: ${{ needs.preparar.outputs.sha }}
+      EJECUCION: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Comentar el resultado en el PR
+        run: |
+          if [ -n "$MOTIVO" ]; then
+            TEXTO="🚫 **No se desplegó a staging.** $MOTIVO"
+          else
+            SERVICIOS=$(jq -r '[.include[].servicio | "`" + . + "`"] | join(", ")' <<<"$MATRIZ")
+            case "$RESULTADO" in
+              success) TEXTO="✅ **Staging actualizado** con \`${SHA:0:7}\`: $SERVICIOS. [Ejecución]($EJECUCION)" ;;
+              *) TEXTO="❌ **Falló el despliegue a staging** ($RESULTADO) de $SERVICIOS con \`${SHA:0:7}\`. Si falló el despliegue (no la migración), se revirtió el Deployment. [Ejecución]($EJECUCION)" ;;
+            esac
+          fi
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$TEXTO"
