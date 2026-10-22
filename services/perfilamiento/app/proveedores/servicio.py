@@ -1,0 +1,197 @@
+"""Consulta de las fuentes externas: caché → proveedor → degradación.
+
+Réplica adaptada de `ServicioPerfil` de MS Cotización (HU09): aquí no verifica el consentimiento
+(lo hace `Enriquecedor` antes, porque un intento sin consentimiento debe quedar registrado) y el TTL
+depende del tipo de dato de cada fuente.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import logging
+import random
+import time
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
+
+from app.proveedores.cache import CachePerfil
+from app.proveedores.circuit_breaker import CircuitBreaker
+from app.proveedores.config import ConfigProveedores
+from app.proveedores.dominio import (
+    PERFIL_POR_DEFECTO,
+    ConsentimientoPort,
+    Fuente,
+    PerfilCrudo,
+    ProveedorError,
+    ProveedorExterno,
+    RegistroLlamada,
+    ResultadoFuente,
+)
+from app.proveedores.ttl import ttl_con_jitter
+
+log = logging.getLogger(__name__)
+
+# Clave reservada con que se guarda en caché la fecha de consulta al proveedor;
+# nunca llega al payload que ven los normalizadores.
+_META_OBTENIDO_EN = "__obtenido_en"
+
+
+def _separar_meta(guardado: dict[str, Any]) -> tuple[dict[str, Any], datetime | None]:
+    payload = {k: v for k, v in guardado.items() if k != _META_OBTENIDO_EN}
+    crudo = guardado.get(_META_OBTENIDO_EN)
+    try:
+        return payload, datetime.fromisoformat(crudo) if crudo else None
+    except (TypeError, ValueError):
+        return payload, None
+
+
+class ServicioFuentes:
+    def __init__(
+        self,
+        proveedores: dict[Fuente, ProveedorExterno],
+        cache: CachePerfil,
+        consentimiento: ConsentimientoPort,
+        config: ConfigProveedores | None = None,
+        breakers: dict[Fuente, CircuitBreaker] | None = None,
+        registrar: Callable[[RegistroLlamada], None] | None = None,
+        rng: random.Random | None = None,
+        reloj: Callable[[], datetime] | None = None,
+    ) -> None:
+        self._proveedores = proveedores
+        self._cache = cache
+        self.consentimiento = consentimiento
+        self.config = config or ConfigProveedores()
+        self.breakers = breakers or {
+            f: CircuitBreaker(self.config.umbral_fallos) for f in proveedores
+        }
+        self._registrar = registrar or (lambda _r: None)
+        self._rng = rng or random.Random()
+        self._reloj = reloj or (lambda: datetime.now(UTC))
+
+    async def consultar(self, cliente_id: str) -> PerfilCrudo:
+        """Consulta todas las fuentes. El llamador ya verificó el consentimiento."""
+        fuentes = await asyncio.gather(
+            *(self._consultar(cliente_id, f) for f in self._proveedores)
+        )
+        return PerfilCrudo(cliente_id=cliente_id, fuentes=list(fuentes))
+
+    async def _consultar(self, cliente_id: str, fuente: Fuente) -> ResultadoFuente:
+        inicio = time.perf_counter()
+        breaker = self.breakers[fuente]
+        ttl_base = self.config.ttl_de(fuente)
+        timeout = False
+
+        vigente = await self._cache.obtener(cliente_id, fuente)
+        if vigente is not None:
+            payload, obtenido_en = _separar_meta(vigente)
+            return self._cerrar(
+                cliente_id,
+                fuente,
+                inicio,
+                ResultadoFuente(
+                    fuente, payload, hit_cache=True, obtenido_en=obtenido_en, ttl_s=ttl_base
+                ),
+            )
+
+        if breaker.permite_solicitud():
+            try:
+                payload = await asyncio.wait_for(
+                    self._proveedores[fuente].consultar_perfil(cliente_id),
+                    timeout=self.config.timeout_s,
+                )
+                if not payload:
+                    raise ProveedorError("respuesta vacía")
+            except (TimeoutError, ProveedorError, OSError) as exc:
+                log.warning("proveedor %s degradado: %s", fuente.value, type(exc).__name__)
+                breaker.registrar_fallo()
+                timeout = isinstance(exc, TimeoutError)
+            else:
+                breaker.registrar_exito()
+                ttl = ttl_con_jitter(
+                    ttl_base, self.config.jitter_min, self.config.jitter_max, self._rng
+                )
+                obtenido_en = self._reloj()
+                await self._cache.guardar(
+                    cliente_id,
+                    fuente,
+                    {**payload, _META_OBTENIDO_EN: obtenido_en.isoformat()},
+                    ttl,
+                    self.config.ttl_respaldo_s,
+                )
+                return self._cerrar(
+                    cliente_id,
+                    fuente,
+                    inicio,
+                    ResultadoFuente(fuente, payload, obtenido_en=obtenido_en, ttl_s=ttl_base),
+                )
+
+        return self._cerrar(
+            cliente_id, fuente, inicio, await self._degradar(cliente_id, fuente, timeout)
+        )
+
+    async def _degradar(
+        self, cliente_id: str, fuente: Fuente, timeout: bool = False
+    ) -> ResultadoFuente:
+        ttl_base = self.config.ttl_de(fuente)
+        respaldo = await self._cache.obtener_respaldo(cliente_id, fuente)
+        if respaldo is not None:
+            payload, obtenido_en = _separar_meta(respaldo)
+            return ResultadoFuente(
+                fuente,
+                payload,
+                degradado=True,
+                hit_cache=True,
+                obtenido_en=obtenido_en,
+                ttl_s=ttl_base,
+                timeout=timeout,
+            )
+        return ResultadoFuente(
+            fuente,
+            dict(PERFIL_POR_DEFECTO),
+            degradado=True,
+            por_defecto=True,
+            ttl_s=ttl_base,
+            timeout=timeout,
+        )
+
+    def _cerrar(
+        self, cliente_id: str, fuente: Fuente, inicio: float, resultado: ResultadoFuente
+    ) -> ResultadoFuente:
+        self._registrar(
+            RegistroLlamada(
+                cliente_id=cliente_id,
+                fuente=fuente,
+                latencia_ms=(time.perf_counter() - inicio) * 1000,
+                hit_cache=resultado.hit_cache,
+                degradado=resultado.degradado,
+                estado_circuito=self.breakers[fuente].estado,
+            )
+        )
+        return resultado
+
+    async def sondear_una_vez(self) -> None:
+        """Sondeo half-open en segundo plano; nunca ocurre dentro de una solicitud."""
+        for fuente, breaker in self.breakers.items():
+            if not breaker.iniciar_sondeo():
+                continue
+            try:
+                await asyncio.wait_for(
+                    self._proveedores[fuente].sondear(), timeout=self.config.timeout_s
+                )
+                breaker.resultado_sondeo(exito=True)
+            except (TimeoutError, ProveedorError, OSError):
+                breaker.resultado_sondeo(exito=False)
+
+    async def cerrar(self) -> None:
+        """Libera los recursos de red del adaptador de consentimiento, si los tiene."""
+        cerrar = getattr(self.consentimiento, "cerrar", None)
+        if cerrar is not None:
+            await cerrar()
+
+    async def ejecutar_sondeador(self) -> None:
+        while True:
+            await asyncio.sleep(self.config.intervalo_half_open_s)
+            with contextlib.suppress(Exception):
+                await self.sondear_una_vez()

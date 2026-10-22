@@ -12,8 +12,9 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
-  # Transitorio: solventa-infra solo conoce el servicio `solventa-backend` (hoy MS Cotización).
-  # Al registrar `solventa-identidad` y `solventa-cotizacion` en services.yaml se despliega cada uno.
+  # Transitorio: `deploy-staging` sigue desplegando `solventa-backend` (hoy MS Cotización).
+  # Identidad y Cotización se desplegarán cada uno cuando se registren por separado en solventa-infra.
+  # Perfilamiento ya está registrado como `solventa-perfilamiento` y tiene su propio job y su propio rol.
   ECR_REPOSITORY: solventa-backend
   EKS_CLUSTER: solventa-staging
 
@@ -24,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [identidad, cotizacion]
+        service: [identidad, cotizacion, perfilamiento]
     defaults:
       run:
         working-directory: services/${{ matrix.service }}
@@ -45,6 +46,9 @@ jobs:
       - name: Cobertura mínima del 80 % en los módulos de negocio de cotización
         if: matrix.service == 'cotizacion'
         run: coverage report --include="app/cotizacion/*" --fail-under=80
+      - name: Cobertura mínima del 80 % en los módulos de negocio de perfilamiento
+        if: matrix.service == 'perfilamiento'
+        run: coverage report --include="app/perfilamiento/*" --fail-under=80
       - name: Publicar reportes de pruebas
         if: always()
         uses: actions/upload-artifact@v4
@@ -72,7 +76,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [identidad, cotizacion]
+        service: [identidad, cotizacion, perfilamiento]
     steps:
       - uses: actions/checkout@v4
       - name: Construir imagen Docker
@@ -104,3 +108,57 @@ jobs:
           kubectl -n staging set image deployment/solventa-backend \
             app=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
           kubectl -n staging rollout status deployment/solventa-backend --timeout=180s
+
+  # MS Perfilamiento (HU23): servicio interno con su repositorio ECR, su rol de despliegue y su Deployment
+  # propios (solventa-infra, `services.yaml`). Se despliega solo en main y cuando el rol esté configurado.
+  deploy-staging-perfilamiento:
+    name: deploy-staging (perfilamiento)
+    needs: build
+    # Variable de repositorio AWS_ROLE_ARN_PERFILAMIENTO = salida service_deploy_role_arns["solventa-perfilamiento"]
+    if: github.ref == 'refs/heads/main' && vars.AWS_ROLE_ARN_PERFILAMIENTO != ''
+    runs-on: ubuntu-latest
+    # La confianza OIDC del rol de despliegue exige el environment `staging`.
+    environment: staging
+    # Un solo despliegue de perfilamiento a la vez; el siguiente espera en lugar de pisar la migración.
+    concurrency:
+      group: deploy-staging-perfilamiento
+      cancel-in-progress: false
+    env:
+      SERVICE: solventa-perfilamiento
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_PERFILAMIENTO }}
+          aws-region: ${{ env.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Construir y publicar imagen
+        run: |
+          IMAGE=${{ steps.ecr.outputs.registry }}/${{ env.SERVICE }}:${{ github.sha }}
+          docker build -t "$IMAGE" services/perfilamiento
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+      - name: Conectar con el clúster
+        run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
+      - name: Migrar el esquema perfilamiento (Alembic)
+        # El baseline deja una plantilla suspendida `<servicio>-migrate` (contrato C3): se le pone la imagen
+        # nueva y se lanza un Job a partir de ella. Si la migración falla, no se despliega la imagen.
+        run: |
+          JOB="${SERVICE}-migrate-${GITHUB_RUN_ID}"
+          kubectl -n staging set image "cronjob/${SERVICE}-migrate" app="$IMAGE"
+          kubectl -n staging create job "$JOB" --from="cronjob/${SERVICE}-migrate"
+          if ! kubectl -n staging wait --for=condition=complete "job/$JOB" --timeout=180s; then
+            kubectl -n staging logs "job/$JOB" --tail=100 || true
+            exit 1
+          fi
+      - id: desplegar
+        name: Desplegar al namespace staging en EKS
+        run: |
+          kubectl -n staging set image "deployment/${SERVICE}" app="$IMAGE"
+          kubectl -n staging rollout status "deployment/${SERVICE}" --timeout=180s
+      - name: Revertir si el despliegue falló
+        # Solo si el propio despliegue falló: un fallo anterior (build, migración) no tocó el Deployment,
+        # y revertirlo deshacería un despliegue sano.
+        if: failure() && steps.desplegar.conclusion == 'failure'
+        run: kubectl -n staging rollout undo "deployment/${SERVICE}" || true

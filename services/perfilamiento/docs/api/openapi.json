@@ -1,0 +1,490 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Solventa — MS Perfilamiento",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/v1/perfilamiento/{cliente_id}/enriquecer": {
+      "post": {
+        "tags": [
+          "perfilamiento"
+        ],
+        "summary": "Enriquecer el perfil del cliente con Open Finance y Open Data",
+        "operationId": "enriquecer_v1_perfilamiento__cliente_id__enriquecer_post",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cliente Id"
+            }
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerfilOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/perfilamiento/{cliente_id}/perfil": {
+      "get": {
+        "tags": [
+          "perfilamiento"
+        ],
+        "summary": "Perfil enriquecido vigente (exige consentimiento vigente)",
+        "operationId": "perfil_v1_perfilamiento__cliente_id__perfil_get",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cliente Id"
+            }
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerfilOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/perfilamiento/{cliente_id}/linaje": {
+      "get": {
+        "tags": [
+          "perfilamiento"
+        ],
+        "summary": "Linaje del perfil vigente, para auditoría",
+        "operationId": "linaje_v1_perfilamiento__cliente_id__linaje_get",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cliente Id"
+            }
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinajeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CampoOut": {
+        "properties": {
+          "valor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Valor"
+          },
+          "fuente": {
+            "type": "string",
+            "title": "Fuente"
+          },
+          "obtenido_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obtenido En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valor",
+          "fuente",
+          "obtenido_en"
+        ],
+        "title": "CampoOut"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LinajeOut": {
+        "properties": {
+          "perfil_id": {
+            "type": "string",
+            "title": "Perfil Id"
+          },
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "creado_en": {
+            "type": "string",
+            "title": "Creado En"
+          },
+          "consentimiento_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consentimiento Id"
+          },
+          "fuentes": {
+            "items": {
+              "$ref": "#/components/schemas/LineaLinajeOut"
+            },
+            "type": "array",
+            "title": "Fuentes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "perfil_id",
+          "cliente_id",
+          "creado_en",
+          "consentimiento_id",
+          "fuentes"
+        ],
+        "title": "LinajeOut"
+      },
+      "LineaLinajeOut": {
+        "properties": {
+          "fuente": {
+            "type": "string",
+            "title": "Fuente"
+          },
+          "campos": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Campos"
+          },
+          "obtenido_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obtenido En"
+          },
+          "ttl_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttl S"
+          },
+          "hit_cache": {
+            "type": "boolean",
+            "title": "Hit Cache"
+          },
+          "degradado": {
+            "type": "boolean",
+            "title": "Degradado"
+          },
+          "por_defecto": {
+            "type": "boolean",
+            "title": "Por Defecto"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fuente",
+          "campos",
+          "obtenido_en",
+          "ttl_s",
+          "hit_cache",
+          "degradado",
+          "por_defecto"
+        ],
+        "title": "LineaLinajeOut"
+      },
+      "PerfilOut": {
+        "properties": {
+          "perfil_id": {
+            "type": "string",
+            "title": "Perfil Id"
+          },
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "creado_en": {
+            "type": "string",
+            "title": "Creado En"
+          },
+          "consentimiento_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consentimiento Id"
+          },
+          "campos": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CampoOut"
+            },
+            "type": "object",
+            "title": "Campos"
+          },
+          "ausentes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Ausentes"
+          },
+          "conflictos": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Conflictos"
+          },
+          "completitud": {
+            "type": "number",
+            "title": "Completitud"
+          },
+          "degradado": {
+            "type": "boolean",
+            "title": "Degradado"
+          },
+          "con_consentimiento": {
+            "type": "boolean",
+            "title": "Con Consentimiento"
+          },
+          "hit_cache": {
+            "type": "boolean",
+            "title": "Hit Cache"
+          },
+          "fuentes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fuentes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "perfil_id",
+          "cliente_id",
+          "creado_en",
+          "consentimiento_id",
+          "campos",
+          "ausentes",
+          "conflictos",
+          "completitud",
+          "degradado",
+          "con_consentimiento",
+          "hit_cache",
+          "fuentes"
+        ],
+        "title": "PerfilOut"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
