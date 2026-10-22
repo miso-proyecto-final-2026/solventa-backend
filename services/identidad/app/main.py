@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 
 from app.db import DATABASE_URL, Base, engine
@@ -11,6 +13,9 @@ if DATABASE_URL.startswith("sqlite"):
     Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Solventa — MS Identidad", version="0.1.0")
+
+# Mismo logger que uvicorn para que la línea salga en `kubectl logs` sin configurar nada más.
+logging.getLogger("uvicorn.error").info("MS Identidad iniciado (base: %s)", engine.dialect.name)
 app.include_router(clientes_router)
 app.include_router(consentimientos_router)
 app.include_router(verificaciones_router)
