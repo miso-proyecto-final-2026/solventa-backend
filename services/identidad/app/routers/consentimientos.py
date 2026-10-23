@@ -1,3 +1,4 @@
+import ipaddress
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -105,11 +106,46 @@ def consultar_consentimiento(
     return _salida(cliente_id, tipo, consentimiento_vigente(db, cliente_id, tipo))
 
 
+def _ip_valida(texto: str) -> str | None:
+    try:
+        return str(ipaddress.ip_address(texto.strip()))
+    except ValueError:
+        return None
+
+
+def _sin_puerto(direccion: str) -> str:
+    """`ip:puerto` (IPv4), `[ip]:puerto` o IPv6 con el puerto al final, como lo escribe CloudFront."""
+    direccion = direccion.strip()
+    if direccion.startswith("["):
+        return direccion[1:].split("]", 1)[0]
+    if direccion.count(":") == 1:
+        return direccion.split(":", 1)[0]
+    if direccion.count(":") > 1 and _ip_valida(direccion) is None:
+        return direccion.rsplit(":", 1)[0]
+    return direccion
+
+
 def _ip_origen(request: Request) -> str | None:
-    """IP del cliente: la primera de `X-Forwarded-For` (CloudFront y API Gateway la agregan) o la del socket."""
-    reenviada = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-    ip = reenviada or (request.client.host if request.client else "")
-    return ip[:45] or None
+    """IP del cliente para la auditoría.
+
+    1. `CloudFront-Viewer-Address`: la pone CloudFront y sobrescribe lo que envíe el visitante, así que no se
+       puede falsificar por el borde público. El API Gateway no reenvía `X-Forwarded-For` (lo convierte en
+       `Forwarded`), por eso la IP del socket sería la del NLB.
+    2. La primera de `X-Forwarded-For` (balanceadores que sí lo envían).
+    3. La del socket.
+    Un valor que no sea una IP se descarta.
+    """
+    cabeceras = request.headers
+    candidatos = [
+        _sin_puerto(cabeceras.get("cloudfront-viewer-address", "")),
+        cabeceras.get("x-forwarded-for", "").split(",")[0],
+        request.client.host if request.client else "",
+    ]
+    for candidato in candidatos:
+        ip = _ip_valida(candidato) if candidato else None
+        if ip:
+            return ip[:45]
+    return None
 
 
 @router.delete("/{tipo}", response_model=ConsentimientoOut)

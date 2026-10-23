@@ -71,7 +71,12 @@ def test_revocar_deja_un_registro_de_auditoria_con_ip_y_user_agent(client):
     cliente_id, auth = registrar(client)
     _otorgar(client, cliente_id, auth)
 
-    _revocar(client, cliente_id, auth, headers={**auth, "User-Agent": "SolventaApp/1.0 (Android 14)"})
+    _revocar(
+        client,
+        cliente_id,
+        auth,
+        headers={**auth, "User-Agent": "SolventaApp/1.0 (Android 14)", "CloudFront-Viewer-Address": "203.0.113.7:5000"},
+    )
 
     otorgamiento, revocacion = _registros()
     assert (otorgamiento.evento, revocacion.evento) == ("OTORGADO", "REVOCADO")
@@ -79,17 +84,44 @@ def test_revocar_deja_un_registro_de_auditoria_con_ip_y_user_agent(client):
     assert revocacion.tipo == TIPO
     assert revocacion.canal == "MOVIL"
     assert revocacion.user_agent == "SolventaApp/1.0 (Android 14)"
-    assert revocacion.ip_origen
+    assert revocacion.ip_origen == "203.0.113.7"
     assert revocacion.fecha is not None
 
 
-def test_la_ip_de_origen_es_la_primera_de_x_forwarded_for(client):
+def _ip_registrada(client, headers_extra):
     cliente_id, auth = registrar(client)
     _otorgar(client, cliente_id, auth)
+    _revocar(client, cliente_id, auth, headers={**auth, **headers_extra})
+    return _registros()[-1].ip_origen
 
-    _revocar(client, cliente_id, auth, headers={**auth, "X-Forwarded-For": "203.0.113.7, 10.0.0.1"})
 
-    assert _registros()[-1].ip_origen == "203.0.113.7"
+def test_la_ip_de_origen_es_la_del_visitante_que_informa_cloudfront(client):
+    assert _ip_registrada(client, {"CloudFront-Viewer-Address": "186.29.148.224:54460"}) == "186.29.148.224"
+
+
+def test_cloudfront_tambien_informa_ipv6_con_y_sin_corchetes(client):
+    assert _ip_registrada(client, {"CloudFront-Viewer-Address": "[2001:db8::7]:443"}) == "2001:db8::7"
+
+
+def test_cloudfront_tiene_prioridad_sobre_x_forwarded_for(client):
+    ip = _ip_registrada(
+        client,
+        {"CloudFront-Viewer-Address": "186.29.148.224:54460", "X-Forwarded-For": "203.0.113.7, 10.0.0.1"},
+    )
+
+    assert ip == "186.29.148.224"
+
+
+def test_sin_cloudfront_se_usa_la_primera_de_x_forwarded_for(client):
+    assert _ip_registrada(client, {"X-Forwarded-For": "203.0.113.7, 10.0.0.1"}) == "203.0.113.7"
+
+
+@pytest.mark.parametrize("valor", ["no-es-una-ip", "<script>", "999.1.1.1:80", ""])
+def test_un_valor_que_no_es_una_ip_se_descarta_y_se_usa_la_del_socket(client, valor):
+    ip = _ip_registrada(client, {"CloudFront-Viewer-Address": valor, "X-Forwarded-For": valor})
+
+    # El cliente de pruebas tampoco tiene una IP de socket válida ("testclient"): no se inventa ninguna.
+    assert ip is None
 
 
 def test_un_user_agent_enorme_se_recorta(client):
