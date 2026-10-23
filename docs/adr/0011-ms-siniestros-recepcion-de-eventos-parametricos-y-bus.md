@@ -1,17 +1,17 @@
-# ADR-0010 — MS Siniestros: recepción de eventos paramétricos y bus de eventos detrás de una interfaz
+# ADR-0011 — MS Siniestros: recepción de eventos paramétricos y bus de eventos detrás de una interfaz
 
 - **Estado:** Propuesto (lista de tipos de evento, clave de partición y broker real pendientes de confirmar con el equipo)
 - **Fecha:** 2026-10-23
 - **Historia:** HU27 (E07 · F16 Recepción de eventos paramétricos, Sprint 2)
-- **Depende de:** [ADR-0001](0001-descomposicion-microservicios-bounded-contexts.md) (MS Siniestros posee `Evento_Paramétrico`; referencia pólizas solo por id) y [ADR-0002](0002-comunicacion-sincrona-asincrona-por-flujo.md) (pago paramétrico asíncrono, entrega al menos una vez, consumidores idempotentes).
+- **Depende de:** [ADR-0001](0001-descomposicion-microservicios-bounded-contexts.md) (MS Siniestros posee `Evento_Paramétrico`; referencia pólizas solo por id), [ADR-0002](0002-comunicacion-sincrona-asincrona-por-flujo.md) (pago paramétrico asíncrono, entrega al menos una vez, consumidores idempotentes) y [ADR-0010](0010-eventos-sobre-msk-plantilla-por-servicio.md) (MSK y plantilla de cliente por servicio, `docs/plantillas/eventos/`).
 
 ## Contexto
 
-HU27 crea MS Siniestros con el endpoint por el que un proveedor de vuelos o clima entrega eventos. Debe responder de inmediato, no perder eventos ante ráfagas ni ante la caída del consumidor, y no duplicarlos si el proveedor reintenta. La historia depende de que el bus (T1, MSK) exista; hoy no está disponible. HU28, que valida la condición de cada póliza, consumirá lo que aquí se publique.
+HU27 crea MS Siniestros con el endpoint por el que un proveedor de vuelos o clima entrega eventos. Debe responder de inmediato, no perder eventos ante ráfagas ni ante la caída del consumidor, y no duplicarlos si el proveedor reintenta. La historia depende del bus (T1, MSK): el ADR-0010 ya define la plantilla de cliente, pero el MSK de staging no está encendido ni los topics declarados para este servicio. HU28, que valida la condición de cada póliza, consumirá lo que aquí se publique.
 
 ## Decisión
 
-1. **El bus es una interfaz (`BusEventos`) con un adaptador en memoria (`BusMemoria`).** Registro por partición, consumidores por grupo, confirmación explícita (entrega al menos una vez) y contrapresión por rezago. Cuando MSK esté disponible se agrega otro adaptador con la misma interfaz; ni el receptor ni los consumidores cambian. Los topics ya llevan los nombres del issue: `solventa.siniestros.eventos` y, para mensajes agotados, `solventa.siniestros.eventos.dlq`.
+1. **El bus es una interfaz (`BusEventos`) con un adaptador en memoria (`BusMemoria`).** Registro por partición, consumidores por grupo, confirmación explícita (entrega al menos una vez) y contrapresión por rezago. Para pasar a MSK se adopta la plantilla del ADR-0010 detrás de la misma interfaz (declarar el servicio y sus topics en `services.yaml`); ni el receptor ni los consumidores cambian. Los topics ya llevan los nombres del issue: `solventa.siniestros.eventos` y, para mensajes agotados, `solventa.siniestros.eventos.dlq`.
 2. **Orden de las operaciones al recibir:** autenticar → validar → registrar (idempotente) → publicar → acusar. El acuse es `202` con `evento_uuid` y no espera al procesamiento. Un reenvío del mismo `(fuente, evento_id)` responde `200` con `duplicado: true`, sin segundo registro ni segunda publicación (restricción única en la base y una sola fila en `publicaciones_bus`).
 3. **No perder eventos con el bus saturado.** El evento se registra **antes** de publicarse. Si el bus no lo acepta (rezago ≥ `SINIESTROS_CAPACIDAD_REZAGO`), se responde `503 BUS_SATURADO` con `Retry-After: 1`; el evento ya está guardado y, cuando el proveedor lo reenvía con el mismo `evento_id`, solo falta publicarlo. La contrapresión llega así al proveedor, que es quien debe reintentar.
 4. **Al reiniciar, el bus en memoria se repone desde la base.** `reponer_rezago` vuelve a publicar los eventos registrados que el consumidor no procesó. Con un broker que persiste, esto desaparece.

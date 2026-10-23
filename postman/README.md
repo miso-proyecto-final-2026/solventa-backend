@@ -17,6 +17,7 @@ Cada petición lleva pruebas (`pm.test`) y guarda las variables que necesita la 
 | MS Identidad / Salud | `GET /health` |
 | MS Identidad / Clientes | `POST /v1/clientes` (alta, idempotencia, duplicado, validaciones) |
 | MS Identidad / Consentimientos | `POST /v1/clientes/{id}/consentimientos`, `GET /v1/clientes/{id}/consentimientos/{tipo}` (cliente y servicio; `id` del consentimiento; 401/403/404/422) |
+| MS Identidad / Revocación de consentimiento (HU07) | `DELETE /v1/clientes/{id}/consentimientos/{tipo}` (revocar, repetir con la misma fecha, consultar, 401/403/404/422) y la cotización posterior, que sale `aproximada`. Usa el segundo cliente para no quitar el consentimiento que otras carpetas necesitan. |
 | MS Identidad / KYC | `POST /v1/clientes/{id}/verificaciones` (multipart), `GET /v1/clientes/{id}/verificacion` (idempotencia, 401/403/404/415/422) |
 | MS Cotización / Salud | `GET /health` (y cabecera `X-Correlation-Id`) |
 | MS Cotización / Cotizaciones | `POST /v1/cotizaciones`, `GET /v1/cotizaciones/{id}`, `PUT /v1/cotizaciones/{id}/latencia-cliente` (ambos productos, validaciones, `X-Correlation-Id`, 404) |
@@ -51,7 +52,7 @@ ASESOR_DEMO_EMAIL=asesor@solventa.test ASESOR_DEMO_PASSWORD=<clave-de-desarrollo
 
 # MS Cotización (puerto 8000) — en otra terminal
 cd services/cotizacion
-SOLVENTA_MODO_DESARROLLO=1 \
+SOLVENTA_MODO_DESARROLLO=1 ASESOR_JWT_SECRETO=dev-secreto-asesor-de-al-menos-32-bytes \
 IDENTIDAD_URL=http://localhost:8001 IDENTIDAD_SERVICE_KEY=dev-service-key \
 AUDITOR_API_KEYS=dev-auditor-key PERFILES_API_KEYS=dev-perfiles-key \
 uvicorn app.main:app --port 8000
@@ -103,7 +104,7 @@ npx newman run solventa-backend.postman_collection.json \
 | `asesor_token`, `cliente_demo_id`, `catalogo_etag` | Colección | Las deja la carpeta de HU38 para las peticiones siguientes. |
 | `identidad_integrada` | Entorno | `true` si Cotización corre con `IDENTIDAD_URL`; `false` con el stub de consentimiento. |
 | `cliente_id`, `access_token` | «Registrar cliente» | Cliente principal y su sesión. |
-| `otro_cliente_id`, `otro_access_token` | «Registrar segundo cliente» | Para las pruebas 403 y los casos negativos de KYC; no otorga consentimiento. |
+| `otro_cliente_id`, `otro_access_token` | «Registrar segundo cliente» | Para las pruebas 403 y los casos negativos de KYC. Solo la carpeta de HU07 le otorga y le revoca el consentimiento (queda `REVOCADO`). |
 | `consentimiento_id` | «Otorgar consentimiento» | Se compara con el `consentimiento_id` que Cotización deja en la trazabilidad. |
 | `cotizacion_id` | «Crear cotización - microseguro de vida» | Consultas, latencia, desglose y consultas externas. |
 | `correlacion_id`, `cotizacion_correlada_id` | «Crear cotización - con X-Correlation-Id» | Verifican que la correlación llega a los registros de auditoría. |

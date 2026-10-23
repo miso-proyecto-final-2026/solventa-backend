@@ -61,7 +61,7 @@ El CI corre `test` y `build` en matriz por servicio.
 | `PROVEEDORES_TTL_OPEN_FINANCE_S`, `PROVEEDORES_TTL_OPEN_DATA_S` | perfilamiento | TTL por tipo de dato (3.600 s y 86.400 s por defecto), con dispersión de ±10–15 %. Ver ADR-0009. |
 | `SINIESTROS_DATABASE_URL` | siniestros | Base de datos PostgreSQL (esquema `siniestros`, Alembic). Obligatoria fuera de desarrollo; admite `DATABASE_URL`. |
 | `SINIESTROS_API_KEYS` | siniestros | Llaves de los proveedores de eventos en `X-Service-Key`, como pares `fuente=clave` separados por coma; el evento debe traer esa misma `fuente`. Vacía = nadie accede. Debe venir de un secreto. |
-| `SINIESTROS_PARTICIONES`, `SINIESTROS_CAPACIDAD_REZAGO`, `SINIESTROS_REINTENTOS_CONSUMIDOR` | siniestros | Particiones del bus (6), rezago a partir del cual responde 503 al proveedor (200.000) y reintentos del consumidor antes de la cola de fallidos (3). Ver ADR-0010. |
+| `SINIESTROS_PARTICIONES`, `SINIESTROS_CAPACIDAD_REZAGO`, `SINIESTROS_REINTENTOS_CONSUMIDOR` | siniestros | Particiones del bus (6), rezago a partir del cual responde 503 al proveedor (200.000) y reintentos del consumidor antes de la cola de fallidos (3). Ver ADR-0011. |
 | `TRAZA_COLA_MAX`, `TRAZA_REINTENTOS` | cotizacion | Cola en memoria de la trazabilidad de consultas (10.000 por defecto) y reintentos de escritura (3). Ver ADR-0007. |
 | `ASESOR_JWT_SECRETO` | identidad, cotizacion | Secreto HS256 con el que Identidad firma y Cotización valida el token del asesor (HU38, ADR-0008). **Debe ser el mismo en ambos** y venir de un secreto. Sin él solo arranca con `SOLVENTA_MODO_DESARROLLO=1` (secreto fijo de desarrollo). |
 | `ASESOR_JWT_TTL_MIN` | identidad | Vida del token del asesor en minutos (30 por defecto). |
@@ -117,6 +117,6 @@ La imagen incluye `alembic.ini` y `migrations/`, pero **no ejecuta las migracion
 
 ### Puntos a confirmar en `solventa-infra`
 
-- El pipeline (`ci.yml`, job `deploy-staging`) publica solo la imagen de `services/cotizacion` en el repositorio ECR `solventa-backend`; Identidad aún no se despliega.
+- El despliegue a staging es manual y por demanda: un colaborador comenta `cicd/deploy-staging` en un PR y `deploy-staging.yml` publica en ECR, migra y hace el rollout de cada servicio que el PR modifica (mapa en `.github/deploy-services.json`). Requiere la variable de repositorio `AWS_DEPLOY_ROLE_ARNS` (JSON `{servicio: arn}`, salida `service_deploy_role_arns` del bootstrap de solventa-infra).
 - Contenedor escucha en el puerto `8000`.
 - Los secretos deben llegar desde el gestor de secretos del ambiente (no ConfigMap ni git).
