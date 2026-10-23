@@ -61,10 +61,31 @@ jobs:
       - run: pip install pytest
       - run: pytest .github/scripts
 
+  # Plantilla del cliente de eventos (HS2): se prueba contra un Kafka real en Docker, aparte de los servicios que la copian.
+  pruebas-plantilla-eventos:
+    name: pruebas (plantilla de eventos)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs/plantillas/eventos
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt -r ../../../requirements-dev.txt
+      - name: Lint (ruff)
+        working-directory: .
+        run: ruff check docs/plantillas/eventos
+      - name: Pruebas (pytest, Kafka real con testcontainers)
+        run: pytest
+
   # Check agregado `test`: es el contexto que exige la protección de `main`; resume la matriz.
   test:
     name: test
-    needs: [pruebas, pruebas-cd]
+    needs: [pruebas, pruebas-cd, pruebas-plantilla-eventos]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -72,6 +93,7 @@ jobs:
         run: |
           test "${{ needs.pruebas.result }}" = "success"
           test "${{ needs.pruebas-cd.result }}" = "success"
+          test "${{ needs.pruebas-plantilla-eventos.result }}" = "success"
 
   build:
     name: build (${{ matrix.service }})

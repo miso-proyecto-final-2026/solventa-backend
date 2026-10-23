@@ -1,0 +1,5 @@
+# Dependencias de la plantilla del cliente de eventos (HS2). Cada servicio que la copia las agrega a su requirements.txt.
+aiokafka==0.14.0
+aws-msk-iam-sasl-signer-python==1.0.2
+pydantic>=2.7
+sqlalchemy>=2.0
