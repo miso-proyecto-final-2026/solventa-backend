@@ -296,6 +296,96 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "consentimientos"
+        ],
+        "summary": "Revocar Consentimiento",
+        "description": "Revoca el consentimiento (HU07). Solo el propio cliente; idempotente y auditado.",
+        "operationId": "revocar_consentimiento_v1_clientes__cliente_id__consentimientos__tipo__delete",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cliente Id"
+            }
+          },
+          {
+            "name": "tipo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/TipoConsentimiento"
+            }
+          },
+          {
+            "name": "canal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CanalConsentimiento",
+              "default": "MOVIL"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentimientoOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/clientes/{cliente_id}/verificaciones": {

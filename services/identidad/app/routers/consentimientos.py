@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -8,6 +8,7 @@ from app.auth import Acceso, acceso_actual, exigir_cliente
 from app.db import get_db
 from app.models import Cliente, Consentimiento, ConsentimientoRegistro
 from app.schemas import (
+    CanalConsentimiento,
     ConsentimientoCreate,
     ConsentimientoOut,
     EstadoConsentimiento,
@@ -102,3 +103,56 @@ def consultar_consentimiento(
     if db.get(Cliente, cliente_id) is None:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     return _salida(cliente_id, tipo, consentimiento_vigente(db, cliente_id, tipo))
+
+
+def _ip_origen(request: Request) -> str | None:
+    """IP del cliente: la primera de `X-Forwarded-For` (CloudFront y API Gateway la agregan) o la del socket."""
+    reenviada = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    ip = reenviada or (request.client.host if request.client else "")
+    return ip[:45] or None
+
+
+@router.delete("/{tipo}", response_model=ConsentimientoOut)
+def revocar_consentimiento(
+    cliente_id: str,
+    tipo: TipoConsentimiento,
+    request: Request,
+    canal: CanalConsentimiento = CanalConsentimiento.MOVIL,
+    db: Session = Depends(get_db),
+    acceso: Acceso = Depends(acceso_actual),
+) -> ConsentimientoOut:
+    """Revoca el consentimiento (HU07). Solo el propio cliente; idempotente y auditado."""
+    exigir_cliente(cliente_id, acceso)
+    if db.get(Cliente, cliente_id) is None:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    # FOR UPDATE: dos revocaciones simultáneas se serializan y solo la primera deja registro de auditoría.
+    vigente = (
+        db.query(Consentimiento)
+        .filter(Consentimiento.cliente_id == cliente_id, Consentimiento.tipo == tipo.value)
+        .with_for_update()
+        .first()
+    )
+    if vigente is None:
+        raise HTTPException(status_code=404, detail="Consentimiento no encontrado")
+    if vigente.estado == EstadoConsentimiento.REVOCADO.value:
+        return _salida(cliente_id, tipo, vigente)
+
+    ahora = datetime.now(UTC)
+    vigente.estado = EstadoConsentimiento.REVOCADO.value
+    vigente.fecha_revocacion = ahora
+    db.add(
+        ConsentimientoRegistro(
+            cliente_id=cliente_id,
+            tipo=tipo.value,
+            evento=EstadoConsentimiento.REVOCADO.value,
+            version_texto=vigente.version_texto,
+            canal=canal.value,
+            fecha=ahora,
+            ip_origen=_ip_origen(request),
+            user_agent=(request.headers.get("user-agent") or "")[:500] or None,
+        )
+    )
+    db.commit()
+    db.refresh(vigente)
+    return _salida(cliente_id, tipo, vigente)

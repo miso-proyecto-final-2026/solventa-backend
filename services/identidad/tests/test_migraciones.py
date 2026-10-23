@@ -235,3 +235,47 @@ def _insertar_consentimiento(c, id_, cliente_id):
             "'OTORGADO', 'v1', now())"
         )
     )
+
+
+def test_0005_agrega_ip_y_user_agent_nulos_al_registro_de_consentimiento(base_migrada):
+    columnas = {c["name"]: c for c in inspect(base_migrada).get_columns("consentimiento_registros", schema=SCHEMA)}
+
+    assert columnas["ip_origen"]["nullable"] and columnas["user_agent"]["nullable"]
+    assert columnas["ip_origen"]["type"].length == 45
+    assert columnas["user_agent"]["type"].length == 500
+
+
+def test_el_registro_con_origen_sigue_siendo_inmutable_en_la_base(base_migrada):
+    with base_migrada.begin() as c:
+        _insertar_cliente(c, "c1")
+        c.execute(
+            text(
+                f"INSERT INTO {SCHEMA}.consentimiento_registros "
+                "(id, cliente_id, tipo, evento, version_texto, canal, fecha, ip_origen, user_agent) "
+                "VALUES ('r1', 'c1', 'OPEN_FINANCE_OPEN_DATA', 'REVOCADO', 'v1', 'MOVIL', now(), '203.0.113.7', 'App/1')"
+            )
+        )
+
+    with pytest.raises(DBAPIError, match="inmutable"), base_migrada.begin() as c:
+        c.execute(text(f"UPDATE {SCHEMA}.consentimiento_registros SET ip_origen = '1.1.1.1'"))
+
+
+def test_revertir_la_0005_conserva_los_registros_y_quita_las_columnas(engine_pg, alembic):
+    alembic("upgrade", "head")
+    with engine_pg.begin() as c:
+        _insertar_cliente(c, "c1")
+        c.execute(
+            text(
+                f"INSERT INTO {SCHEMA}.consentimiento_registros "
+                "(id, cliente_id, tipo, evento, version_texto, canal, fecha, ip_origen) "
+                "VALUES ('r1', 'c1', 'OPEN_FINANCE_OPEN_DATA', 'OTORGADO', 'v1', 'MOVIL', now(), '203.0.113.7')"
+            )
+        )
+
+    alembic("downgrade", "0004")
+
+    nombres = {c["name"] for c in inspect(engine_pg).get_columns("consentimiento_registros", schema=SCHEMA)}
+    assert not {"ip_origen", "user_agent"} & nombres
+    with engine_pg.connect() as c:
+        assert c.execute(text(f"SELECT count(*) FROM {SCHEMA}.consentimiento_registros")).scalar() == 1
+    alembic("upgrade", "head")
