@@ -86,7 +86,7 @@ class Consentimiento(Base):
 
 
 class ConsentimientoRegistro(Base):
-    """Registro inmutable (solo inserciones) de cada otorgamiento; la fuente de auditoría."""
+    """Registro inmutable (solo inserciones) de cada otorgamiento y revocación; la fuente de auditoría."""
 
     __tablename__ = "consentimiento_registros"
     __table_args__ = (Index("ix_registro_cliente_tipo", "cliente_id", "tipo"),)
@@ -94,10 +94,13 @@ class ConsentimientoRegistro(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     cliente_id: Mapped[str] = mapped_column(ForeignKey("identidad.clientes.id"))
     tipo: Mapped[str] = mapped_column(String(40))
-    evento: Mapped[str] = mapped_column(String(20))  # OTORGADO
+    evento: Mapped[str] = mapped_column(String(20))  # OTORGADO | REVOCADO
     version_texto: Mapped[str] = mapped_column(String(20))
     canal: Mapped[str] = mapped_column(String(10))
     fecha: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Origen de la solicitud (HU07). Nulos en los registros anteriores a la migración 0005.
+    ip_origen: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
 class VerificacionKyc(Base):

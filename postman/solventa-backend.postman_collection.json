@@ -2335,6 +2335,512 @@
               }
             }
           ]
+        },
+        {
+          "name": "Revocación de consentimiento (HU07)",
+          "item": [
+            {
+              "name": "Revocar consentimiento - antes de otorgarlo",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 404', () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{otro_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{otro_cliente_id}}/consentimientos/OPEN_FINANCE_OPEN_DATA",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{otro_cliente_id}}",
+                    "consentimientos",
+                    "OPEN_FINANCE_OPEN_DATA"
+                  ]
+                },
+                "description": "El segundo cliente aún no otorgó nada: no hay consentimiento que revocar."
+              }
+            },
+            {
+              "name": "Otorgar consentimiento al segundo cliente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "pm.test('OTORGADO', () => pm.expect(pm.response.json().estado).to.eql('OTORGADO'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{otro_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{otro_cliente_id}}/consentimientos",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{otro_cliente_id}}",
+                    "consentimientos"
+                  ]
+                },
+                "description": "Prepara la revocación. Se usa el segundo cliente para no quitar el consentimiento del primero, que otras carpetas necesitan.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"tipo\": \"OPEN_FINANCE_OPEN_DATA\",\n  \"version_texto\": \"v1\",\n  \"canal\": \"MOVIL\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Revocar consentimiento",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const c = pm.response.json();",
+                      "pm.test('REVOCADO con fecha de revocación y de otorgamiento', () => {",
+                      "  pm.expect(c.estado).to.eql('REVOCADO');",
+                      "  pm.expect(c.fecha_revocacion).to.be.a('string').and.not.empty;",
+                      "  pm.expect(c.fecha_otorgamiento).to.be.a('string').and.not.empty;",
+                      "});",
+                      "pm.test('la respuesta no trae datos financieros ni personales', () => {",
+                      "  pm.expect(Object.keys(c).filter(k => !['id','cliente_id','tipo','estado','version_texto','fecha_otorgamiento','fecha_revocacion'].includes(k))).to.eql([]);",
+                      "});",
+                      "pm.collectionVariables.set('fecha_revocacion_1', c.fecha_revocacion);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{otro_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{otro_cliente_id}}/consentimientos/OPEN_FINANCE_OPEN_DATA",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{otro_cliente_id}}",
+                    "consentimientos",
+                    "OPEN_FINANCE_OPEN_DATA"
+                  ]
+                },
+                "description": "HU07: pasa a `REVOCADO` con su fecha y conserva la de otorgamiento. Deja un registro de auditoría con IP y user agent."
+              }
+            },
+            {
+              "name": "Revocar consentimiento - repetición idempotente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "pm.test('misma fecha de revocación', () => {",
+                      "  pm.expect(pm.response.json().estado).to.eql('REVOCADO');",
+                      "  pm.expect(pm.response.json().fecha_revocacion).to.eql(pm.collectionVariables.get('fecha_revocacion_1'));",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{otro_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{otro_cliente_id}}/consentimientos/OPEN_FINANCE_OPEN_DATA",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{otro_cliente_id}}",
+                    "consentimientos",
+                    "OPEN_FINANCE_OPEN_DATA"
+                  ]
+                },
+                "description": "Repetir la revocación responde el estado actual: misma fecha y sin segundo registro de auditoría."
+              }
+            },
+            {
+              "name": "Consultar consentimiento - tras revocarlo",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "pm.test('REVOCADO', () => pm.expect(pm.response.json().estado).to.eql('REVOCADO'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{otro_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{otro_cliente_id}}/consentimientos/OPEN_FINANCE_OPEN_DATA",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{otro_cliente_id}}",
+                    "consentimientos",
+                    "OPEN_FINANCE_OPEN_DATA"
+                  ]
+                },
+                "description": "La consulta confirma el estado `REVOCADO`."
+              }
+            },
+            {
+              "name": "Revocar consentimiento - sin credenciales",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{otro_cliente_id}}/consentimientos/OPEN_FINANCE_OPEN_DATA",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{otro_cliente_id}}",
+                    "consentimientos",
+                    "OPEN_FINANCE_OPEN_DATA"
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Revocar consentimiento - de otro cliente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 403', () => pm.response.to.have.status(403));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{otro_cliente_id}}/consentimientos/OPEN_FINANCE_OPEN_DATA",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{otro_cliente_id}}",
+                    "consentimientos",
+                    "OPEN_FINANCE_OPEN_DATA"
+                  ]
+                },
+                "description": "El token del primer cliente no puede revocar el consentimiento del segundo."
+              }
+            },
+            {
+              "name": "Revocar consentimiento - como servicio interno",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401 o 403', () => pm.expect(pm.response.code).to.be.oneOf([401, 403]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{service_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{otro_cliente_id}}/consentimientos/OPEN_FINANCE_OPEN_DATA",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{otro_cliente_id}}",
+                    "consentimientos",
+                    "OPEN_FINANCE_OPEN_DATA"
+                  ]
+                },
+                "description": "Un servicio no revoca en nombre del cliente."
+              }
+            },
+            {
+              "name": "Revocar consentimiento - canal inválido",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{otro_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/{{otro_cliente_id}}/consentimientos/OPEN_FINANCE_OPEN_DATA?canal=FAX",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "{{otro_cliente_id}}",
+                    "consentimientos",
+                    "OPEN_FINANCE_OPEN_DATA"
+                  ],
+                  "query": [
+                    {
+                      "key": "canal",
+                      "value": "FAX"
+                    }
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Revocar consentimiento - cliente inexistente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 403 o 404', () => pm.expect(pm.response.code).to.be.oneOf([403, 404]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{otro_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/clientes/00000000-0000-0000-0000-000000000000/consentimientos/OPEN_FINANCE_OPEN_DATA",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "clientes",
+                    "00000000-0000-0000-0000-000000000000",
+                    "consentimientos",
+                    "OPEN_FINANCE_OPEN_DATA"
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Crear cotización - tras revocar el consentimiento",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "const c = pm.response.json();",
+                      "pm.test('tras revocar, la cotización es aproximada con perfil por defecto', () => {",
+                      "  if (pm.variables.get('identidad_integrada') !== 'true') { return; }",
+                      "  pm.expect(c.aproximada).to.eql(true);",
+                      "  pm.expect(c.aviso).to.be.a('string').and.not.empty;",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/cotizaciones",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "cotizaciones"
+                  ]
+                },
+                "description": "HU07: Cotización consulta el consentimiento en cada operación, así que la revocación surte efecto en la siguiente cotización.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cliente_id\": \"{{otro_cliente_id}}\",\n  \"producto\": \"microseguro_vida\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
         }
       ],
       "description": "Registro, consentimiento y KYC. Cada carpeta depende de las variables que deja la anterior: ejecútalas en orden (Runner / Newman)."
@@ -4778,6 +5284,11 @@
     },
     {
       "key": "perfil_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "fecha_revocacion_1",
       "value": "",
       "type": "string"
     }
