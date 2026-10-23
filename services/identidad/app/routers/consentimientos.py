@@ -49,6 +49,7 @@ def consentimiento_vigente(db: Session, cliente_id: str, tipo: TipoConsentimient
 def otorgar_consentimiento(
     cliente_id: str,
     payload: ConsentimientoCreate,
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
     acceso: Acceso = Depends(acceso_actual),
@@ -79,6 +80,7 @@ def otorgar_consentimiento(
             version_texto=payload.version_texto,
             canal=payload.canal.value,
             fecha=ahora,
+            **_origen(request),
         )
     )
     try:
@@ -148,6 +150,14 @@ def _ip_origen(request: Request) -> str | None:
     return None
 
 
+def _origen(request: Request) -> dict[str, str | None]:
+    """IP y user agent de la solicitud, para la auditoría de cada otorgamiento y revocación."""
+    return {
+        "ip_origen": _ip_origen(request),
+        "user_agent": (request.headers.get("user-agent") or "")[:500] or None,
+    }
+
+
 @router.delete("/{tipo}", response_model=ConsentimientoOut)
 def revocar_consentimiento(
     cliente_id: str,
@@ -185,8 +195,7 @@ def revocar_consentimiento(
             version_texto=vigente.version_texto,
             canal=canal.value,
             fecha=ahora,
-            ip_origen=_ip_origen(request),
-            user_agent=(request.headers.get("user-agent") or "")[:500] or None,
+            **_origen(request),
         )
     )
     db.commit()
