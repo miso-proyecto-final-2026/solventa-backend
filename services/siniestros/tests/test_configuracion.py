@@ -45,10 +45,16 @@ def test_con_kafka_configurado_se_arma_el_consumidor_del_grupo_del_servicio(monk
 
 def test_las_llaves_se_leen_como_fuente_igual_clave():
     config = ConfigSiniestros.desde_entorno(
-        {"SINIESTROS_API_KEYS": "proveedor-sismos=k1, proveedor-vuelos=k2 ,sinnombre,=vacia"}
+        {"SINIESTROS_API_KEYS": "proveedor-sismos=k1, proveedor-vuelos=k2 ,=vacia,v="}
     )
 
     assert config.api_keys == {"k1": "proveedor-sismos", "k2": "proveedor-vuelos"}
+
+
+def test_una_llave_sin_nombre_es_del_proveedor_simulado():
+    config = ConfigSiniestros.desde_entorno({"SINIESTROS_API_KEYS": "claveAleatoria123"})
+
+    assert config.api_keys == {"claveAleatoria123": "proveedor-simulado"}
 
 
 def test_sin_llaves_configuradas_el_mapa_queda_vacio():

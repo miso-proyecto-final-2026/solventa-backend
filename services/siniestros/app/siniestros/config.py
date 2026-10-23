@@ -9,15 +9,21 @@ import os
 from dataclasses import dataclass
 
 SQLITE_LOCAL = "sqlite:///./siniestros.db"
+# Fuente de una llave sin nombre. La plataforma entrega `SINIESTROS_API_KEYS` como una clave aleatoria
+# suelta (secreto compartido), así que en staging la única llave es la del proveedor simulado (T4).
+FUENTE_POR_DEFECTO = "proveedor-simulado"
 
 
 def _claves(crudo: str) -> dict[str, str]:
-    """`fuente=clave,otra=clave2` → {clave: fuente}. El nombre de la clave es la fuente del proveedor."""
+    """`fuente=clave,otra=clave2` → {clave: fuente}. Una clave sin nombre es del proveedor simulado."""
     claves: dict[str, str] = {}
     for parte in crudo.split(","):
         nombre, separador, clave = parte.strip().partition("=")
-        if separador and nombre.strip() and clave.strip():
-            claves[clave.strip()] = nombre.strip()
+        if separador:
+            if nombre.strip() and clave.strip():
+                claves[clave.strip()] = nombre.strip()
+        elif nombre:
+            claves[nombre] = FUENTE_POR_DEFECTO
     return claves
 
 

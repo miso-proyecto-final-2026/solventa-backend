@@ -2,6 +2,7 @@
   "servicios": [
     { "carpeta": "cotizacion", "servicio": "solventa-backend" },
     { "carpeta": "identidad", "servicio": "solventa-identidad" },
-    { "carpeta": "perfilamiento", "servicio": "solventa-perfilamiento" }
+    { "carpeta": "perfilamiento", "servicio": "solventa-perfilamiento" },
+    { "carpeta": "siniestros", "servicio": "solventa-siniestros" }
   ]
 }
