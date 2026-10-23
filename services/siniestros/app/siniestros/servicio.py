@@ -1,7 +1,8 @@
 """Recepción de eventos paramétricos (HU27): validar, registrar, publicar y acusar recibo.
 
-El acuse sale en cuanto el evento está registrado y publicado en el bus; el procesamiento
-(HU28) ocurre después y no lo espera.
+El acuse sale en cuanto el evento está registrado y publicado en Kafka; el procesamiento
+(HU28) ocurre después y no lo espera. La publicación usa el cliente de la plantilla HS2
+(`app/eventos`, ADR-0010).
 """
 
 from __future__ import annotations
@@ -13,15 +14,22 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from aiokafka.errors import KafkaError
+from sqlalchemy.orm import Session
+
 from app.contexto import correlacion_id
-from app.siniestros.bus import TOPIC_EVENTOS, BusEventos, BusSaturado, Mensaje
+from app.eventos import Evento, PublicadorEventos
 from app.siniestros.dominio import validar
 from app.siniestros.errores import BusNoDisponible, EventoInvalido
 from app.siniestros.repositorio import EventoGuardado, RepositorioEventos
 
 log = logging.getLogger(__name__)
 
-CONSUMIDOR_RECEPCION = "recepcion"
+TOPIC_EVENTOS = "solventa.siniestros.eventos"  # clave de partición: poliza_id (contrato de infra)
+TIPO_EVENTO = "evento_parametrico_recibido"
+FUENTE_SOBRE = "ms-siniestros"
+# El grupo de consumo debe empezar por el nombre del servicio: es lo único que permite su política de IAM.
+GRUPO_RECEPCION = "solventa-siniestros.recepcion"
 
 
 @dataclass(frozen=True)
@@ -37,11 +45,11 @@ class Receptor:
     def __init__(
         self,
         repositorio: RepositorioEventos,
-        bus: BusEventos,
+        publicador: PublicadorEventos,
         reloj: Callable[[], datetime] | None = None,
     ) -> None:
         self._repo = repositorio
-        self._bus = bus
+        self._publicador = publicador
         self._reloj = reloj or (lambda: datetime.now(UTC))
         self._candados: dict[str, asyncio.Lock] = {}
 
@@ -92,55 +100,32 @@ class Receptor:
             async with candado:
                 if evento.publicado or await asyncio.to_thread(self._repo.esta_publicado, evento.uuid):
                     return
+                sobre = Evento(
+                    event_id=evento.uuid,  # la reentrega se detecta por este id en el consumidor
+                    event_type=TIPO_EVENTO,
+                    source=FUENTE_SOBRE,
+                    timestamp=evento.recibido_en,
+                    correlation_id=evento.correlacion_id or evento.uuid,
+                    payload=evento.mensaje(),
+                )
                 try:
-                    mensaje = await self._bus.publicar(
-                        TOPIC_EVENTOS, evento.clave_particion, evento.mensaje()
-                    )
-                except BusSaturado as exc:
+                    await self._publicador.publicar(TOPIC_EVENTOS, sobre, clave=evento.clave_particion)
+                except (KafkaError, TimeoutError, OSError) as exc:
+                    log.warning("no se pudo publicar evento_id=%s: %s", evento.evento_id, type(exc).__name__)
                     raise BusNoDisponible from exc
                 await asyncio.to_thread(
-                    self._repo.registrar_publicacion,
-                    evento.uuid,
-                    mensaje.topic,
-                    mensaje.particion,
-                    mensaje.posicion,
-                    self._reloj(),
+                    self._repo.registrar_publicacion, evento.uuid, TOPIC_EVENTOS, self._reloj()
                 )
         finally:
             self._candados.pop(evento.uuid, None)
 
-    async def reponer_rezago(self) -> int:
-        """Vuelve a poner en el bus los eventos registrados que nadie procesó.
-
-        El bus en memoria se pierde al reiniciar el proceso; la base conserva la verdad. Con el
-        broker real (que persiste) esto no hace falta.
-        """
-        pendientes = await asyncio.to_thread(self._repo.sin_procesar, CONSUMIDOR_RECEPCION)
-        for evento in pendientes:
-            await self._bus.publicar(TOPIC_EVENTOS, evento.clave_particion, evento.mensaje())
-        return len(pendientes)
-
     async def resumen(self) -> dict[str, int]:
-        datos = await asyncio.to_thread(self._repo.resumen, CONSUMIDOR_RECEPCION)
-        datos["rezago"] = await self._bus.rezago(TOPIC_EVENTOS, CONSUMIDOR_RECEPCION)
-        return datos
+        return await asyncio.to_thread(self._repo.resumen, GRUPO_RECEPCION)
 
 
-class RegistradorProcesamiento:
-    """Consumidor idempotente de este sprint: deja constancia de que cada evento llegó al final.
+async def procesar_evento(evento: Evento, sesion: Session) -> None:
+    """Manejador del consumidor de este sprint: la constancia de procesado la deja la reserva de idempotencia.
 
-    HU28 agrega el consumidor que evalúa la condición de las pólizas con su propio grupo; este
-    sirve de base para medir «enviados, aceptados y procesados» en la prueba de ráfaga.
+    HU28 agrega aquí (o en otro grupo `solventa-siniestros.*`) la evaluación de la condición de cada
+    póliza, escribiendo con `sesion` para que se confirme junto con la reserva.
     """
-
-    def __init__(self, repositorio: RepositorioEventos, reloj: Callable[[], datetime] | None = None):
-        self._repo = repositorio
-        self._reloj = reloj or (lambda: datetime.now(UTC))
-
-    async def __call__(self, mensaje: Mensaje) -> None:
-        await asyncio.to_thread(
-            self._repo.registrar_procesado,
-            mensaje.valor["evento_uuid"],
-            CONSUMIDOR_RECEPCION,
-            self._reloj(),
-        )

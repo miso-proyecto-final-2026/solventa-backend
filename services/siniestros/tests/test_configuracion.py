@@ -1,24 +1,46 @@
 """Fuera de desarrollo, una variable faltante impide arrancar (falla cerrado)."""
 
+import asyncio
+
 import pytest
 
 from app.configuracion import VARIABLE_MODO_DESARROLLO, ErrorConfiguracion
 from app.siniestros.config import ConfigSiniestros
-from app.siniestros.wiring import construir_receptor
+from app.siniestros.wiring import construir_ensamblado
 
 
 def test_sin_base_de_datos_no_arranca_fuera_de_desarrollo(monkeypatch):
     monkeypatch.delenv(VARIABLE_MODO_DESARROLLO, raising=False)
 
     with pytest.raises(ErrorConfiguracion, match="SINIESTROS_DATABASE_URL"):
-        construir_receptor(ConfigSiniestros())
+        construir_ensamblado(ConfigSiniestros())
 
 
-def test_en_desarrollo_arranca_con_el_sustituto_local():
-    receptor, consumidor, engine = construir_receptor(ConfigSiniestros(database_url="sqlite://"))
+def test_sin_kafka_no_arranca_fuera_de_desarrollo(monkeypatch):
+    monkeypatch.delenv(VARIABLE_MODO_DESARROLLO, raising=False)
 
-    assert receptor is not None and consumidor is not None
-    engine.dispose()
+    with pytest.raises(ErrorConfiguracion, match="KAFKA_BOOTSTRAP_SERVERS"):
+        construir_ensamblado(ConfigSiniestros(database_url="sqlite://"))
+
+
+def test_en_desarrollo_arranca_con_publicador_en_memoria_y_sin_consumidor():
+    ensamblado = construir_ensamblado(ConfigSiniestros(database_url="sqlite://"))
+
+    assert ensamblado.receptor is not None and ensamblado.consumidor is None
+    ensamblado.engine.dispose()
+
+
+def test_con_kafka_configurado_se_arma_el_consumidor_del_grupo_del_servicio(monkeypatch):
+    monkeypatch.setenv("KAFKA_SEGURIDAD", "PLAINTEXT")
+    monkeypatch.setenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
+
+    async def armar():
+        return construir_ensamblado(ConfigSiniestros(database_url="sqlite://", kafka_brokers="kafka:9092"))
+
+    ensamblado = asyncio.run(armar())
+
+    assert ensamblado.consumidor is not None
+    ensamblado.engine.dispose()
 
 
 def test_las_llaves_se_leen_como_fuente_igual_clave():
@@ -31,9 +53,3 @@ def test_las_llaves_se_leen_como_fuente_igual_clave():
 
 def test_sin_llaves_configuradas_el_mapa_queda_vacio():
     assert ConfigSiniestros.desde_entorno({}).api_keys == {}
-
-
-def test_los_valores_numericos_invalidos_usan_el_valor_por_defecto():
-    config = ConfigSiniestros.desde_entorno({"SINIESTROS_PARTICIONES": "muchas"})
-
-    assert config.particiones == 6

@@ -1,7 +1,7 @@
 """Tablas de MS Siniestros en su propio esquema `siniestros` (HU27, ADR-0001).
 
-Solo inserción: el evento recibido, su rechazo, su publicación y su procesamiento son evidencia
-de auditoría; cada hecho nuevo es una fila nueva. Las pólizas se referencian solo por id.
+Solo inserción (salvo `eventos_procesados`, de la plantilla de eventos): el evento recibido, su
+rechazo y su publicación son evidencia de auditoría; cada hecho nuevo es una fila nueva. Las pólizas se referencian solo por id.
 """
 
 from __future__ import annotations
@@ -19,6 +19,8 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+from app.eventos.registro import tabla_eventos_procesados
 
 SCHEMA = "siniestros"
 
@@ -68,31 +70,12 @@ class PublicacionBusDB(BaseSiniestros):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     evento_uuid: Mapped[str] = mapped_column(String(36))
     topic: Mapped[str] = mapped_column(String(80))
-    particion: Mapped[int] = mapped_column(Integer)
-    posicion: Mapped[int] = mapped_column(Integer)
     publicado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     # Una sola publicación por evento (criterio 5).
     __table_args__ = (UniqueConstraint("evento_uuid", name="uq_publicacion_evento"),)
 
 
-class EventoProcesadoDB(BaseSiniestros):
-    """Idempotencia del consumidor: la clave se valida contra esta tabla antes de actuar."""
-
-    __tablename__ = "eventos_procesados"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    evento_uuid: Mapped[str] = mapped_column(String(36))
-    consumidor: Mapped[str] = mapped_column(String(64))
-    procesado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-
-    __table_args__ = (UniqueConstraint("evento_uuid", "consumidor", name="uq_procesado_consumidor"),)
-
-
-class ReentregaEventoDB(BaseSiniestros):
-    __tablename__ = "reentregas_evento"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    evento_uuid: Mapped[str] = mapped_column(String(36))
-    consumidor: Mapped[str] = mapped_column(String(64))
-    recibido_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+# Idempotencia del consumidor (plantilla HS2): la clave (consumidor, event_id) se reserva en la
+# misma transacción del manejador. No es de solo inserción: una reentrega incrementa `reentregas`.
+EVENTOS_PROCESADOS = tabla_eventos_procesados(BaseSiniestros.metadata, SCHEMA)

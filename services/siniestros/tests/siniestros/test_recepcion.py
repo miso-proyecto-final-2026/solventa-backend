@@ -2,8 +2,8 @@
 
 import pytest
 
-from app.siniestros.bus import TOPIC_EVENTOS, BusSaturado
-from tests.siniestros.conftest import CLAVE, Entorno, evento
+from app.siniestros.servicio import TOPIC_EVENTOS
+from tests.siniestros.conftest import CLAVE, evento
 
 
 def test_un_evento_valido_se_registra_se_publica_y_se_acusa(entorno):
@@ -19,7 +19,6 @@ def test_un_evento_valido_se_registra_se_publica_y_se_acusa(entorno):
         "publicados": 1,
         "procesados": 0,
         "reentregas": 0,
-        "rezago": 1,
     }
 
 
@@ -43,14 +42,25 @@ def test_el_evento_conserva_fecha_de_recepcion_fuente_y_estado_de_validacion(ent
     assert fila.estado_validacion == "valido"
 
 
-def test_el_mensaje_publicado_lleva_el_evento_y_se_particiona_por_poliza(entorno):
-    import asyncio
-
+def test_se_publica_el_sobre_estandar_en_el_topic_con_la_poliza_como_clave(entorno):
     entorno.enviar(evento(poliza_id="pol-9"))
 
-    [m] = asyncio.run(entorno.bus.leer(TOPIC_EVENTOS, "otro-grupo", 10))
-    assert m.clave == "pol-9"
-    assert m.valor["tipo"] == "sismo" and m.valor["datos"]["magnitud"] == 6.4
+    [(topic, clave, sobre)] = entorno.publicador.publicados
+    assert (topic, clave) == (TOPIC_EVENTOS, "pol-9")
+    assert sobre.event_type == "evento_parametrico_recibido" and sobre.source == "ms-siniestros"
+    assert sobre.payload["tipo"] == "sismo" and sobre.payload["datos"]["magnitud"] == 6.4
+
+
+def test_sin_poliza_la_clave_de_particion_es_el_id_del_evento(entorno):
+    entorno.enviar()
+
+    assert entorno.publicador.publicados[0][1] == "evt-1"
+
+
+def test_el_sobre_lleva_la_correlacion_de_la_solicitud(entorno):
+    entorno.enviar(cabeceras={**entorno.cabeceras, "X-Correlation-Id": "corr-123"})
+
+    assert entorno.publicador.publicados[0][2].correlation_id == "corr-123"
 
 
 @pytest.mark.parametrize(
@@ -116,7 +126,8 @@ def test_el_mismo_evento_dos_veces_no_crea_dos_registros_ni_dos_publicaciones(en
     assert segundo.json()["duplicado"] is True
     assert segundo.json()["evento_uuid"] == primero.json()["evento_uuid"]
     resumen = entorno.resumen()
-    assert resumen["recibidos"] == 1 and resumen["publicados"] == 1 and resumen["rezago"] == 1
+    assert resumen["recibidos"] == 1 and resumen["publicados"] == 1
+    assert len(entorno.publicador.publicados) == 1
 
 
 def test_eventos_distintos_con_el_mismo_id_de_otra_fuente_no_chocan(entorno):
@@ -139,28 +150,20 @@ def test_la_correlacion_viaja_en_la_respuesta(entorno):
     assert r.headers["X-Correlation-Id"] == "corr-123"
 
 
-def test_con_el_bus_saturado_responde_503_y_el_reenvio_completa_la_publicacion():
-    e = Entorno(capacidad_rezago=1)
-    try:
-        assert e.enviar(evento(evento_id="a")).status_code == 202  # llena el bus
-        saturado = e.enviar(evento(evento_id="b"))
+def test_con_kafka_caido_responde_503_y_el_reenvio_completa_la_publicacion(entorno):
+    entorno.publicador.caido = True
 
-        assert saturado.status_code == 503
-        assert saturado.headers["Retry-After"] == "1"
-        assert saturado.json()["error"]["code"] == "BUS_SATURADO"
-        assert e.resumen()["recibidos"] == 2 and e.resumen()["publicados"] == 1  # no se pierde
+    caido = entorno.enviar(evento(evento_id="b"))
 
-        import asyncio
+    assert caido.status_code == 503
+    assert caido.headers["Retry-After"] == "1"
+    assert caido.json()["error"]["code"] == "BUS_SATURADO"
+    assert entorno.resumen()["recibidos"] == 1 and entorno.resumen()["publicados"] == 0  # no se pierde
 
-        asyncio.run(e.consumidor.drenar())  # el consumidor libera espacio
-        reenvio = e.enviar(evento(evento_id="b"))
+    entorno.publicador.caido = False
+    reenvio = entorno.enviar(evento(evento_id="b"))
 
-        assert reenvio.status_code == 200 and reenvio.json()["duplicado"] is True
-        resumen = e.resumen()
-        assert resumen["recibidos"] == 2 and resumen["publicados"] == 2 and resumen["rezago"] == 1
-    finally:
-        e.engine.dispose()
-
-
-def test_el_bus_saturado_es_una_excepcion_propia():
-    assert issubclass(BusSaturado, Exception)
+    assert reenvio.status_code == 200 and reenvio.json()["duplicado"] is True
+    resumen = entorno.resumen()
+    assert resumen["recibidos"] == 1 and resumen["publicados"] == 1
+    assert len(entorno.publicador.publicados) == 1

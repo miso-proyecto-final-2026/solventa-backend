@@ -1,7 +1,7 @@
-"""Esquema siniestros: eventos paramétricos, rechazos, publicaciones y procesamiento (HU27).
+"""Esquema siniestros: eventos paramétricos, rechazos, publicaciones e idempotencia del consumidor (HU27).
 
-Las cinco tablas son de solo inserción: son evidencia de auditoría de lo que se recibió, lo que
-se rechazó y lo que llegó al final del flujo.
+Las tres primeras tablas son de solo inserción: son evidencia de auditoría de lo que se recibió y de lo
+que se rechazó. `eventos_procesados` es la de la plantilla de eventos (HS2) y se actualiza (reentregas).
 
 Revision ID: 0001
 Revises:
@@ -17,13 +17,7 @@ branch_labels = None
 depends_on = None
 
 SCHEMA = "siniestros"
-TABLAS = (
-    "eventos_parametricos",
-    "eventos_rechazados",
-    "publicaciones_bus",
-    "eventos_procesados",
-    "reentregas_evento",
-)
+TABLAS = ("eventos_parametricos", "eventos_rechazados", "publicaciones_bus")
 
 
 def upgrade() -> None:
@@ -64,8 +58,6 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column("evento_uuid", sa.String(36), nullable=False),
         sa.Column("topic", sa.String(80), nullable=False),
-        sa.Column("particion", sa.Integer, nullable=False),
-        sa.Column("posicion", sa.Integer, nullable=False),
         sa.Column("publicado_en", sa.DateTime(timezone=True), nullable=False),
         sa.UniqueConstraint("evento_uuid", name="uq_publicacion_evento"),
         schema=SCHEMA,
@@ -73,20 +65,10 @@ def upgrade() -> None:
 
     op.create_table(
         "eventos_procesados",
-        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("evento_uuid", sa.String(36), nullable=False),
-        sa.Column("consumidor", sa.String(64), nullable=False),
+        sa.Column("consumidor", sa.String(100), primary_key=True),
+        sa.Column("event_id", sa.String(64), primary_key=True),
         sa.Column("procesado_en", sa.DateTime(timezone=True), nullable=False),
-        sa.UniqueConstraint("evento_uuid", "consumidor", name="uq_procesado_consumidor"),
-        schema=SCHEMA,
-    )
-
-    op.create_table(
-        "reentregas_evento",
-        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("evento_uuid", sa.String(36), nullable=False),
-        sa.Column("consumidor", sa.String(64), nullable=False),
-        sa.Column("recibido_en", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("reentregas", sa.Integer(), nullable=False, server_default="0"),
         schema=SCHEMA,
     )
 
@@ -114,5 +96,6 @@ def downgrade() -> None:
     for tabla in TABLAS:
         op.execute(f'DROP TRIGGER IF EXISTS trg_{tabla}_inmutable ON "{SCHEMA}".{tabla}')
     op.execute(f'DROP FUNCTION IF EXISTS "{SCHEMA}".solo_insercion()')
+    op.drop_table("eventos_procesados", schema=SCHEMA)
     for tabla in reversed(TABLAS):
         op.drop_table(tabla, schema=SCHEMA)

@@ -23,8 +23,8 @@ TABLAS = {
     "eventos_rechazados",
     "publicaciones_bus",
     "eventos_procesados",
-    "reentregas_evento",
 }
+SOLO_INSERCION = sorted(TABLAS - {"eventos_procesados"})
 
 
 @pytest.fixture
@@ -64,7 +64,7 @@ def test_la_migracion_coincide_con_los_modelos_sin_deriva(base_migrada):
     assert diferencias == []
 
 
-@pytest.mark.parametrize("tabla", sorted(TABLAS))
+@pytest.mark.parametrize("tabla", SOLO_INSERCION)
 def test_las_tablas_son_de_solo_insercion(base_migrada, tabla):
     engine, _ = base_migrada
     with engine.begin() as c:
@@ -83,20 +83,8 @@ def test_las_tablas_son_de_solo_insercion(base_migrada, tabla):
         )
         c.execute(
             text(
-                f"INSERT INTO {SCHEMA}.publicaciones_bus (evento_uuid, topic, particion, posicion, "
-                "publicado_en) VALUES ('u1', 't', 0, 0, now())"
-            )
-        )
-        c.execute(
-            text(
-                f"INSERT INTO {SCHEMA}.eventos_procesados (evento_uuid, consumidor, procesado_en) "
-                "VALUES ('u1', 'c', now())"
-            )
-        )
-        c.execute(
-            text(
-                f"INSERT INTO {SCHEMA}.reentregas_evento (evento_uuid, consumidor, recibido_en) "
-                "VALUES ('u1', 'c', now())"
+                f"INSERT INTO {SCHEMA}.publicaciones_bus (evento_uuid, topic, publicado_en) "
+                "VALUES ('u1', 't', now())"
             )
         )
 
@@ -124,3 +112,16 @@ def test_el_mismo_evento_del_mismo_proveedor_no_se_registra_dos_veces(base_migra
 
     with pytest.raises(DBAPIError, match="uq_evento_fuente"), engine.begin() as c:
         c.execute(text(insertar), {"id": "u2"})
+
+
+def test_eventos_procesados_admite_contar_reentregas(base_migrada):
+    engine, _ = base_migrada
+    with engine.begin() as c:
+        c.execute(
+            text(
+                f"INSERT INTO {SCHEMA}.eventos_procesados (consumidor, event_id, procesado_en, reentregas) "
+                "VALUES ('g', 'e1', now(), 0)"
+            )
+        )
+        c.execute(text(f"UPDATE {SCHEMA}.eventos_procesados SET reentregas = reentregas + 1"))
+        assert c.execute(text(f"SELECT reentregas FROM {SCHEMA}.eventos_procesados")).scalar() == 1

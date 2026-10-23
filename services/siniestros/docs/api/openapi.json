@@ -261,10 +261,6 @@
           "reentregas": {
             "type": "integer",
             "title": "Reentregas"
-          },
-          "rezago": {
-            "type": "integer",
-            "title": "Rezago"
           }
         },
         "type": "object",
@@ -273,8 +269,7 @@
           "rechazados",
           "publicados",
           "procesados",
-          "reentregas",
-          "rezago"
+          "reentregas"
         ],
         "title": "ResumenOut"
       },

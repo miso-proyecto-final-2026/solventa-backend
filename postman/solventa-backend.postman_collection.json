@@ -5529,7 +5529,7 @@
                 "exec": [
                   "pm.test('Responde 200', () => pm.response.to.have.status(200));",
                   "const d = pm.response.json();",
-                  "pm.test('trae los conteos', () => ['recibidos','rechazados','publicados','procesados','reentregas','rezago'].forEach(k => pm.expect(d).to.have.property(k)));",
+                  "pm.test('trae los conteos', () => ['recibidos','rechazados','publicados','procesados','reentregas'].forEach(k => pm.expect(d).to.have.property(k)));",
                   "pm.test('hay al menos un rechazo registrado', () => pm.expect(d.rechazados).to.be.at.least(1));"
                 ]
               }
@@ -5559,7 +5559,7 @@
                 "resumen"
               ]
             },
-            "description": "Conteos para verificar una ráfaga: recibidos = distintos enviados, procesados = recibidos y rezago 0 al terminar."
+            "description": "Conteos para verificar una ráfaga: recibidos = distintos enviados, publicados = recibidos y, con Kafka, procesados = recibidos al terminar."
           }
         }
       ]

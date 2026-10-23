@@ -76,7 +76,6 @@ class ResumenOut(BaseModel):
     publicados: int
     procesados: int
     reentregas: int
-    rezago: int
 
 
 router = APIRouter(prefix="/v1/siniestros", tags=["siniestros"])

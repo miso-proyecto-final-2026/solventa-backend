@@ -2,27 +2,67 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+from dataclasses import dataclass, field
+
 from sqlalchemy import Engine
 from sqlalchemy.orm import sessionmaker
 
 from app.configuracion import permitir_sustituto_local
-from app.siniestros.bus import TOPIC_EVENTOS, BusMemoria, Consumidor
+from app.eventos import (
+    ConsumidorEventos,
+    PublicadorEventos,
+    PublicadorKafka,
+    PublicadorMemoria,
+    RegistroEventos,
+    brokers_desde_entorno,
+    parametros_seguridad,
+)
 from app.siniestros.config import SQLITE_LOCAL, ConfigSiniestros
+from app.siniestros.modelos_db import EVENTOS_PROCESADOS
 from app.siniestros.repositorio import (
     RepositorioEventos,
     crear_engine,
     crear_tablas_locales,
 )
 from app.siniestros.servicio import (
-    CONSUMIDOR_RECEPCION,
+    GRUPO_RECEPCION,
+    TOPIC_EVENTOS,
     Receptor,
-    RegistradorProcesamiento,
+    procesar_evento,
 )
 
 
-def construir_receptor(
-    config: ConfigSiniestros | None = None,
-) -> tuple[Receptor, Consumidor, Engine]:
+@dataclass
+class Ensamblado:
+    receptor: Receptor
+    engine: Engine
+    publicador: PublicadorEventos
+    # None solo en desarrollo sin Kafka: el publicador es en memoria y nadie consume.
+    consumidor: ConsumidorEventos | None = None
+    _tarea: asyncio.Task[None] | None = field(default=None, init=False)
+
+    async def iniciar(self) -> None:
+        if isinstance(self.publicador, PublicadorKafka):
+            await self.publicador.iniciar()
+        if self.consumidor is not None:
+            await self.consumidor.iniciar()
+            self._tarea = asyncio.create_task(self.consumidor.ejecutar())
+
+    async def detener(self) -> None:
+        if self.consumidor is not None:
+            await self.consumidor.detener()
+        if self._tarea is not None:
+            self._tarea.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._tarea
+        if isinstance(self.publicador, PublicadorKafka):
+            await self.publicador.detener()
+        self.engine.dispose()
+
+
+def construir_ensamblado(config: ConfigSiniestros | None = None) -> Ensamblado:
     config = config or ConfigSiniestros.desde_entorno()
     url = config.database_url
     if url is None:
@@ -33,15 +73,27 @@ def construir_receptor(
     engine = crear_engine(url)
     if engine.dialect.name == "sqlite":
         crear_tablas_locales(engine)  # en PostgreSQL el esquema lo crea Alembic
-    repositorio = RepositorioEventos(sessionmaker(engine, expire_on_commit=False))
-    bus = BusMemoria(config.particiones, config.capacidad_rezago)
-    bus.registrar_grupo(TOPIC_EVENTOS, CONSUMIDOR_RECEPCION)
-    consumidor = Consumidor(
-        bus,
-        TOPIC_EVENTOS,
-        CONSUMIDOR_RECEPCION,
-        RegistradorProcesamiento(repositorio),
-        reintentos=config.reintentos_consumidor,
-        espera_base_s=config.espera_base_consumidor_s,
+    fabrica = sessionmaker(engine, expire_on_commit=False)
+    repositorio = RepositorioEventos(fabrica)
+
+    if config.kafka_brokers is None:
+        permitir_sustituto_local(
+            "KAFKA_BOOTSTRAP_SERVERS", "un publicador en memoria sin consumidor (no hay Kafka)"
+        )
+        publicador: PublicadorEventos = PublicadorMemoria()
+        return Ensamblado(Receptor(repositorio, publicador), engine, publicador)
+
+    brokers = brokers_desde_entorno()
+    seguridad = parametros_seguridad()
+    publicador = PublicadorKafka(brokers, seguridad, client_id="solventa-siniestros")
+    consumidor = ConsumidorEventos(
+        brokers=brokers,
+        seguridad=seguridad,
+        topic=TOPIC_EVENTOS,
+        grupo=GRUPO_RECEPCION,
+        manejador=procesar_evento,
+        fabrica_sesiones=fabrica,
+        registro=RegistroEventos(EVENTOS_PROCESADOS),
+        publicador=publicador,
     )
-    return Receptor(repositorio, bus), consumidor, engine
+    return Ensamblado(Receptor(repositorio, publicador), engine, publicador, consumidor)

@@ -4,7 +4,7 @@
 //   k6 run -e BASE_URL=http://localhost:8003 -e SERVICE_KEY=<clave> -e FUENTE=proveedor-sismos \
 //          -e RATE=500 -e DURATION=60s -e DUP_RATIO=0.1 tests/rendimiento/rafaga-eventos.js
 // Al terminar, compara «enviados distintos» con el resumen del servicio:
-//   GET /v1/siniestros/eventos/resumen  →  recibidos = enviados distintos, rezago = 0, procesados = recibidos.
+//   GET /v1/siniestros/eventos/resumen  →  recibidos = publicados = enviados distintos y, con Kafka, procesados = recibidos.
 // NO sustituye la medición formal en staging: es un humo reproducible.
 import http from 'k6/http';
 import { check } from 'k6';

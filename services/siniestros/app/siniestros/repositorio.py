@@ -7,20 +7,19 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import Engine, create_engine, func, select
+from sqlalchemy import Engine, create_engine, event, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.siniestros.dominio import EventoEntrada
 from app.siniestros.modelos_db import (
+    EVENTOS_PROCESADOS,
     SCHEMA,
     BaseSiniestros,
     EventoParametricoDB,
-    EventoProcesadoDB,
     EventoRechazadoDB,
     PublicacionBusDB,
-    ReentregaEventoDB,
 )
 
 
@@ -42,6 +41,17 @@ def crear_engine(url: str) -> Engine:
             connect_args={"check_same_thread": False},
             poolclass=StaticPool if memoria else None,
         )
+
+        # Receta de SQLAlchemy para que SQLite respete transacciones y savepoints como PostgreSQL
+        # (el controlador de Python no lo hace); la reserva de idempotencia de la plantilla la necesita.
+        @event.listens_for(engine, "connect")
+        def _sin_autotransaccion(conexion_dbapi, _registro):
+            conexion_dbapi.isolation_level = None
+
+        @event.listens_for(engine, "begin")
+        def _begin_explicito(conexion):
+            conexion.exec_driver_sql("BEGIN")
+
         return engine.execution_options(schema_translate_map={SCHEMA: None})
     return create_engine(url, pool_pre_ping=True, pool_size=10, max_overflow=20)
 
@@ -175,56 +185,13 @@ class RepositorioEventos:
             )
             sesion.commit()
 
-    def registrar_publicacion(
-        self, evento_uuid: str, topic: str, particion: int, posicion: int, publicado_en: datetime
-    ) -> None:
+    def registrar_publicacion(self, evento_uuid: str, topic: str, publicado_en: datetime) -> None:
         with self._fabrica() as sesion:
-            sesion.add(
-                PublicacionBusDB(
-                    evento_uuid=evento_uuid,
-                    topic=topic,
-                    particion=particion,
-                    posicion=posicion,
-                    publicado_en=publicado_en,
-                )
-            )
+            sesion.add(PublicacionBusDB(evento_uuid=evento_uuid, topic=topic, publicado_en=publicado_en))
             try:
                 sesion.commit()
             except IntegrityError:  # otra réplica la registró primero: una sola por evento
                 sesion.rollback()
-
-    def registrar_procesado(self, evento_uuid: str, consumidor: str, ahora: datetime) -> bool:
-        """True si es la primera vez; si es una reentrega la deja registrada y devuelve False."""
-        with self._fabrica() as sesion:
-            sesion.add(
-                EventoProcesadoDB(evento_uuid=evento_uuid, consumidor=consumidor, procesado_en=ahora)
-            )
-            try:
-                sesion.commit()
-                return True
-            except IntegrityError:
-                sesion.rollback()
-                sesion.add(
-                    ReentregaEventoDB(
-                        evento_uuid=evento_uuid, consumidor=consumidor, recibido_en=ahora
-                    )
-                )
-                sesion.commit()
-                return False
-
-    def sin_procesar(self, consumidor: str, limite: int = 100_000) -> list[EventoGuardado]:
-        """Eventos registrados que `consumidor` aún no procesó, en orden de recepción."""
-        with self._fabrica() as sesion:
-            procesados = select(EventoProcesadoDB.evento_uuid).where(
-                EventoProcesadoDB.consumidor == consumidor
-            )
-            filas = sesion.scalars(
-                select(EventoParametricoDB)
-                .where(EventoParametricoDB.id.not_in(procesados))
-                .order_by(EventoParametricoDB.recibido_en)
-                .limit(limite)
-            ).all()
-            return [_guardado(f, True) for f in filas]
 
     def resumen(self, consumidor: str) -> dict[str, int]:
         with self._fabrica() as sesion:
@@ -232,10 +199,14 @@ class RepositorioEventos:
             def contar(modelo, *condiciones) -> int:
                 return sesion.scalar(select(func.count()).select_from(modelo).where(*condiciones)) or 0
 
+            procesados = EVENTOS_PROCESADOS.c.consumidor == consumidor
             return {
                 "recibidos": contar(EventoParametricoDB),
                 "rechazados": contar(EventoRechazadoDB),
                 "publicados": contar(PublicacionBusDB),
-                "procesados": contar(EventoProcesadoDB, EventoProcesadoDB.consumidor == consumidor),
-                "reentregas": contar(ReentregaEventoDB),
+                "procesados": contar(EVENTOS_PROCESADOS, procesados),
+                "reentregas": sesion.scalar(
+                    select(func.coalesce(func.sum(EVENTOS_PROCESADOS.c.reentregas), 0)).where(procesados)
+                )
+                or 0,
             }

@@ -1,28 +1,39 @@
-"""Ensamblado de pruebas: SQLite en memoria y bus en memoria con un consumidor manejable."""
+"""Ensamblado de pruebas: SQLite en memoria y publicador en memoria (el cliente de eventos de la plantilla)."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from aiokafka.errors import KafkaConnectionError
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 
 from app.correlacion import MiddlewareCorrelacion
+from app.eventos import (
+    ConsumidorEventos,
+    Evento,
+    PoliticaReintentos,
+    PublicadorMemoria,
+    RegistroEventos,
+    parametros_seguridad,
+)
 from app.siniestros.api import router
-from app.siniestros.bus import TOPIC_EVENTOS, BusMemoria, Consumidor
 from app.siniestros.errores import registrar_errores
+from app.siniestros.modelos_db import EVENTOS_PROCESADOS
 from app.siniestros.repositorio import (
     RepositorioEventos,
     crear_engine,
     crear_tablas_locales,
 )
 from app.siniestros.servicio import (
-    CONSUMIDOR_RECEPCION,
+    GRUPO_RECEPCION,
+    TOPIC_EVENTOS,
     Receptor,
-    RegistradorProcesamiento,
+    procesar_evento,
 )
 
 CLAVE = "clave-de-prueba"
@@ -46,24 +57,40 @@ async def no_dormir(_segundos: float) -> None:
     return None
 
 
+class PublicadorQueFalla(PublicadorMemoria):
+    """Como el de memoria, pero Kafka puede estar caído (`caido = True`)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.caido = False
+
+    async def publicar(self, topic: str, evento: Evento, clave: str) -> None:
+        if self.caido:
+            raise KafkaConnectionError("broker caído")
+        await super().publicar(topic, evento, clave)
+
+
+def mensaje_de(topic: str, clave: str, evento_publicado: Evento, offset: int = 0) -> SimpleNamespace:
+    """Lo que `ConsumidorEventos.procesar` lee de un registro de Kafka."""
+    return SimpleNamespace(
+        topic=topic,
+        key=clave.encode(),
+        value=evento_publicado.a_bytes(),
+        partition=0,
+        offset=offset,
+    )
+
+
 class Entorno:
     """Todo lo que una prueba necesita tocar."""
 
-    def __init__(self, capacidad_rezago: int = 1000, url: str = "sqlite://") -> None:
+    def __init__(self, url: str = "sqlite://") -> None:
         self.engine = crear_engine(url)
         crear_tablas_locales(self.engine)
-        self.repo = RepositorioEventos(sessionmaker(self.engine, expire_on_commit=False))
-        self.bus = BusMemoria(particiones=4, capacidad_rezago=capacidad_rezago)
-        self.bus.registrar_grupo(TOPIC_EVENTOS, CONSUMIDOR_RECEPCION)
-        self.receptor = Receptor(self.repo, self.bus, reloj=lambda: AHORA)
-        self.consumidor = Consumidor(
-            self.bus,
-            TOPIC_EVENTOS,
-            CONSUMIDOR_RECEPCION,
-            RegistradorProcesamiento(self.repo, reloj=lambda: AHORA),
-            espera_base_s=0,
-            dormir=no_dormir,
-        )
+        self.fabrica = sessionmaker(self.engine, expire_on_commit=False)
+        self.repo = RepositorioEventos(self.fabrica)
+        self.publicador = PublicadorQueFalla()
+        self.receptor = Receptor(self.repo, self.publicador, reloj=lambda: AHORA)
         self.app = FastAPI()
         self.app.include_router(router)
         registrar_errores(self.app)
@@ -82,6 +109,26 @@ class Entorno:
 
     def resumen(self) -> dict[str, int]:
         return self.cliente.get("/v1/siniestros/eventos/resumen", headers=self.cabeceras).json()
+
+    def consumidor(self, manejador=procesar_evento, **kw) -> ConsumidorEventos:
+        """El consumidor real de la plantilla, sin conectarse: las pruebas llaman a `procesar`."""
+        return ConsumidorEventos(
+            brokers=["sin-kafka:9092"],
+            seguridad=parametros_seguridad("PLAINTEXT"),
+            topic=TOPIC_EVENTOS,
+            grupo=GRUPO_RECEPCION,
+            manejador=manejador,
+            fabrica_sesiones=self.fabrica,
+            registro=RegistroEventos(EVENTOS_PROCESADOS),
+            publicador=self.publicador,
+            politica=kw.pop("politica", PoliticaReintentos(intentos=3, base_s=0.01)),
+            dormir=no_dormir,
+        )
+
+    async def entregar_todo(self, consumidor: ConsumidorEventos) -> None:
+        """Entrega al consumidor lo publicado, como lo haría Kafka."""
+        for i, (topic, clave, publicado) in enumerate(list(self.publicador.publicados)):
+            await consumidor.procesar(mensaje_de(topic, clave, publicado, offset=i))
 
 
 @pytest.fixture

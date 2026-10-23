@@ -70,7 +70,7 @@ uvicorn app.main:app --port 8003
 
 Sin `IDENTIDAD_URL`, Perfilamiento usa el consentimiento «siempre otorgado» (solo desarrollo). Con ella, un cliente sin consentimiento vigente recibe 403 `CONSENTIMIENTO_NO_VIGENTE` y el intento queda registrado con el nombre de la clave (`postman`) como origen.
 
-La llave de Siniestros se asocia a una fuente (`proveedor-sismos`): el evento debe traer esa misma `fuente` o recibe 400 `FUENTE_DESCONOCIDA`. El bus es en memoria, así que el consumidor corre dentro del mismo proceso; `GET /v1/siniestros/eventos/resumen` muestra recibidos, procesados y rezago.
+La llave de Siniestros se asocia a una fuente (`proveedor-sismos`): el evento debe traer esa misma `fuente` o recibe 400 `FUENTE_DESCONOCIDA`. Sin `KAFKA_BOOTSTRAP_SERVERS`, en desarrollo se publica en memoria y no hay consumidor, así que `procesados` queda en 0; con un Kafka local (`KAFKA_SEGURIDAD=PLAINTEXT`) el consumidor corre dentro del mismo proceso. `GET /v1/siniestros/eventos/resumen` muestra recibidos, publicados, procesados y reentregas.
 
 Con `IDENTIDAD_URL` definida, Cotización consulta el consentimiento real en Identidad (si el cliente no lo otorgó,
 cotiza con el perfil por defecto: la cotización sale `aproximada` con `aviso`, y cada proveedor omitido queda auditado como
