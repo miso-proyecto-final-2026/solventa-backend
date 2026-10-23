@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [identidad, cotizacion, perfilamiento]
+        service: [identidad, cotizacion, perfilamiento, siniestros]
     defaults:
       run:
         working-directory: services/${{ matrix.service }}
@@ -49,6 +49,9 @@ jobs:
       - name: Cobertura mínima del 80 % en los módulos de negocio de perfilamiento
         if: matrix.service == 'perfilamiento'
         run: coverage report --include="app/perfilamiento/*" --fail-under=80
+      - name: Cobertura mínima del 80 % en los módulos de negocio de siniestros
+        if: matrix.service == 'siniestros'
+        run: coverage report --include="app/siniestros/*" --fail-under=80
       - name: Publicar reportes de pruebas
         if: always()
         uses: actions/upload-artifact@v4
@@ -76,7 +79,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [identidad, cotizacion, perfilamiento]
+        service: [identidad, cotizacion, perfilamiento, siniestros]
     steps:
       - uses: actions/checkout@v4
       - name: Construir imagen Docker

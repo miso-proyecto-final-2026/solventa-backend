@@ -1,0 +1,30 @@
+# ADR-0010 — MS Siniestros: recepción de eventos paramétricos y bus de eventos detrás de una interfaz
+
+- **Estado:** Propuesto (lista de tipos de evento, clave de partición y broker real pendientes de confirmar con el equipo)
+- **Fecha:** 2026-10-23
+- **Historia:** HU27 (E07 · F16 Recepción de eventos paramétricos, Sprint 2)
+- **Depende de:** [ADR-0001](0001-descomposicion-microservicios-bounded-contexts.md) (MS Siniestros posee `Evento_Paramétrico`; referencia pólizas solo por id) y [ADR-0002](0002-comunicacion-sincrona-asincrona-por-flujo.md) (pago paramétrico asíncrono, entrega al menos una vez, consumidores idempotentes).
+
+## Contexto
+
+HU27 crea MS Siniestros con el endpoint por el que un proveedor de vuelos o clima entrega eventos. Debe responder de inmediato, no perder eventos ante ráfagas ni ante la caída del consumidor, y no duplicarlos si el proveedor reintenta. La historia depende de que el bus (T1, MSK) exista; hoy no está disponible. HU28, que valida la condición de cada póliza, consumirá lo que aquí se publique.
+
+## Decisión
+
+1. **El bus es una interfaz (`BusEventos`) con un adaptador en memoria (`BusMemoria`).** Registro por partición, consumidores por grupo, confirmación explícita (entrega al menos una vez) y contrapresión por rezago. Cuando MSK esté disponible se agrega otro adaptador con la misma interfaz; ni el receptor ni los consumidores cambian. Los topics ya llevan los nombres del issue: `solventa.siniestros.eventos` y, para mensajes agotados, `solventa.siniestros.eventos.dlq`.
+2. **Orden de las operaciones al recibir:** autenticar → validar → registrar (idempotente) → publicar → acusar. El acuse es `202` con `evento_uuid` y no espera al procesamiento. Un reenvío del mismo `(fuente, evento_id)` responde `200` con `duplicado: true`, sin segundo registro ni segunda publicación (restricción única en la base y una sola fila en `publicaciones_bus`).
+3. **No perder eventos con el bus saturado.** El evento se registra **antes** de publicarse. Si el bus no lo acepta (rezago ≥ `SINIESTROS_CAPACIDAD_REZAGO`), se responde `503 BUS_SATURADO` con `Retry-After: 1`; el evento ya está guardado y, cuando el proveedor lo reenvía con el mismo `evento_id`, solo falta publicarlo. La contrapresión llega así al proveedor, que es quien debe reintentar.
+4. **Al reiniciar, el bus en memoria se repone desde la base.** `reponer_rezago` vuelve a publicar los eventos registrados que el consumidor no procesó. Con un broker que persiste, esto desaparece.
+5. **Consumidor con reintentos y cola de fallidos.** Reintenta con retroceso exponencial (`SINIESTROS_REINTENTOS_CONSUMIDOR`, 3 por defecto; base 0,2 s). Agotados, el mensaje va al topic `.dlq` y se confirma, para que un mensaje venenoso no frene la partición. El manejador es idempotente: `eventos_procesados` tiene clave única `(evento_uuid, consumidor)` y una reentrega queda en `reentregas_evento`.
+6. **Autenticación y fuente.** `X-Service-Key` con pares `fuente=clave` en `SINIESTROS_API_KEYS`. Sin llave o con una inválida: `401` y no se registra nada. El campo `fuente` del evento debe ser la de su llave; otra distinta es `400 FUENTE_DESCONOCIDA` (un proveedor no puede hablar por otro). Vacía = nadie accede.
+7. **Validación y rechazos (`400`).** Campos obligatorios, tipo dentro del catálogo, fecha ISO 8601 con zona y no futura (tolerancia 5 min), `datos` objeto no vacío de hasta 8 KB. Cada rechazo se guarda en `eventos_rechazados` con código y campos defectuosos, nunca con el valor recibido.
+8. **Persistencia (`siniestros`), solo inserción:** `eventos_parametricos` (fecha de recepción, fuente, `estado_validacion`), `eventos_rechazados`, `publicaciones_bus`, `eventos_procesados`, `reentregas_evento`. Triggers de PostgreSQL rechazan UPDATE y DELETE. Sin llaves foráneas hacia otros servicios.
+9. **Partición.** La clave es `poliza_id` si el evento la trae y, si no, `evento_id`. Los eventos de proveedores suelen describir un fenómeno, no una póliza; el orden por póliza lo necesitará HU28 al repartir un evento entre las pólizas afectadas, y ahí se vuelve a particionar por póliza.
+10. **Verificación.** `GET /v1/siniestros/eventos/resumen` devuelve recibidos, rechazados, publicados, procesados, reentregas y rezago, para comparar contra lo enviado en una ráfaga.
+
+## Consecuencias
+
+- **Un solo proceso.** El bus en memoria vive en cada réplica: con varias réplicas cada una consume solo lo que ella publicó, y un evento repuesto al reiniciar podría procesarse dos veces (lo absorbe la idempotencia). Esto es aceptable solo mientras no haya broker; no escala horizontalmente. **Escalar MS Siniestros de forma agresiva (HA03) depende de reemplazar el bus.**
+- **Ráfaga (criterio 6), medido en local, no en staging.** Con un proceso, SQLite y k6 (`tests/rendimiento/rafaga-eventos.js`): a 300 eventos/s, p95 de 6 ms y todo procesado de inmediato (6.001 enviados, 5.474 distintos = 5.474 recibidos = 5.474 procesados, 0 de rezago). A 1.700 eventos/s (la meta de EC-E2.1) el servicio satura en ≈820/s: p95 de 1,4 s y el consumidor queda ≈6.600 eventos atrás, pero al terminar 21.420 recibidos = 21.420 procesados, 0 reentregas, ninguno perdido. **La meta de 1.000.000 en 10 min no está demostrada**; requiere PostgreSQL, el broker real y, probablemente, insertar por lotes.
+- **Costo por evento:** dos escrituras en línea (evento y publicación) más una del consumidor. Si la ráfaga lo exige, se agrupan en lote o se saca la escritura de publicación del camino crítico.
+- **Pendiente de confirmar:** lista final de tipos de evento (se aceptan vuelos y clima del enunciado y sismo, inundación y sequía de la documentación técnica), campos requeridos por tipo (los define HU28 con las reglas) y si el proveedor real puede reintentar con el mismo identificador.

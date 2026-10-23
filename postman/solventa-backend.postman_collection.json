@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Solventa Backend",
-    "description": "Colección de pruebas de los endpoints de `solventa-backend` (MS Identidad y MS Cotización). Cada petición trae pruebas (`pm.test`) y guarda las variables que usa la siguiente, así que puede ejecutarse completa con el Collection Runner o con Newman, en el orden del árbol.\n\nVer `postman/README.md` para levantar los servicios en local.",
+    "description": "Colección de pruebas de los endpoints de `solventa-backend` (MS Identidad, MS Cotización, MS Perfilamiento y MS Siniestros). Cada petición trae pruebas (`pm.test`) y guarda las variables que usa la siguiente, así que puede ejecutarse completa con el Collection Runner o con Newman, en el orden del árbol.\n\nVer `postman/README.md` para levantar los servicios en local.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -4678,6 +4678,385 @@
           }
         }
       ]
+    },
+    {
+      "name": "MS Siniestros (HU27)",
+      "item": [
+        {
+          "name": "Recibir evento - válido",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('evento_id', 'pm-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 202', () => pm.response.to.have.status(202));",
+                  "const d = pm.response.json();",
+                  "pm.test('acuse de recibido, no duplicado', () => { pm.expect(d.estado).to.eql('recibido'); pm.expect(d.duplicado).to.eql(false); });",
+                  "pm.collectionVariables.set('evento_uuid', d.evento_uuid);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/eventos",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "eventos"
+              ]
+            },
+            "description": "Valida, registra y publica el evento; el acuse es inmediato (202) y no espera al procesamiento. Guarda `evento_id` para la prueba de duplicado.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"evento_id\": \"{{evento_id}}\",\n  \"tipo\": \"sismo\",\n  \"fuente\": \"{{siniestros_fuente}}\",\n  \"ocurrido_en\": \"{{$isoTimestamp}}\",\n  \"datos\": {\n    \"magnitud\": 6.4,\n    \"latitud\": 4.71,\n    \"longitud\": -74.07\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Recibir evento - duplicado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('es el mismo evento', () => { pm.expect(d.duplicado).to.eql(true); pm.expect(d.evento_uuid).to.eql(pm.collectionVariables.get('evento_uuid')); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/eventos",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "eventos"
+              ]
+            },
+            "description": "Reenvía el mismo `evento_id`: no se crea otro registro ni otra publicación (200, `duplicado: true`).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"evento_id\": \"{{evento_id}}\",\n  \"tipo\": \"sismo\",\n  \"fuente\": \"{{siniestros_fuente}}\",\n  \"ocurrido_en\": \"{{$isoTimestamp}}\",\n  \"datos\": {\n    \"magnitud\": 6.4,\n    \"latitud\": 4.71,\n    \"longitud\": -74.07\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Recibir evento - tipo desconocido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));",
+                  "const e = pm.response.json().error;",
+                  "pm.test('formato estándar', () => { pm.expect(e.code).to.eql('EVENTO_INVALIDO'); pm.expect(e.trace_id).to.be.a('string'); pm.expect(e.details[0].campo).to.eql('tipo'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/eventos",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "eventos"
+              ]
+            },
+            "description": "Evento mal formado: 400 con código estándar y el rechazo queda registrado.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"evento_id\": \"pm-invalido\",\n  \"tipo\": \"meteorito\",\n  \"fuente\": \"{{siniestros_fuente}}\",\n  \"ocurrido_en\": \"{{$isoTimestamp}}\",\n  \"datos\": {\n    \"magnitud\": 6.4,\n    \"latitud\": 4.71,\n    \"longitud\": -74.07\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Recibir evento - fuente ajena",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('código propio', () => pm.expect(pm.response.json().error.code).to.eql('FUENTE_DESCONOCIDA'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/eventos",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "eventos"
+              ]
+            },
+            "description": "La fuente debe ser la de la llave: otra distinta es FUENTE_DESCONOCIDA.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"evento_id\": \"pm-fuente-ajena\",\n  \"tipo\": \"sismo\",\n  \"fuente\": \"otro-proveedor\",\n  \"ocurrido_en\": \"{{$isoTimestamp}}\",\n  \"datos\": {\n    \"magnitud\": 6.4,\n    \"latitud\": 4.71,\n    \"longitud\": -74.07\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Recibir evento - sin llave",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('código', () => pm.expect(pm.response.json().error.code).to.eql('NO_AUTENTICADO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/eventos",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "eventos"
+              ]
+            },
+            "description": "Sin llave: 401 y no se registra nada.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"evento_id\": \"pm-sin-llave\",\n  \"tipo\": \"sismo\",\n  \"fuente\": \"{{siniestros_fuente}}\",\n  \"ocurrido_en\": \"{{$isoTimestamp}}\",\n  \"datos\": {\n    \"magnitud\": 6.4,\n    \"latitud\": 4.71,\n    \"longitud\": -74.07\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Recibir evento - llave inválida",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "llave-incorrecta",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/eventos",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "eventos"
+              ]
+            },
+            "description": "Llave que no corresponde a ningún proveedor: 401.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"evento_id\": \"pm-llave-mala\",\n  \"tipo\": \"sismo\",\n  \"fuente\": \"{{siniestros_fuente}}\",\n  \"ocurrido_en\": \"{{$isoTimestamp}}\",\n  \"datos\": {\n    \"magnitud\": 6.4,\n    \"latitud\": 4.71,\n    \"longitud\": -74.07\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Resumen de eventos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('trae los conteos', () => ['recibidos','rechazados','publicados','procesados','reentregas','rezago'].forEach(k => pm.expect(d).to.have.property(k)));",
+                  "pm.test('hay al menos un rechazo registrado', () => pm.expect(d.rechazados).to.be.at.least(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/eventos/resumen",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "eventos",
+                "resumen"
+              ]
+            },
+            "description": "Conteos para verificar una ráfaga: recibidos = distintos enviados, procesados = recibidos y rezago 0 al terminar."
+          }
+        }
+      ]
     }
   ],
   "variable": [
@@ -4778,6 +5157,31 @@
     },
     {
       "key": "perfil_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "siniestros_url",
+      "value": "http://localhost:8003",
+      "type": "string"
+    },
+    {
+      "key": "siniestros_key",
+      "value": "dev-siniestros-key",
+      "type": "string"
+    },
+    {
+      "key": "siniestros_fuente",
+      "value": "proveedor-sismos",
+      "type": "string"
+    },
+    {
+      "key": "evento_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "evento_uuid",
       "value": "",
       "type": "string"
     }

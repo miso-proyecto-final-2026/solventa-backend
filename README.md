@@ -9,6 +9,7 @@ services/
   identidad/     MS Identidad    HU01–HU08 (registro, KYC, consentimiento)
   cotizacion/    MS Cotización   HU09–HU14, HU37–HU38 (proveedores de datos, perfil, motor de rating)
   perfilamiento/ MS Perfilamiento HU23 (enriquecimiento del perfil de riesgo, linaje)
+  siniestros/    MS Siniestros   HU27 (recepción de eventos paramétricos; HU28 validará la condición)
 docs/adr/        decisiones de arquitectura (compartidas)
 pyproject.toml   configuración de ruff
 requirements-dev.txt   dependencias de prueba comunes
@@ -27,7 +28,7 @@ Los demás servicios del ADR (Perfilamiento, Suscripción, Pagos, Siniestros, So
 ## Trabajar con un servicio
 
 ```bash
-cd services/identidad          # o services/cotizacion, services/perfilamiento
+cd services/identidad          # o services/cotizacion, services/perfilamiento, services/siniestros
 pip install -r requirements.txt -r ../../requirements-dev.txt
 pytest                         # pruebas de ese servicio
 uvicorn app.main:app --reload
@@ -58,6 +59,9 @@ El CI corre `test` y `build` en matriz por servicio.
 | `PERFILAMIENTO_API_KEYS` | perfilamiento | Claves de servicio en `X-Service-Key`, como pares `nombre=clave` separados por coma; el nombre queda como «origen» de los intentos bloqueados. Vacía = nadie accede. Debe venir de un secreto. |
 | `REDIS_URL`, `IDENTIDAD_URL`, `IDENTIDAD_SERVICE_KEY` | perfilamiento | Igual que en cotización: caché de fuentes y consulta de consentimiento; obligatorias fuera de desarrollo. |
 | `PROVEEDORES_TTL_OPEN_FINANCE_S`, `PROVEEDORES_TTL_OPEN_DATA_S` | perfilamiento | TTL por tipo de dato (3.600 s y 86.400 s por defecto), con dispersión de ±10–15 %. Ver ADR-0009. |
+| `SINIESTROS_DATABASE_URL` | siniestros | Base de datos PostgreSQL (esquema `siniestros`, Alembic). Obligatoria fuera de desarrollo; admite `DATABASE_URL`. |
+| `SINIESTROS_API_KEYS` | siniestros | Llaves de los proveedores de eventos en `X-Service-Key`, como pares `fuente=clave` separados por coma; el evento debe traer esa misma `fuente`. Vacía = nadie accede. Debe venir de un secreto. |
+| `SINIESTROS_PARTICIONES`, `SINIESTROS_CAPACIDAD_REZAGO`, `SINIESTROS_REINTENTOS_CONSUMIDOR` | siniestros | Particiones del bus (6), rezago a partir del cual responde 503 al proveedor (200.000) y reintentos del consumidor antes de la cola de fallidos (3). Ver ADR-0010. |
 | `TRAZA_COLA_MAX`, `TRAZA_REINTENTOS` | cotizacion | Cola en memoria de la trazabilidad de consultas (10.000 por defecto) y reintentos de escritura (3). Ver ADR-0007. |
 | `ASESOR_JWT_SECRETO` | identidad, cotizacion | Secreto HS256 con el que Identidad firma y Cotización valida el token del asesor (HU38, ADR-0008). **Debe ser el mismo en ambos** y venir de un secreto. Sin él solo arranca con `SOLVENTA_MODO_DESARROLLO=1` (secreto fijo de desarrollo). |
 | `ASESOR_JWT_TTL_MIN` | identidad | Vida del token del asesor en minutos (30 por defecto). |
