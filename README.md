@@ -9,6 +9,7 @@ services/
   identidad/     MS Identidad    HU01–HU08 (registro, KYC, consentimiento)
   cotizacion/    MS Cotización   HU09–HU14, HU37–HU38 (proveedores de datos, perfil, motor de rating)
   perfilamiento/ MS Perfilamiento HU23 (enriquecimiento del perfil de riesgo, linaje)
+  suscripcion/   MS Suscripción   HU15 (saga de suscripción: decisión automática; cobro, firma y emisión llegan con HU18, HU21 y HU20)
 docs/adr/        decisiones de arquitectura (compartidas)
 pyproject.toml   configuración de ruff
 requirements-dev.txt   dependencias de prueba comunes
@@ -27,7 +28,7 @@ Los demás servicios del ADR (Perfilamiento, Suscripción, Pagos, Siniestros, So
 ## Trabajar con un servicio
 
 ```bash
-cd services/identidad          # o services/cotizacion, services/perfilamiento
+cd services/identidad          # o services/cotizacion, services/perfilamiento, services/suscripcion
 pip install -r requirements.txt -r ../../requirements-dev.txt
 pytest                         # pruebas de ese servicio
 uvicorn app.main:app --reload
@@ -58,6 +59,12 @@ El CI corre `test` y `build` en matriz por servicio.
 | `PERFILAMIENTO_API_KEYS` | perfilamiento | Claves de servicio en `X-Service-Key`, como pares `nombre=clave` separados por coma; el nombre queda como «origen» de los intentos bloqueados. Vacía = nadie accede. Debe venir de un secreto. |
 | `REDIS_URL`, `IDENTIDAD_URL`, `IDENTIDAD_SERVICE_KEY` | perfilamiento | Igual que en cotización: caché de fuentes y consulta de consentimiento; obligatorias fuera de desarrollo. |
 | `PROVEEDORES_TTL_OPEN_FINANCE_S`, `PROVEEDORES_TTL_OPEN_DATA_S` | perfilamiento | TTL por tipo de dato (3.600 s y 86.400 s por defecto), con dispersión de ±10–15 %. Ver ADR-0009. |
+| `SUSCRIPCION_DATABASE_URL` | suscripcion | Base de datos PostgreSQL (esquema `suscripcion`, Alembic). Obligatoria fuera de desarrollo; admite `DATABASE_URL`. |
+| `IDENTIDAD_URL`, `IDENTIDAD_SERVICE_KEY` | suscripcion | MS Identidad y la clave de servicio con la que Suscripción valida el token del cliente (`GET /v1/sesion/actual`). `IDENTIDAD_URL` es obligatoria siempre (no hay sustituto). |
+| `COTIZACION_URL` | suscripcion | MS Cotización, de donde se lee la cotización (`GET /v1/cotizaciones/{id}`). Obligatoria siempre. |
+| `PERFILAMIENTO_URL`, `PERFILAMIENTO_SERVICE_KEY` | suscripcion | MS Perfilamiento y su clave de servicio (debe estar en su `PERFILAMIENTO_API_KEYS`). Si Perfilamiento no responde, el caso se deriva a revisión asistida. |
+| `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SEGURIDAD`, `AWS_REGION` | suscripcion | Brokers de MSK que la plataforma inyecta al servicio, `IAM` (por defecto) o `PLAINTEXT`, y la región para firmar. Sin brokers solo se arranca en modo desarrollo, con un publicador en memoria. Ver ADR-0010. |
+| `SUSCRIPCION_ESPERA_BARRIDO_S`, `SUSCRIPCION_TIMEOUT_S` | suscripcion | Segundos tras los que el barrido retoma una saga sin decidir (30) y timeout de las llamadas a servicios vecinos (2). |
 | `TRAZA_COLA_MAX`, `TRAZA_REINTENTOS` | cotizacion | Cola en memoria de la trazabilidad de consultas (10.000 por defecto) y reintentos de escritura (3). Ver ADR-0007. |
 | `ASESOR_JWT_SECRETO` | identidad, cotizacion | Secreto HS256 con el que Identidad firma y Cotización valida el token del asesor (HU38, ADR-0008). **Debe ser el mismo en ambos** y venir de un secreto. Sin él solo arranca con `SOLVENTA_MODO_DESARROLLO=1` (secreto fijo de desarrollo). |
 | `ASESOR_JWT_TTL_MIN` | identidad | Vida del token del asesor en minutos (30 por defecto). |

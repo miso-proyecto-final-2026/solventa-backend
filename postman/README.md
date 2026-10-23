@@ -23,6 +23,7 @@ Cada petición lleva pruebas (`pm.test`) y guarda las variables que necesita la 
 | MS Cotización / Cotizaciones | `POST /v1/cotizaciones`, `GET /v1/cotizaciones/{id}`, `PUT /v1/cotizaciones/{id}/latencia-cliente` (ambos productos, validaciones, `X-Correlation-Id`, 404) |
 | MS Cotización / Auditoría | `GET /v1/cotizaciones/{id}/desglose` y `GET /v1/cotizaciones/{id}/consultas-externas` (auditor; 401/403/404/422) |
 | MS Perfilamiento (HU23) | `POST /v1/perfilamiento/{id}/enriquecer`, `GET …/perfil` y `GET …/linaje` (con credencial; 401/403/404/422) |
+| MS Suscripción (HU15) | `POST /v1/suscripciones` (202, idempotencia, cotización ya usada, 401/404/422), `GET /v1/suscripciones/{id}`. Usa el cliente y la cotización de las carpetas anteriores. Quedan fuera `COTIZACION_VENCIDA` (exige una cotización vencida) y las decisiones rechazada/derivada (dependen del perfil del cliente; se prueban en pytest). |
 | MS Cotización / Perfiles | `GET /perfiles/{cliente_id}` (exige clave de servicio; 401/403) |
 | MS Identidad / Asesor - login y búsqueda (HU38) | `POST /v1/sesiones-internas`, `GET /v1/clientes/busqueda` (200/401/404/422) |
 | MS Cotización / Cotización asistida (HU38) | `GET /v1/productos` (200/304), `GET /v1/asesor/clientes/{id}/perfil`, `POST /v1/asesor/cotizaciones` (cliente existente, sin cuenta, 401/422) |
@@ -60,6 +61,12 @@ uvicorn app.main:app --port 8000
 cd services/perfilamiento
 SOLVENTA_MODO_DESARROLLO=1 PERFILAMIENTO_API_KEYS=postman=dev-perfilamiento-key \
 uvicorn app.main:app --port 8002
+
+# MS Suscripción (puerto 8003, HU15) — en otra terminal. Necesita a los otros tres; sin Kafka usa un publicador en memoria.
+cd services/suscripcion
+SOLVENTA_MODO_DESARROLLO=1 IDENTIDAD_URL=http://localhost:8001 IDENTIDAD_SERVICE_KEY=dev-service-key \
+COTIZACION_URL=http://localhost:8000 PERFILAMIENTO_URL=http://localhost:8002 PERFILAMIENTO_SERVICE_KEY=dev-perfilamiento-key \
+uvicorn app.main:app --port 8003
 ```
 
 Sin `IDENTIDAD_URL`, Perfilamiento usa el consentimiento «siempre otorgado» (solo desarrollo). Con ella, un cliente sin consentimiento vigente recibe 403 `CONSENTIMIENTO_NO_VIGENTE` y el intento queda registrado con el nombre de la clave (`postman`) como origen.

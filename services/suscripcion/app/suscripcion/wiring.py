@@ -1,0 +1,66 @@
+"""Ensamblado de Suscripción desde la configuración del entorno."""
+
+from __future__ import annotations
+
+import httpx
+from sqlalchemy import Engine
+from sqlalchemy.orm import sessionmaker
+
+from app.configuracion import permitir_sustituto_local
+from app.eventos import (
+    PublicadorEventos,
+    PublicadorKafka,
+    PublicadorMemoria,
+    brokers_desde_entorno,
+    parametros_seguridad,
+)
+from app.suscripcion.clientes import (
+    ClienteCotizacion,
+    ClienteIdentidad,
+    ClientePerfilamiento,
+)
+from app.suscripcion.config import SQLITE_LOCAL, ConfigSuscripcion
+from app.suscripcion.reglas import cargar_reglas
+from app.suscripcion.repositorio import crear_engine, crear_tablas_locales
+from app.suscripcion.servicio import ServicioSuscripcion
+
+
+def _http(url: str | None, variable: str, config: ConfigSuscripcion) -> httpx.AsyncClient:
+    if not url:
+        # Sin sustituto: Suscripción no tiene sentido sin sus vecinos, ni siquiera en desarrollo.
+        raise RuntimeError(f"Falta {variable} (URL del servicio vecino)")
+    return httpx.AsyncClient(base_url=url.rstrip("/"), timeout=config.timeout_s)
+
+
+def construir_servicio(config: ConfigSuscripcion | None = None) -> tuple[ServicioSuscripcion, Engine, list[httpx.AsyncClient]]:
+    config = config or ConfigSuscripcion.desde_entorno()
+    url = config.database_url
+    if url is None:
+        permitir_sustituto_local("SUSCRIPCION_DATABASE_URL", f"la base SQLite local ({SQLITE_LOCAL})")
+        url = SQLITE_LOCAL
+    engine = crear_engine(url)
+    if engine.dialect.name == "sqlite":
+        crear_tablas_locales(engine)
+    clientes = [
+        _http(config.identidad_url, "IDENTIDAD_URL", config),
+        _http(config.cotizacion_url, "COTIZACION_URL", config),
+        _http(config.perfilamiento_url, "PERFILAMIENTO_URL", config),
+    ]
+    servicio = ServicioSuscripcion(
+        fabrica=sessionmaker(bind=engine, expire_on_commit=False),
+        identidad=ClienteIdentidad(clientes[0], config.identidad_key),
+        cotizaciones=ClienteCotizacion(clientes[1]),
+        perfiles=ClientePerfilamiento(clientes[2], config.perfilamiento_key),
+        reglas=cargar_reglas(),
+    )
+    return servicio, engine, clientes
+
+
+def construir_publicador() -> PublicadorEventos:
+    """Kafka real si la plataforma entrega los brokers; en desarrollo, un publicador en memoria."""
+    import os
+
+    if not os.environ.get("KAFKA_BOOTSTRAP_SERVERS"):
+        permitir_sustituto_local("KAFKA_BOOTSTRAP_SERVERS", "un publicador en memoria (los eventos no salen del proceso)")
+        return PublicadorMemoria()
+    return PublicadorKafka(brokers_desde_entorno(), parametros_seguridad(), client_id="ms-suscripcion")

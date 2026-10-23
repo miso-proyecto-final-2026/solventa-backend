@@ -1,0 +1,394 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Solventa — MS Suscripción",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/v1/suscripciones": {
+      "post": {
+        "tags": [
+          "suscripciones"
+        ],
+        "summary": "Inicia la saga de suscripción; la decisión se toma enseguida y se consulta con GET",
+        "operationId": "iniciar_v1_suscripciones_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuscripcionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuscripcionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/{suscripcion_id}": {
+      "get": {
+        "tags": [
+          "suscripciones"
+        ],
+        "summary": "Estado de la saga",
+        "operationId": "consultar_v1_suscripciones__suscripcion_id__get",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuscripcionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "DecisionOut": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "motivos": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Motivos"
+          },
+          "ajuste": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ajuste"
+          },
+          "reglas_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reglas Version"
+          },
+          "decidido_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decidido En"
+          },
+          "duracion_decision_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duracion Decision Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision",
+          "motivos",
+          "ajuste",
+          "reglas_version",
+          "decidido_en",
+          "duracion_decision_ms"
+        ],
+        "title": "DecisionOut"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "SuscripcionIn": {
+        "properties": {
+          "cotizacion_id": {
+            "type": "string",
+            "maxLength": 36,
+            "minLength": 1,
+            "title": "Cotizacion Id"
+          },
+          "metodo_pago": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Metodo Pago",
+            "description": "Token de la pasarela; nunca el número de tarjeta"
+          },
+          "acepta_terminos": {
+            "type": "boolean",
+            "title": "Acepta Terminos"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "cotizacion_id",
+          "metodo_pago",
+          "acepta_terminos"
+        ],
+        "title": "SuscripcionIn"
+      },
+      "SuscripcionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "cotizacion_id": {
+            "type": "string",
+            "title": "Cotizacion Id"
+          },
+          "estado_saga": {
+            "type": "string",
+            "title": "Estado Saga"
+          },
+          "paso_actual": {
+            "type": "string",
+            "title": "Paso Actual"
+          },
+          "pasos": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pasos"
+          },
+          "producto": {
+            "type": "string",
+            "title": "Producto"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "monto_asegurado": {
+            "type": "integer",
+            "title": "Monto Asegurado"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecisionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revision_asistida": {
+            "type": "boolean",
+            "title": "Revision Asistida"
+          },
+          "creada_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creada En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "cotizacion_id",
+          "estado_saga",
+          "paso_actual",
+          "pasos",
+          "producto",
+          "moneda",
+          "monto_asegurado",
+          "decision",
+          "revision_asistida",
+          "creada_en"
+        ],
+        "title": "SuscripcionOut"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
