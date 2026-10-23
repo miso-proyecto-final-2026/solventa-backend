@@ -149,7 +149,8 @@ def test_el_linaje_dice_de_que_fuente_salio_cada_dato_cuando_y_con_que_ttl(entor
 def test_el_linaje_no_contiene_valores_de_los_datos(entorno):
     entorno.enriquecer()
 
-    texto = str(entorno.linaje().json())
+    # Solo las fuentes: el `perfil_id` es un UUID aleatorio y puede contener «710» por azar.
+    texto = str(entorno.linaje().json()["fuentes"])
 
     assert "4500000" not in texto and "710" not in texto
 
