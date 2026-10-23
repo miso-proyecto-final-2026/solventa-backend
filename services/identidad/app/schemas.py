@@ -169,3 +169,9 @@ class ClienteBusquedaOut(BaseModel):
     numero_documento: str
     estado_kyc: str
     consentimiento: ConsentimientoResumenOut
+
+
+class SesionActualOut(BaseModel):
+    """Solo el dueño del token: sin nombre, correo ni documento."""
+
+    cliente_id: str
