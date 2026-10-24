@@ -1,11 +1,10 @@
 import uuid
 
 import pytest
+from app.eventos.registro import RegistroEventos, tabla_eventos_procesados
 from sqlalchemy import Column, Integer, MetaData, String, Table, create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-
-from app.eventos.registro import RegistroEventos, tabla_eventos_procesados
 
 
 @pytest.fixture

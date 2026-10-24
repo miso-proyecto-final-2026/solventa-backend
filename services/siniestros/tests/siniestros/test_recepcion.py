@@ -1,8 +1,8 @@
 """Recepción por HTTP: acuse, validación, autenticación e idempotencia (criterios 1 a 5 y 8)."""
 
 import pytest
-
 from app.siniestros.servicio import TOPIC_EVENTOS
+
 from tests.siniestros.conftest import CLAVE, evento
 
 
@@ -31,9 +31,8 @@ def test_el_acuse_no_espera_el_procesamiento(entorno):
 def test_el_evento_conserva_fecha_de_recepcion_fuente_y_estado_de_validacion(entorno):
     entorno.enviar()
 
-    from sqlalchemy import select
-
     from app.siniestros.modelos_db import EventoParametricoDB
+    from sqlalchemy import select
 
     with entorno.repo._fabrica() as s:
         fila = s.scalars(select(EventoParametricoDB)).one()

@@ -1,8 +1,8 @@
 """Validación del evento de entrada (criterios 2 y 3), sin HTTP ni base."""
 
 import pytest
-
 from app.siniestros.dominio import TIPOS_EVENTO, validar
+
 from tests.siniestros.conftest import AHORA, FUENTE, evento
 
 

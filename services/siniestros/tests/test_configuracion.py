@@ -3,10 +3,10 @@
 import asyncio
 
 import pytest
-
-from app.configuracion import VARIABLE_MODO_DESARROLLO, ErrorConfiguracion
 from app.siniestros.config import ConfigSiniestros
 from app.siniestros.wiring import construir_ensamblado
+
+from app.configuracion import VARIABLE_MODO_DESARROLLO, ErrorConfiguracion
 
 
 def test_sin_base_de_datos_no_arranca_fuera_de_desarrollo(monkeypatch):

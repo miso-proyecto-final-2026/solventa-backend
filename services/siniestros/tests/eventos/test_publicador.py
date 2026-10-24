@@ -4,7 +4,6 @@ import json
 
 import pytest
 from aiokafka import AIOKafkaConsumer
-
 from app.eventos import Evento
 from app.eventos.conexion import parametros_seguridad
 from app.eventos.publicador import PublicadorKafka, PublicadorMemoria

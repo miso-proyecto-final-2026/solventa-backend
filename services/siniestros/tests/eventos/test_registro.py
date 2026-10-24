@@ -41,9 +41,8 @@ def test_si_la_transaccion_falla_la_reserva_se_deshace(base):
 
 
 def test_un_esquema_propio_del_servicio_se_aplica_a_la_tabla():
-    from sqlalchemy import MetaData
-
     from app.eventos.registro import tabla_eventos_procesados
+    from sqlalchemy import MetaData
 
     tabla = tabla_eventos_procesados(MetaData(), schema="suscripcion")
 

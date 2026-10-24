@@ -8,11 +8,6 @@ from typing import Any
 
 import pytest
 from aiokafka.errors import KafkaConnectionError
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from sqlalchemy.orm import sessionmaker
-
-from app.correlacion import MiddlewareCorrelacion
 from app.eventos import (
     ConsumidorEventos,
     Evento,
@@ -35,6 +30,11 @@ from app.siniestros.servicio import (
     Receptor,
     procesar_evento,
 )
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import sessionmaker
+
+from app.correlacion import MiddlewareCorrelacion
 
 CLAVE = "clave-de-prueba"
 FUENTE = "proveedor-sismos"

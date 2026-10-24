@@ -3,11 +3,10 @@
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import create_engine, pool, text
-
 from app.siniestros.config import ConfigSiniestros
 from app.siniestros.modelos_db import SCHEMA, BaseSiniestros
 from app.siniestros.repositorio import normalizar_url
+from sqlalchemy import create_engine, pool, text
 
 config = context.config
 if config.config_file_name is not None:

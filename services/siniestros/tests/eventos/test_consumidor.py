@@ -4,12 +4,11 @@ import asyncio
 
 import pytest
 from aiokafka import AIOKafkaConsumer
-from sqlalchemy import func, insert, select
-
 from app.eventos import Evento
 from app.eventos.conexion import parametros_seguridad
 from app.eventos.consumidor import ConsumidorEventos, PoliticaReintentos
 from app.eventos.publicador import PublicadorKafka
+from sqlalchemy import func, insert, select
 
 pytestmark = pytest.mark.contenedores
 SEGURIDAD = parametros_seguridad("PLAINTEXT")

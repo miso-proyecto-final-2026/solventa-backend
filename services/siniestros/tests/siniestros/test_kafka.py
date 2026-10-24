@@ -6,7 +6,6 @@ Se omite sola si Docker no está disponible.
 import asyncio
 
 import pytest
-
 from app.eventos import (
     ConsumidorEventos,
     PublicadorKafka,
@@ -20,6 +19,7 @@ from app.siniestros.servicio import (
     Receptor,
     procesar_evento,
 )
+
 from tests.siniestros.conftest import AHORA, FUENTE, Entorno, evento
 
 pytestmark = pytest.mark.contenedores

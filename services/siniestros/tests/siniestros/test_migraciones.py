@@ -10,10 +10,9 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
+from app.siniestros.modelos_db import SCHEMA, BaseSiniestros
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import DBAPIError
-
-from app.siniestros.modelos_db import SCHEMA, BaseSiniestros
 
 pytestmark = pytest.mark.contenedores
 

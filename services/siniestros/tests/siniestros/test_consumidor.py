@@ -7,6 +7,7 @@ y `test_kafka.py`; aquí se verifica lo que Siniestros agrega: el manejador, el 
 import asyncio
 
 from app.eventos import Evento
+
 from tests.siniestros.conftest import evento, mensaje_de
 
 

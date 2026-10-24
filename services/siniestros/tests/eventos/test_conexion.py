@@ -1,7 +1,6 @@
 """Parámetros de conexión a MSK: SASL/IAM (staging) o PLAINTEXT (solo para pruebas locales)."""
 
 import pytest
-
 from app.eventos.conexion import (
     ProveedorTokenIam,
     brokers_desde_entorno,
