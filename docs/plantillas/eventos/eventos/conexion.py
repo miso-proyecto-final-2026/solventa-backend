@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import ssl
 from collections.abc import Callable
 from typing import Any
 
@@ -43,6 +44,8 @@ def parametros_seguridad(seguridad: str | None = None, region: str | None = None
         raise ValueError("La autenticación IAM necesita AWS_REGION")
     return {
         "security_protocol": "SASL_SSL",
+        # aiokafka exige el contexto TLS con SASL_SSL (sin él ni siquiera construye el cliente): valida certificado y nombre.
+        "ssl_context": ssl.create_default_context(),
         "sasl_mechanism": "OAUTHBEARER",
         "sasl_oauth_token_provider": ProveedorTokenIam(region),
     }

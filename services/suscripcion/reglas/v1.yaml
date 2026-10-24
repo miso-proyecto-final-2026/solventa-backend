@@ -1,0 +1,28 @@
+# Reglas de decisión automática de suscripción (HU15). Versionadas y aisladas del motor de rating y del cobro (EC-M1.2):
+# cambiar un umbral toca solo este archivo y `app/suscripcion/reglas.py`/`decision.py`.
+#
+# PROVISIONALES: los documentos del proyecto no fijan los umbrales (los define el área de suscripción o actuaría). Este
+# conjunto inicial lo propuso el equipo para poder arrancar y debe validarse antes de usarse con clientes reales.
+version: "2026.10.1-provisional"
+provisional: true
+
+# Perfil: sin estos datos la decisión no es automática, se deriva a una persona.
+perfil:
+  campos_requeridos: [ratio_endeudamiento, reportes_negativos]
+  completitud_minima: 0.8
+
+# Monto asegurado (COP): la cobertura de mayor monto de la cotización.
+monto:
+  aprobacion_automatica: 50000000   # hasta aquí se aprueba tal cual
+  maximo_automatico: 80000000       # entre ambos se aprueba ajustado; por encima se deriva
+  ajustado_a: 50000000
+
+# Endeudamiento (fracción de los ingresos).
+endeudamiento:
+  aprobacion: 0.50                  # hasta aquí se aprueba
+  maximo_con_ajuste: 0.65           # hasta aquí se aprueba ajustado; por encima se rechaza
+
+# Reportes negativos en centrales de riesgo.
+reportes_negativos:
+  aprobacion: 0                     # sin reportes se aprueba
+  maximo_derivable: 2               # 1 o 2 se derivan a una persona; más de 2 se rechaza

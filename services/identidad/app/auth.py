@@ -44,6 +44,16 @@ def _es_clave_de_servicio(clave: str) -> bool:
     return any(secrets.compare_digest(clave, valida) for valida in _claves_de_servicio())
 
 
+def es_clave_de_servicio(clave: str) -> bool:
+    return _es_clave_de_servicio(clave)
+
+
+def cliente_de_token(db: Session, token: str) -> str | None:
+    """`cliente_id` dueño de un token de sesión, o None si no existe."""
+    sesion = db.query(Sesion).filter(Sesion.token_hash == hash_token(token)).first()
+    return sesion.cliente_id if sesion is not None else None
+
+
 def acceso_actual(
     authorization: str | None = Header(default=None),
     x_service_key: str | None = Header(default=None),
@@ -54,10 +64,9 @@ def acceso_actual(
             return Acceso(cliente_id=None, es_servicio=True)
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
     if authorization and authorization.lower().startswith("bearer "):
-        token = authorization[7:].strip()
-        sesion = db.query(Sesion).filter(Sesion.token_hash == hash_token(token)).first()
-        if sesion is not None:
-            return Acceso(cliente_id=sesion.cliente_id)
+        cliente_id = cliente_de_token(db, authorization[7:].strip())
+        if cliente_id is not None:
+            return Acceso(cliente_id=cliente_id)
     raise HTTPException(status_code=401, detail="Se requiere iniciar sesión")
 
 

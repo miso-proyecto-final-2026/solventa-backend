@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Solventa Backend",
-    "description": "Colección de pruebas de los endpoints de `solventa-backend` (MS Identidad, MS Cotización, MS Perfilamiento y MS Siniestros). Cada petición trae pruebas (`pm.test`) y guarda las variables que usa la siguiente, así que puede ejecutarse completa con el Collection Runner o con Newman, en el orden del árbol.\n\nVer `postman/README.md` para levantar los servicios en local.",
+    "description": "Colección de pruebas de los endpoints de `solventa-backend` (MS Identidad y MS Cotización). Cada petición trae pruebas (`pm.test`) y guarda las variables que usa la siguiente, así que puede ejecutarse completa con el Collection Runner o con Newman, en el orden del árbol.\n\nVer `postman/README.md` para levantar los servicios en local.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -5186,6 +5186,504 @@
       ]
     },
     {
+      "name": "MS Suscripción (HU15)",
+      "item": [
+        {
+          "name": "Salud",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{suscripcion_url}}/health",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Liveness."
+          }
+        },
+        {
+          "name": "Iniciar suscripción",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_suscripcion', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 202', () => pm.response.to.have.status(202));",
+                  "const s = pm.response.json();",
+                  "pm.test('la saga arranca en la decisión con los cuatro pasos', () => {",
+                  "  pm.expect(s.estado_saga).to.eql('EN_PROGRESO');",
+                  "  pm.expect(s.paso_actual).to.eql('DECISION');",
+                  "  pm.expect(s.pasos).to.eql(['DECISION','COBRO','FIRMA','EMISION']);",
+                  "});",
+                  "pm.test('no devuelve el token de pago', () => pm.expect(pm.response.text()).to.not.include('tok_prueba'));",
+                  "pm.collectionVariables.set('suscripcion_id', s.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_suscripcion}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones"
+              ]
+            },
+            "description": "Requiere el cliente y la cotización creados en las carpetas de Identidad y Cotización. Responde 202 y decide enseguida en segundo plano.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cotizacion_id\": \"{{cotizacion_id}}\",\n  \"metodo_pago\": \"tok_prueba_{{$randomInt}}\",\n  \"acepta_terminos\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Repetir con la misma clave",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 202', () => pm.response.to.have.status(202));",
+                  "pm.test('devuelve la misma saga y lo avisa', () => {",
+                  "  pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('suscripcion_id'));",
+                  "  pm.expect(pm.response.headers.get('Idempotent-Replay')).to.eql('true');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_suscripcion}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones"
+              ]
+            },
+            "description": "Idempotencia: la misma clave no crea una segunda saga.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cotizacion_id\": \"{{cotizacion_id}}\",\n  \"metodo_pago\": \"tok_prueba_{{$randomInt}}\",\n  \"acepta_terminos\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Consultar estado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json();",
+                  "pm.test('estado válido de la guía', () => pm.expect(['EN_PROGRESO','APROBADA','COBRO_REALIZADO','FIRMADA','EMITIDA','RECHAZADA','COMPENSADA']).to.include(s.estado_saga));",
+                  "pm.test('si ya se decidió, trae motivos y la versión de las reglas', () => { if (s.decision) { pm.expect(s.decision.motivos).to.be.an('array'); pm.expect(s.decision.reglas_version).to.be.a('string').and.not.empty; } });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/{{suscripcion_id}}",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "{{suscripcion_id}}"
+              ]
+            },
+            "description": "La decisión se toma en segundo plano: justo después del POST puede aparecer aún sin decisión."
+          }
+        },
+        {
+          "name": "Cotización ya usada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error estándar COTIZACION_YA_USADA', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('COTIZACION_YA_USADA'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones"
+              ]
+            },
+            "description": "Otra clave sobre la misma cotización: error propio.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cotizacion_id\": \"{{cotizacion_id}}\",\n  \"metodo_pago\": \"tok_prueba_{{$randomInt}}\",\n  \"acepta_terminos\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Sin sesión",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error estándar NO_AUTENTICADO', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('NO_AUTENTICADO'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones"
+              ]
+            },
+            "description": "Sin token no hay cliente.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cotizacion_id\": \"{{cotizacion_id}}\",\n  \"metodo_pago\": \"tok_prueba_{{$randomInt}}\",\n  \"acepta_terminos\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Sin clave de idempotencia",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('error estándar VALIDATION_ERROR', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('VALIDATION_ERROR'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones"
+              ]
+            },
+            "description": "La clave es obligatoria.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cotizacion_id\": \"{{cotizacion_id}}\",\n  \"metodo_pago\": \"tok_prueba_{{$randomInt}}\",\n  \"acepta_terminos\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Sin aceptar términos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('error estándar VALIDATION_ERROR', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('VALIDATION_ERROR'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones"
+              ]
+            },
+            "description": "`acepta_terminos` debe ser true.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cotizacion_id\": \"{{cotizacion_id}}\",\n  \"metodo_pago\": \"tok_prueba_{{$randomInt}}\",\n  \"acepta_terminos\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "Cotización inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error estándar COTIZACION_NO_ENCONTRADA', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('COTIZACION_NO_ENCONTRADA'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones"
+              ]
+            },
+            "description": "Cotización que no existe (o ajena).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cotizacion_id\": \"no-existe\",\n  \"metodo_pago\": \"tok_prueba_{{$randomInt}}\",\n  \"acepta_terminos\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Estado de una suscripción inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error estándar SUSCRIPCION_NO_ENCONTRADA', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('SUSCRIPCION_NO_ENCONTRADA'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/no-existe",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "no-existe"
+              ]
+            },
+            "description": "404 con el formato estándar."
+          }
+        }
+      ]
+    },
+    {
       "name": "MS Siniestros (HU27)",
       "item": [
         {
@@ -5667,8 +6165,28 @@
       "type": "string"
     },
     {
-      "key": "siniestros_url",
+      "key": "fecha_revocacion_1",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "suscripcion_url",
       "value": "http://localhost:8003",
+      "type": "string"
+    },
+    {
+      "key": "suscripcion_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "idem_suscripcion",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "siniestros_url",
+      "value": "http://localhost:8004",
       "type": "string"
     },
     {
@@ -5688,11 +6206,6 @@
     },
     {
       "key": "evento_uuid",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "fecha_revocacion_1",
       "value": "",
       "type": "string"
     }

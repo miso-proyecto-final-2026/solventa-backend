@@ -84,7 +84,8 @@ asyncio.create_task(consumidor.ejecutar())      # y consumidor.detener() al apag
   doble escritura). Un patrón *outbox* lo resuelve; no se incluye todavía. HU15 decide si lo necesita para la saga.
 - La sesión de SQLAlchemy es síncrona y se usa dentro del bucle asíncrono: es aceptable al volumen actual, no a escala.
 - La autenticación IAM se verifica con la prueba de humo contra MSK (`scripts/prueba-humo-kafka.sh` en `solventa-infra`);
-  localmente solo se prueba con `PLAINTEXT` y con un firmador simulado.
+  localmente solo se prueba con `PLAINTEXT`, con un firmador simulado y construyendo los clientes con los parámetros IAM (así se
+  detectó que `aiokafka` exige `ssl_context` con `SASL_SSL`, un defecto que solo había aparecido contra MSK real).
 
 ## Pruebas
 

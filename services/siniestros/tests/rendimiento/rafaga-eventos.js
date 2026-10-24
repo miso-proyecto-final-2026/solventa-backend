@@ -1,7 +1,7 @@
 // Ráfaga k6 de HU27: proveedor simulado con tasa, duración y proporción de duplicados configurables.
 // Meta del enunciado (EC-E2.1): ≥ 1.000.000 de eventos en 10 min ≈ 1.667/s. Aquí se valida un porcentaje
 // en el ambiente disponible; el informe de staging debe decir qué porcentaje fue.
-//   k6 run -e BASE_URL=http://localhost:8003 -e SERVICE_KEY=<clave> -e FUENTE=proveedor-sismos \
+//   k6 run -e BASE_URL=http://localhost:8004 -e SERVICE_KEY=<clave> -e FUENTE=proveedor-sismos \
 //          -e RATE=500 -e DURATION=60s -e DUP_RATIO=0.1 tests/rendimiento/rafaga-eventos.js
 // Al terminar, compara «enviados distintos» con el resumen del servicio:
 //   GET /v1/siniestros/eventos/resumen  →  recibidos = publicados = enviados distintos y, con Kafka, procesados = recibidos.
@@ -47,7 +47,7 @@ export default function () {
     ocurrido_en: new Date().toISOString(),
     datos: { magnitud: 5 + (n % 40) / 10, latitud: 4.71, longitud: -74.07 },
   };
-  const r = http.post(`${__ENV.BASE_URL || 'http://localhost:8003'}/v1/siniestros/eventos`, JSON.stringify(cuerpo), {
+  const r = http.post(`${__ENV.BASE_URL || 'http://localhost:8004'}/v1/siniestros/eventos`, JSON.stringify(cuerpo), {
     headers: { 'Content-Type': 'application/json', 'X-Service-Key': __ENV.SERVICE_KEY },
   });
   if (r.status === 202) nuevos.add(1);
