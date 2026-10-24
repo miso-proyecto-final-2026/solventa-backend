@@ -22,6 +22,7 @@ Cada petición lleva pruebas (`pm.test`) y guarda las variables que necesita la 
 | MS Cotización / Salud | `GET /health` (y cabecera `X-Correlation-Id`) |
 | MS Cotización / Cotizaciones | `POST /v1/cotizaciones`, `GET /v1/cotizaciones/{id}`, `PUT /v1/cotizaciones/{id}/latencia-cliente` (ambos productos, validaciones, `X-Correlation-Id`, 404) |
 | MS Cotización / Auditoría | `GET /v1/cotizaciones/{id}/desglose` y `GET /v1/cotizaciones/{id}/consultas-externas` (auditor; 401/403/404/422) |
+| MS Siniestros (HU27) | `POST /v1/siniestros/eventos` (202 acuse, 200 duplicado, 400 inválido/fuente ajena, 401) y `GET …/eventos/resumen` |
 | MS Perfilamiento (HU23) | `POST /v1/perfilamiento/{id}/enriquecer`, `GET …/perfil` y `GET …/linaje` (con credencial; 401/403/404/422) |
 | MS Suscripción (HU15) | `POST /v1/suscripciones` (202, idempotencia, cotización ya usada, 401/404/422), `GET /v1/suscripciones/{id}`. Usa el cliente y la cotización de las carpetas anteriores. Quedan fuera `COTIZACION_VENCIDA` (exige una cotización vencida) y las decisiones rechazada/derivada (dependen del perfil del cliente; se prueban en pytest). |
 | MS Cotización / Perfiles | `GET /perfiles/{cliente_id}` (exige clave de servicio; 401/403) |
@@ -67,9 +68,16 @@ cd services/suscripcion
 SOLVENTA_MODO_DESARROLLO=1 IDENTIDAD_URL=http://localhost:8001 IDENTIDAD_SERVICE_KEY=dev-service-key \
 COTIZACION_URL=http://localhost:8000 PERFILAMIENTO_URL=http://localhost:8002 PERFILAMIENTO_SERVICE_KEY=dev-perfilamiento-key \
 uvicorn app.main:app --port 8003
+
+# MS Siniestros (puerto 8004, HU27) — en otra terminal
+cd services/siniestros
+SOLVENTA_MODO_DESARROLLO=1 SINIESTROS_API_KEYS=proveedor-sismos=dev-siniestros-key \
+uvicorn app.main:app --port 8004
 ```
 
 Sin `IDENTIDAD_URL`, Perfilamiento usa el consentimiento «siempre otorgado» (solo desarrollo). Con ella, un cliente sin consentimiento vigente recibe 403 `CONSENTIMIENTO_NO_VIGENTE` y el intento queda registrado con el nombre de la clave (`postman`) como origen.
+
+La llave de Siniestros se asocia a una fuente (`proveedor-sismos`): el evento debe traer esa misma `fuente` o recibe 400 `FUENTE_DESCONOCIDA`. Sin `KAFKA_BOOTSTRAP_SERVERS`, en desarrollo se publica en memoria y no hay consumidor, así que `procesados` queda en 0; con un Kafka local (`KAFKA_SEGURIDAD=PLAINTEXT`) el consumidor corre dentro del mismo proceso. `GET /v1/siniestros/eventos/resumen` muestra recibidos, publicados, procesados y reentregas.
 
 Con `IDENTIDAD_URL` definida, Cotización consulta el consentimiento real en Identidad (si el cliente no lo otorgó,
 cotiza con el perfil por defecto: la cotización sale `aproximada` con `aviso`, y cada proveedor omitido queda auditado como

@@ -1,0 +1,318 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Solventa — MS Siniestros",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/v1/siniestros/eventos": {
+      "post": {
+        "tags": [
+          "siniestros"
+        ],
+        "summary": "Recibir un evento paramétrico de vuelos o clima",
+        "operationId": "recibir_evento_v1_siniestros_eventos_post",
+        "parameters": [
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcuseOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "Tipos aceptados: inundacion, sequia, sismo, tormenta, vuelo_cancelado, vuelo_retrasado",
+                "examples": [
+                  {
+                    "datos": {
+                      "latitud": 4.71,
+                      "longitud": -74.07,
+                      "magnitud": 6.4
+                    },
+                    "evento_id": "evt-2026-10-23-0001",
+                    "fuente": "proveedor-sismos",
+                    "ocurrido_en": "2026-10-23T14:05:00Z",
+                    "tipo": "sismo"
+                  }
+                ],
+                "properties": {
+                  "evento_id": {
+                    "title": "Evento Id",
+                    "type": "string"
+                  },
+                  "tipo": {
+                    "title": "Tipo",
+                    "type": "string"
+                  },
+                  "fuente": {
+                    "title": "Fuente",
+                    "type": "string"
+                  },
+                  "ocurrido_en": {
+                    "title": "Ocurrido En",
+                    "type": "string"
+                  },
+                  "datos": {
+                    "additionalProperties": true,
+                    "title": "Datos",
+                    "type": "object"
+                  },
+                  "poliza_id": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Poliza Id"
+                  }
+                },
+                "required": [
+                  "evento_id",
+                  "tipo",
+                  "fuente",
+                  "ocurrido_en",
+                  "datos"
+                ],
+                "title": "EventoIn",
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/siniestros/eventos/resumen": {
+      "get": {
+        "tags": [
+          "siniestros"
+        ],
+        "summary": "Conteos de eventos recibidos, publicados y procesados (verificación de ráfagas)",
+        "operationId": "resumen_v1_siniestros_eventos_resumen_get",
+        "parameters": [
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumenOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AcuseOut": {
+        "properties": {
+          "evento_uuid": {
+            "type": "string",
+            "title": "Evento Uuid"
+          },
+          "evento_id": {
+            "type": "string",
+            "title": "Evento Id"
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "duplicado": {
+            "type": "boolean",
+            "title": "Duplicado"
+          },
+          "recibido_en": {
+            "type": "string",
+            "title": "Recibido En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "evento_uuid",
+          "evento_id",
+          "estado",
+          "duplicado",
+          "recibido_en"
+        ],
+        "title": "AcuseOut"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ResumenOut": {
+        "properties": {
+          "recibidos": {
+            "type": "integer",
+            "title": "Recibidos"
+          },
+          "rechazados": {
+            "type": "integer",
+            "title": "Rechazados"
+          },
+          "publicados": {
+            "type": "integer",
+            "title": "Publicados"
+          },
+          "procesados": {
+            "type": "integer",
+            "title": "Procesados"
+          },
+          "reentregas": {
+            "type": "integer",
+            "title": "Reentregas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recibidos",
+          "rechazados",
+          "publicados",
+          "procesados",
+          "reentregas"
+        ],
+        "title": "ResumenOut"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

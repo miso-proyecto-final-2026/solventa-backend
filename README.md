@@ -10,6 +10,7 @@ services/
   cotizacion/    MS Cotización   HU09–HU14, HU37–HU38 (proveedores de datos, perfil, motor de rating)
   perfilamiento/ MS Perfilamiento HU23 (enriquecimiento del perfil de riesgo, linaje)
   suscripcion/   MS Suscripción   HU15 (saga de suscripción: decisión automática; cobro, firma y emisión llegan con HU18, HU21 y HU20)
+  siniestros/    MS Siniestros   HU27 (recepción de eventos paramétricos; HU28 validará la condición)
 docs/adr/        decisiones de arquitectura (compartidas)
 pyproject.toml   configuración de ruff
 requirements-dev.txt   dependencias de prueba comunes
@@ -28,7 +29,7 @@ Los demás servicios del ADR (Perfilamiento, Suscripción, Pagos, Siniestros, So
 ## Trabajar con un servicio
 
 ```bash
-cd services/identidad          # o services/cotizacion, services/perfilamiento, services/suscripcion
+cd services/identidad          # o services/cotizacion, services/perfilamiento, services/suscripcion, services/siniestros
 pip install -r requirements.txt -r ../../requirements-dev.txt
 pytest                         # pruebas de ese servicio
 uvicorn app.main:app --reload
@@ -65,6 +66,9 @@ El CI corre `test` y `build` en matriz por servicio.
 | `PERFILAMIENTO_URL`, `PERFILAMIENTO_SERVICE_KEY` | suscripcion | MS Perfilamiento y su clave de servicio (debe estar en su `PERFILAMIENTO_API_KEYS`). Si Perfilamiento no responde, el caso se deriva a revisión asistida. |
 | `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SEGURIDAD`, `AWS_REGION` | suscripcion | Brokers de MSK que la plataforma inyecta al servicio, `IAM` (por defecto) o `PLAINTEXT`, y la región para firmar. Sin brokers solo se arranca en modo desarrollo, con un publicador en memoria. Ver ADR-0010. |
 | `SUSCRIPCION_ESPERA_BARRIDO_S`, `SUSCRIPCION_TIMEOUT_S` | suscripcion | Segundos tras los que el barrido retoma una saga sin decidir (30) y timeout de las llamadas a servicios vecinos (2). |
+| `SINIESTROS_DATABASE_URL` | siniestros | Base de datos PostgreSQL (esquema `siniestros`, Alembic). Obligatoria fuera de desarrollo; admite `DATABASE_URL`. |
+| `SINIESTROS_API_KEYS` | siniestros | Llaves de los proveedores de eventos en `X-Service-Key`, como pares `fuente=clave` separados por coma; el evento debe traer esa misma `fuente`. Una clave sin nombre (la que entrega la plataforma en staging) es de la fuente `proveedor-simulado`. Vacía = nadie accede. Debe venir de un secreto. |
+| `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SEGURIDAD` | siniestros | Brokers de MSK (los inyecta la plataforma a los servicios con `eventos`) y `IAM` (por defecto) o `PLAINTEXT` (solo local). Obligatorias fuera de desarrollo; sin ellas, en desarrollo se publica en memoria y no hay consumidor. Ver ADR-0010 y ADR-0011. |
 | `TRAZA_COLA_MAX`, `TRAZA_REINTENTOS` | cotizacion | Cola en memoria de la trazabilidad de consultas (10.000 por defecto) y reintentos de escritura (3). Ver ADR-0007. |
 | `ASESOR_JWT_SECRETO` | identidad, cotizacion | Secreto HS256 con el que Identidad firma y Cotización valida el token del asesor (HU38, ADR-0008). **Debe ser el mismo en ambos** y venir de un secreto. Sin él solo arranca con `SOLVENTA_MODO_DESARROLLO=1` (secreto fijo de desarrollo). |
 | `ASESOR_JWT_TTL_MIN` | identidad | Vida del token del asesor en minutos (30 por defecto). |
