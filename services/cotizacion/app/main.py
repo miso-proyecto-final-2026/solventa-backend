@@ -16,6 +16,8 @@ from app.cotizacion.niveles import ClasificadorSenales
 from app.cotizacion.perfil import AdaptadorPerfilProveedores
 from app.cotizacion.reglas import cargar_reglas
 from app.cotizacion.wiring import construir_servicio_cotizacion
+from app.metricas import MiddlewareSolicitudesEnCurso
+from app.metricas import router as metricas_router
 from app.proveedores.api import router as perfiles_router
 from app.proveedores.wiring import construir_servicio
 
@@ -54,8 +56,11 @@ app.include_router(perfiles_router)
 app.include_router(cotizaciones_router)
 app.include_router(catalogo_router)
 app.include_router(asesor_router)
+app.include_router(metricas_router)
 registrar_errores(app)
 app.add_middleware(MiddlewareCorrelacion)
+# El último middleware añadido es el más externo: cuenta la solicitud completa (HA03, ADR-0014).
+app.add_middleware(MiddlewareSolicitudesEnCurso)
 
 
 @app.get("/health")
