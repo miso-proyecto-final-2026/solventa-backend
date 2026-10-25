@@ -52,3 +52,16 @@ def test_la_aplicacion_arranca_y_responde_health(monkeypatch):
         assert cliente.get("/health").json() == {"status": "ok"}
         r = cliente.post("/v1/suscripciones", json={"cotizacion_id": "x", "metodo_pago": "t", "acepta_terminos": True})
         assert r.status_code == 401 and r.json()["error"]["code"] == "NO_AUTENTICADO"
+
+
+async def test_con_brokers_se_arma_el_consumidor_de_resultados_de_pagos(monkeypatch):
+    from app.suscripcion.repositorio import crear_engine
+    from app.suscripcion.wiring import construir_consumidor_cobros
+
+    engine = crear_engine("sqlite://")
+    monkeypatch.delenv("KAFKA_BOOTSTRAP_SERVERS", raising=False)
+    assert construir_consumidor_cobros(engine, PublicadorMemoria()) is None
+    monkeypatch.setenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+    monkeypatch.setenv("KAFKA_SEGURIDAD", "PLAINTEXT")
+    consumidor = construir_consumidor_cobros(engine, PublicadorMemoria())
+    assert (consumidor._topic, consumidor._grupo) == ("solventa.pagos.resultados", "solventa-suscripcion.pagos")

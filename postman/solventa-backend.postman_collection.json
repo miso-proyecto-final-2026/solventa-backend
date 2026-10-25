@@ -6061,6 +6061,613 @@
           }
         }
       ]
+    },
+    {
+      "name": "MS Pagos (HU18)",
+      "description": "Servicio interno (sin borde público): todas las rutas exigen `X-Service-Key`. En staging se llega por `kubectl port-forward` (ver README). La pasarela es el simulador: el prefijo del token elige el modo (`tok_sim_rechazar_…`, `tok_sim_perder_…`, `tok_sim_tardar_…`). Nunca se envía un número de tarjeta.",
+      "item": [
+        {
+          "name": "Salud",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{pagos_url}}/health",
+              "host": [
+                "{{pagos_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Liveness."
+          }
+        },
+        {
+          "name": "Tokenizar - token de la pasarela",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "const t = pm.response.json();",
+                  "pm.test('marca y últimos 4, sin el token', () => { pm.expect(t.ultimos4).to.match(/^\\d{4}$/); pm.expect(t.marca).to.be.a('string'); });",
+                  "pm.test('no devuelve el token', () => pm.expect(pm.response.text()).to.not.include('tok_sim_'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{pagos_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{pagos_url}}/v1/pagos/tokenizar",
+              "host": [
+                "{{pagos_url}}"
+              ],
+              "path": [
+                "v1",
+                "pagos",
+                "tokenizar"
+              ]
+            },
+            "description": "Registra un token emitido por la pasarela (SAQ-A). Devuelve marca y últimos 4; nunca el token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"tok_sim_postman_{{$randomInt}}\",\n  \"cliente_id\": \"cliente-postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Tokenizar - número de tarjeta (rechazado)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('código propio y sin eco del dato', () => { pm.expect(pm.response.json().error.code).to.eql('DATO_DE_TARJETA_NO_PERMITIDO'); pm.expect(pm.response.text()).to.not.include('4111111111111111'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{pagos_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{pagos_url}}/v1/pagos/tokenizar",
+              "host": [
+                "{{pagos_url}}"
+              ],
+              "path": [
+                "v1",
+                "pagos",
+                "tokenizar"
+              ]
+            },
+            "description": "Número de prueba público de Visa: Solventa no acepta PAN, solo tokens.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"4111111111111111\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cobrar prima - aprobado",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('pagos_suscripcion_id', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "const tx = pm.response.json();",
+                  "pm.test('COBRO_PRIMA aprobado con referencia', () => { pm.expect(tx.tipo).to.eql('COBRO_PRIMA'); pm.expect(tx.estado).to.eql('APROBADA'); pm.expect(tx.referencia_pasarela).to.be.a('string'); pm.expect(tx.monto).to.eql('175000.00'); });",
+                  "pm.test('no devuelve el token', () => pm.expect(pm.response.text()).to.not.include('tok_sim_'));",
+                  "pm.collectionVariables.set('transaccion_id', tx.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{pagos_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{pagos_url}}/v1/pagos/cobros",
+              "host": [
+                "{{pagos_url}}"
+              ],
+              "path": [
+                "v1",
+                "pagos",
+                "cobros"
+              ]
+            },
+            "description": "Entrada interna equivalente al evento `cobro_prima_solicitado`. Sin `Idempotency-Key` se usa `cobro_prima:<suscripcion_id>`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"suscripcion_id\": \"{{pagos_suscripcion_id}}\",\n  \"cliente_id\": \"cliente-postman\",\n  \"metodo_pago\": \"tok_sim_postman_ok\",\n  \"monto\": \"175000.00\",\n  \"periodicidad_pago\": \"ANUAL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cobrar prima - repetir (idempotencia)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('misma transacción, sin cobrar otra vez', () => { pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('transaccion_id')); pm.expect(pm.response.headers.get('Idempotent-Replay')).to.eql('true'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{pagos_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{pagos_url}}/v1/pagos/cobros",
+              "host": [
+                "{{pagos_url}}"
+              ],
+              "path": [
+                "v1",
+                "pagos",
+                "cobros"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"suscripcion_id\": \"{{pagos_suscripcion_id}}\",\n  \"cliente_id\": \"cliente-postman\",\n  \"metodo_pago\": \"tok_sim_postman_ok\",\n  \"monto\": \"175000.00\",\n  \"periodicidad_pago\": \"ANUAL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cobrar prima - misma clave con otro monto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('clave reutilizada', () => pm.expect(pm.response.json().error.code).to.eql('CLAVE_IDEMPOTENCIA_REUTILIZADA'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{pagos_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{pagos_url}}/v1/pagos/cobros",
+              "host": [
+                "{{pagos_url}}"
+              ],
+              "path": [
+                "v1",
+                "pagos",
+                "cobros"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"suscripcion_id\": \"{{pagos_suscripcion_id}}\",\n  \"cliente_id\": \"cliente-postman\",\n  \"metodo_pago\": \"tok_sim_postman_ok\",\n  \"monto\": \"1.00\",\n  \"periodicidad_pago\": \"ANUAL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cobrar prima - rechazado",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('pagos_suscripcion_id', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "const tx = pm.response.json();",
+                  "pm.test('rechazo con código, motivo y período de gracia', () => { pm.expect(tx.estado).to.eql('RECHAZADA'); pm.expect(tx.rechazo.codigo).to.eql('FONDOS_INSUFICIENTES'); pm.expect(tx.gracia_hasta).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{pagos_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{pagos_url}}/v1/pagos/cobros",
+              "host": [
+                "{{pagos_url}}"
+              ],
+              "path": [
+                "v1",
+                "pagos",
+                "cobros"
+              ]
+            },
+            "description": "El prefijo `tok_sim_rechazar_` hace que el simulador rechace.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"suscripcion_id\": \"{{pagos_suscripcion_id}}\",\n  \"cliente_id\": \"cliente-postman\",\n  \"metodo_pago\": \"tok_sim_rechazar_postman\",\n  \"monto\": \"175000.00\",\n  \"periodicidad_pago\": \"ANUAL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cobrar prima - respuesta perdida",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('pagos_suscripcion_id', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 202', () => pm.response.to.have.status(202));",
+                  "pm.test('queda PENDIENTE para conciliar', () => pm.expect(pm.response.json().estado).to.eql('PENDIENTE'));",
+                  "pm.collectionVariables.set('transaccion_perdida_id', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{pagos_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{pagos_url}}/v1/pagos/cobros",
+              "host": [
+                "{{pagos_url}}"
+              ],
+              "path": [
+                "v1",
+                "pagos",
+                "cobros"
+              ]
+            },
+            "description": "El simulador cobra y pierde la respuesta. El procesador concilia en segundo plano (`PAGOS_REINTENTO_BASE_S`, 5 s por defecto): consulte la transacción después y debe estar APROBADA con un solo cargo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"suscripcion_id\": \"{{pagos_suscripcion_id}}\",\n  \"cliente_id\": \"cliente-postman\",\n  \"metodo_pago\": \"tok_sim_perder_postman\",\n  \"monto\": \"175000.00\",\n  \"periodicidad_pago\": \"ANUAL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Consultar transacción",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('estado de la transacción', () => pm.expect(pm.response.json().estado).to.eql('APROBADA'));",
+                  "pm.test('no devuelve el token', () => pm.expect(pm.response.text()).to.not.include('tok_sim_'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{pagos_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{pagos_url}}/v1/pagos/transacciones/{{transaccion_id}}",
+              "host": [
+                "{{pagos_url}}"
+              ],
+              "path": [
+                "v1",
+                "pagos",
+                "transacciones",
+                "{{transaccion_id}}"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Consultar transacción - sin clave",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('formato estándar', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('NO_AUTENTICADO'); pm.expect(e.trace_id).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{pagos_url}}/v1/pagos/transacciones/{{transaccion_id}}",
+              "host": [
+                "{{pagos_url}}"
+              ],
+              "path": [
+                "v1",
+                "pagos",
+                "transacciones",
+                "{{transaccion_id}}"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Consultar transacción - clave ajena",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "no-es-la-clave",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{pagos_url}}/v1/pagos/transacciones/{{transaccion_id}}",
+              "host": [
+                "{{pagos_url}}"
+              ],
+              "path": [
+                "v1",
+                "pagos",
+                "transacciones",
+                "{{transaccion_id}}"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Consultar transacción - inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('código propio', () => pm.expect(pm.response.json().error.code).to.eql('TRANSACCION_NO_ENCONTRADA'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{pagos_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{pagos_url}}/v1/pagos/transacciones/no-existe",
+              "host": [
+                "{{pagos_url}}"
+              ],
+              "path": [
+                "v1",
+                "pagos",
+                "transacciones",
+                "no-existe"
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
     }
   ],
   "variable": [
@@ -6206,6 +6813,31 @@
     },
     {
       "key": "evento_uuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "pagos_url",
+      "value": "http://localhost:8005",
+      "type": "string"
+    },
+    {
+      "key": "pagos_key",
+      "value": "dev-pagos-key",
+      "type": "string"
+    },
+    {
+      "key": "pagos_suscripcion_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "transaccion_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "transaccion_perdida_id",
       "value": "",
       "type": "string"
     }

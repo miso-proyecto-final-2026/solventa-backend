@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Header, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -37,6 +37,9 @@ class SuscripcionIn(BaseModel):
     cotizacion_id: str = Field(min_length=1, max_length=36)
     metodo_pago: str = Field(min_length=1, max_length=200, description="Token de la pasarela; nunca el número de tarjeta")
     acepta_terminos: bool
+    periodicidad_pago: Literal["ANUAL", "MENSUAL"] = Field(
+        default="ANUAL", description="Cómo paga el cliente; se cobra el primer período (HU18)"
+    )
 
 
 class DecisionOut(BaseModel):
@@ -48,6 +51,18 @@ class DecisionOut(BaseModel):
     duracion_decision_ms: int | None
 
 
+class CobroOut(BaseModel):
+    """Resultado del paso COBRO según MS Pagos. Nunca incluye el token ni datos de la tarjeta."""
+
+    estado: str
+    transaccion_id: str | None
+    referencia_pasarela: str | None
+    codigo: str | None
+    motivo: str | None
+    gracia_hasta: datetime | None
+    resuelto_en: datetime | None
+
+
 class SuscripcionOut(BaseModel):
     id: str
     cotizacion_id: str
@@ -57,7 +72,9 @@ class SuscripcionOut(BaseModel):
     producto: str
     moneda: str
     monto_asegurado: int
+    periodicidad_pago: str
     decision: DecisionOut | None
+    cobro: CobroOut | None
     revision_asistida: bool
     creada_en: datetime
 
@@ -73,6 +90,17 @@ def a_salida(s: SuscripcionDB, revision: bool) -> SuscripcionOut:
             decidido_en=s.decidido_en,
             duracion_decision_ms=s.duracion_decision_ms,
         )
+    cobro = None
+    if s.cobro_estado is not None:
+        cobro = CobroOut(
+            estado=s.cobro_estado,
+            transaccion_id=s.cobro_transaccion_id,
+            referencia_pasarela=s.cobro_referencia,
+            codigo=s.cobro_codigo,
+            motivo=s.cobro_motivo,
+            gracia_hasta=s.cobro_gracia_hasta,
+            resuelto_en=s.cobro_resuelto_en,
+        )
     return SuscripcionOut(
         id=s.id,
         cotizacion_id=s.cotizacion_id,
@@ -82,7 +110,9 @@ def a_salida(s: SuscripcionDB, revision: bool) -> SuscripcionOut:
         producto=s.producto,
         moneda=s.moneda,
         monto_asegurado=int(s.monto_asegurado),
+        periodicidad_pago=s.periodicidad_pago,
         decision=decision,
+        cobro=cobro,
         revision_asistida=revision,
         creada_en=s.created_at,
     )
@@ -121,6 +151,7 @@ async def iniciar(
         cotizacion_id=cuerpo.cotizacion_id,
         metodo_pago=cuerpo.metodo_pago,
         acepta_terminos=cuerpo.acepta_terminos,
+        periodicidad_pago=cuerpo.periodicidad_pago,
     )
     if creada:
         _decidir_en_segundo_plano(request, susc.id)
