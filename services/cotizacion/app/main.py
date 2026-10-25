@@ -16,6 +16,7 @@ from app.cotizacion.niveles import ClasificadorSenales
 from app.cotizacion.perfil import AdaptadorPerfilProveedores
 from app.cotizacion.reglas import cargar_reglas
 from app.cotizacion.wiring import construir_servicio_cotizacion
+from app.logs import configurar_logs
 from app.proveedores.api import router as perfiles_router
 from app.proveedores.wiring import construir_servicio
 
@@ -48,6 +49,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await servicio.cerrar()
         engine_cotizacion.dispose()
 
+
+configurar_logs()
 
 app = FastAPI(title="Solventa — MS Cotización", version="0.1.0", lifespan=lifespan)
 app.include_router(perfiles_router)

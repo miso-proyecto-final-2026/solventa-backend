@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime
 
 import pytest
@@ -262,3 +263,31 @@ def test_consulta_inexistente_es_404_con_formato_estandar(entorno):
 
 def test_id_demasiado_largo_es_422(entorno):
     assert entorno().client.get("/v1/cotizaciones/" + "x" * 40).status_code == 422
+
+
+def test_al_emitir_deja_un_log_con_el_id_el_producto_y_la_prima(entorno, caplog):
+    e = entorno(reloj=lambda: AHORA)
+
+    with caplog.at_level(logging.INFO, logger="cotizacion.emision"):
+        c = e.client.post("/v1/cotizaciones", json=VIDA).json()
+
+    mensajes = [
+        r.getMessage() for r in caplog.records if r.name == "cotizacion.emision"
+    ]
+    assert mensajes == [
+        f"cotizacion_emitida id={c['id']} producto=microseguro_vida prima_anual=175000 degradado=False"
+    ]
+
+
+def test_el_log_de_emision_no_lleva_datos_personales_ni_de_la_solicitud(
+    entorno, caplog
+):
+    e = entorno(reloj=lambda: AHORA)
+
+    with caplog.at_level(logging.DEBUG):
+        e.client.post("/v1/cotizaciones", json=VIDA)
+
+    volcado = caplog.text
+    # cliente_id, edad y suma asegurada son datos del cliente: no deben aparecer en ningún log.
+    assert "cli-1" not in volcado
+    assert "50000000" not in volcado

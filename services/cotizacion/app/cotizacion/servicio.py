@@ -37,6 +37,7 @@ from app.cotizacion.repositorio import RepositorioCotizaciones, RepositorioTraza
 from app.proveedores.dominio import RegistroTrazabilidad
 
 log = logging.getLogger("cotizacion.latencia")
+log_emision = logging.getLogger("cotizacion.emision")
 
 
 def _ahora() -> datetime:
@@ -124,6 +125,14 @@ class ServicioCotizacion:
             emitida, hit_cache=perfil.hit_cache, latencia_interna_ms=latencia_ms
         )
         await self._registrar_latencia(emitida)
+        # Solo datos de la cotización emitida: nunca el cliente ni los datos que envió.
+        log_emision.info(
+            "cotizacion_emitida id=%s producto=%s prima_anual=%s degradado=%s",
+            emitida.id,
+            emitida.producto,
+            emitida.prima_anual,
+            emitida.degradado,
+        )
         return emitida
 
     async def _registrar_latencia(self, c: CotizacionEmitida) -> None:
