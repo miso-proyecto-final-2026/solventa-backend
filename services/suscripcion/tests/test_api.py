@@ -109,3 +109,38 @@ async def test_get_de_otra_suscripcion_o_inexistente_es_404(cliente):
     r = await cliente.get("/v1/suscripciones/no-existe", headers=CABECERAS)
     assert (r.status_code, r.json()["error"]["code"]) == (404, "SUSCRIPCION_NO_ENCONTRADA")
     assert (await cliente.get("/v1/suscripciones/x")).status_code == 401
+
+
+# --- HU18: periodicidad de pago y resultado del cobro --------------------------------------------------------
+
+async def test_la_periodicidad_es_opcional_y_por_defecto_anual(cliente):
+    r = await cliente.post("/v1/suscripciones", json=CUERPO, headers=CABECERAS)
+    assert (r.status_code, r.json()["periodicidad_pago"], r.json()["cobro"]) == (202, "ANUAL", None)
+
+
+async def test_el_cliente_puede_elegir_pago_mensual(cliente):
+    r = await cliente.post("/v1/suscripciones", json={**CUERPO, "periodicidad_pago": "MENSUAL"}, headers=CABECERAS)
+    assert (r.status_code, r.json()["periodicidad_pago"]) == (202, "MENSUAL")
+
+
+async def test_una_periodicidad_invalida_responde_422(cliente):
+    r = await cliente.post("/v1/suscripciones", json={**CUERPO, "periodicidad_pago": "SEMANAL"}, headers=CABECERAS)
+    assert (r.status_code, r.json()["error"]["code"]) == (422, "VALIDATION_ERROR")
+    assert r.json()["error"]["details"][0]["campo"] == "periodicidad_pago"
+
+
+async def test_get_muestra_el_resultado_del_cobro_sin_datos_de_tarjeta(cliente, fabrica):
+    from app.suscripcion.cobros import manejar_resultado_cobro
+
+    from tests.test_cobros import _resultado
+
+    r = await cliente.post("/v1/suscripciones", json=CUERPO, headers=CABECERAS)
+    await _esperar_tareas(cliente)
+    with fabrica() as s, s.begin():
+        await manejar_resultado_cobro(_resultado(r.json()["id"], "cobro_prima_rechazado", codigo="FONDOS_INSUFICIENTES"), s)
+
+    g = (await cliente.get(f"/v1/suscripciones/{r.json()['id']}", headers=CABECERAS)).json()
+
+    assert (g["estado_saga"], g["paso_actual"]) == ("APROBADA", "COBRO")
+    assert (g["cobro"]["estado"], g["cobro"]["codigo"], g["cobro"]["transaccion_id"]) == ("RECHAZADO", "FONDOS_INSUFICIENTES", "tx-1")
+    assert "tok_visa_123" not in str(g)

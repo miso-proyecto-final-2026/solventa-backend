@@ -9,6 +9,7 @@ import asyncio
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
@@ -37,10 +38,21 @@ log = logging.getLogger("suscripcion")
 
 FUENTE = "ms-suscripcion"
 REDACTADO = "[redactado]"
+PERIODICIDADES = ("ANUAL", "MENSUAL")
 
 
 def _ahora() -> datetime:
     return datetime.now(UTC)
+
+
+def monto_a_cobrar(susc: SuscripcionDB) -> Decimal:
+    """El primer período de la periodicidad elegida: la prima mensual o la anual."""
+    return Decimal(susc.prima_mensual if susc.periodicidad_pago == "MENSUAL" else susc.prima_anual)
+
+
+def clave_cobro(suscripcion_id: str) -> str:
+    """Clave de idempotencia del cobro de la prima en MS Pagos: una saga, un cobro."""
+    return f"cobro_prima:{suscripcion_id}"
 
 
 def redactar(sobre: dict[str, Any]) -> dict[str, Any]:
@@ -72,7 +84,14 @@ class ServicioSuscripcion:
     # --- iniciar ------------------------------------------------------------------------------------------------
 
     async def iniciar(
-        self, *, token: str | None, clave: str | None, cotizacion_id: str, metodo_pago: str, acepta_terminos: bool
+        self,
+        *,
+        token: str | None,
+        clave: str | None,
+        cotizacion_id: str,
+        metodo_pago: str,
+        acepta_terminos: bool,
+        periodicidad_pago: str = "ANUAL",
     ) -> tuple[SuscripcionDB, bool]:
         """Devuelve (suscripción, creada). `creada=False` si la clave ya existía: se devuelve la misma sin tocar nada."""
         if not token:
@@ -84,6 +103,8 @@ class ServicioSuscripcion:
             raise SolicitudInvalida(detalles=[{"campo": "Idempotency-Key", "motivo": "es obligatoria (1 a 100 caracteres)"}])
         if not acepta_terminos:
             raise SolicitudInvalida(detalles=[{"campo": "acepta_terminos", "motivo": "debe ser true"}])
+        if periodicidad_pago not in PERIODICIDADES:
+            raise SolicitudInvalida(detalles=[{"campo": "periodicidad_pago", "motivo": "debe ser ANUAL o MENSUAL"}])
 
         existente = await asyncio.to_thread(self._por_clave, cliente_id, clave)
         if existente is not None:
@@ -98,7 +119,9 @@ class ServicioSuscripcion:
             raise CotizacionVencida
 
         try:
-            creada = await asyncio.to_thread(self._crear, cliente_id, clave, cotizacion, metodo_pago, ahora)
+            creada = await asyncio.to_thread(
+                self._crear, cliente_id, clave, cotizacion, metodo_pago, periodicidad_pago, ahora
+            )
         except IntegrityError:
             creada = None
         if creada is not None:
@@ -119,7 +142,9 @@ class ServicioSuscripcion:
         with self._fabrica() as s:
             return repo.buscar_por_clave(s, cliente_id, clave)
 
-    def _crear(self, cliente_id: str, clave: str, c: Any, metodo_pago: str, ahora: datetime) -> SuscripcionDB | None:
+    def _crear(
+        self, cliente_id: str, clave: str, c: Any, metodo_pago: str, periodicidad_pago: str, ahora: datetime
+    ) -> SuscripcionDB | None:
         with self._fabrica() as s, s.begin():
             if repo.buscar_activa_por_cotizacion(s, c.id) is not None:
                 return None
@@ -137,6 +162,7 @@ class ServicioSuscripcion:
                 ahora=ahora,
                 correlacion_id=correlacion_id.get(),
                 metodo_pago_token=metodo_pago,
+                periodicidad_pago=periodicidad_pago,
             )
 
     # --- consultar ----------------------------------------------------------------------------------------------
@@ -210,8 +236,13 @@ class ServicioSuscripcion:
                     s, susc, "cobro_prima_solicitado", TOPIC_COMANDOS, ahora,
                     {
                         "moneda": susc.moneda,
+                        # Se conservan las dos primas por compatibilidad con consumidores de HU15.
                         "prima_mensual": int(susc.prima_mensual),
                         "prima_anual": int(susc.prima_anual),
+                        # HU18: lo que se cobra (el primer período de la periodicidad elegida) y la clave del cobro.
+                        "periodicidad_pago": susc.periodicidad_pago,
+                        "monto": f"{monto_a_cobrar(susc):.2f}",
+                        "idempotency_key": clave_cobro(susc.id),
                         "metodo_pago": susc.metodo_pago_token,
                     },
                 )

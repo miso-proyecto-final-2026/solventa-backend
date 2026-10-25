@@ -9,14 +9,15 @@ services/
   identidad/     MS Identidad    HU01–HU08 (registro, KYC, consentimiento)
   cotizacion/    MS Cotización   HU09–HU14, HU37–HU38 (proveedores de datos, perfil, motor de rating)
   perfilamiento/ MS Perfilamiento HU23 (enriquecimiento del perfil de riesgo, linaje)
-  suscripcion/   MS Suscripción   HU15 (saga de suscripción: decisión automática; cobro, firma y emisión llegan con HU18, HU21 y HU20)
+  suscripcion/   MS Suscripción   HU15 y HU18 (saga de suscripción: decisión automática y paso de cobro; firma y emisión llegan con HU21 y HU20)
   siniestros/    MS Siniestros   HU27 (recepción de eventos paramétricos; HU28 validará la condición)
+  pagos/         MS Pagos        HU18 (cobro de la prima con pasarela simulada, idempotencia y conciliación)
 docs/adr/        decisiones de arquitectura (compartidas)
 pyproject.toml   configuración de ruff
 requirements-dev.txt   dependencias de prueba comunes
 ```
 
-Los demás servicios del ADR (Perfilamiento, Suscripción, Pagos, Siniestros, Socios) se agregan como
+Los demás servicios del ADR (hoy solo Socios) se agregan como
 `services/<nombre>/` con la misma forma.
 
 ## Reglas de frontera
@@ -29,7 +30,7 @@ Los demás servicios del ADR (Perfilamiento, Suscripción, Pagos, Siniestros, So
 ## Trabajar con un servicio
 
 ```bash
-cd services/identidad          # o services/cotizacion, services/perfilamiento, services/suscripcion, services/siniestros
+cd services/identidad          # o services/cotizacion, services/perfilamiento, services/suscripcion, services/siniestros, services/pagos
 pip install -r requirements.txt -r ../../requirements-dev.txt
 pytest                         # pruebas de ese servicio
 uvicorn app.main:app --reload
@@ -69,6 +70,13 @@ El CI corre `test` y `build` en matriz por servicio.
 | `SINIESTROS_DATABASE_URL` | siniestros | Base de datos PostgreSQL (esquema `siniestros`, Alembic). Obligatoria fuera de desarrollo; admite `DATABASE_URL`. |
 | `SINIESTROS_API_KEYS` | siniestros | Llaves de los proveedores de eventos en `X-Service-Key`, como pares `fuente=clave` separados por coma; el evento debe traer esa misma `fuente`. Una clave sin nombre (la que entrega la plataforma en staging) es de la fuente `proveedor-simulado`. Vacía = nadie accede. Debe venir de un secreto. |
 | `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SEGURIDAD` | siniestros | Brokers de MSK (los inyecta la plataforma a los servicios con `eventos`) y `IAM` (por defecto) o `PLAINTEXT` (solo local). Obligatorias fuera de desarrollo; sin ellas, en desarrollo se publica en memoria y no hay consumidor. Ver ADR-0010 y ADR-0011. |
+| `PAGOS_DATABASE_URL` | pagos | Base de datos PostgreSQL (esquema `pagos`, Alembic). Obligatoria fuera de desarrollo; admite `DATABASE_URL`. |
+| `PAGOS_API_KEYS` | pagos | Claves de servicio en `X-Service-Key` (pares `nombre=clave` separados por coma; sin nombre, «servicio») para `POST /v1/pagos/cobros`, `POST /v1/pagos/tokenizar` y `GET /v1/pagos/transacciones/{id}`. Vacía = nadie accede. Debe venir de un secreto. |
+| `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SEGURIDAD`, `AWS_REGION` | pagos | Como en suscripción. Con brokers, Pagos consume `solventa.suscripcion.comandos` (grupo `solventa-pagos.cobros`) y publica en `solventa.pagos.resultados`; sin ellos solo arranca en desarrollo, sin consumidor. |
+| `PASARELA_PROVEEDOR`, `PASARELA_TIMEOUT_S` | pagos | Adaptador de pasarela (`simulador`, el único hoy; ADR-0004 y ADR-0014) y tiempo máximo de espera de su respuesta (5 s). |
+| `PASARELA_SIM_MODO`, `PASARELA_SIM_DEMORA_S` | pagos | Modo por defecto del simulador (`APROBAR`, `RECHAZAR`, `TARDAR`, `PERDER_RESPUESTA`) y demora del modo `TARDAR` (10 s). Ver `services/pagos/README.md`. |
+| `PERIODO_GRACIA_DIAS` | pagos | Días del período de gracia tras un rechazo. **Provisional** (3 por defecto) hasta que negocio lo confirme; la gestión es de HU19. |
+| `PAGOS_REINTENTO_BASE_S`, `PAGOS_REINTENTO_MAXIMO_S` | pagos | Espera antes de reintentar o conciliar un cobro sin respuesta (5 s, se duplica en cada intento, tope 300 s). |
 | `TRAZA_COLA_MAX`, `TRAZA_REINTENTOS` | cotizacion | Cola en memoria de la trazabilidad de consultas (10.000 por defecto) y reintentos de escritura (3). Ver ADR-0007. |
 | `ASESOR_JWT_SECRETO` | identidad, cotizacion | Secreto HS256 con el que Identidad firma y Cotización valida el token del asesor (HU38, ADR-0008). **Debe ser el mismo en ambos** y venir de un secreto. Sin él solo arranca con `SOLVENTA_MODO_DESARROLLO=1` (secreto fijo de desarrollo). |
 | `ASESOR_JWT_TTL_MIN` | identidad | Vida del token del asesor en minutos (30 por defecto). |

@@ -4,6 +4,7 @@
     { "carpeta": "identidad", "servicio": "solventa-identidad" },
     { "carpeta": "perfilamiento", "servicio": "solventa-perfilamiento" },
     { "carpeta": "suscripcion", "servicio": "solventa-suscripcion" },
-    { "carpeta": "siniestros", "servicio": "solventa-siniestros" }
+    { "carpeta": "siniestros", "servicio": "solventa-siniestros" },
+    { "carpeta": "pagos", "servicio": "solventa-pagos" }
   ]
 }

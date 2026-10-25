@@ -1,0 +1,24 @@
+{
+  "event_id": "62cbfcb6-a77b-4609-8f6a-c03d94f19bd7",
+  "event_type": "cobro_prima_confirmado",
+  "source": "ms-pagos",
+  "timestamp": "2026-10-25T12:00:00Z",
+  "correlation_id": "20b35e50-c0ac-4576-8a58-44fe60dc339f",
+  "trace_id": "783587f0-e7d6-4bbb-9c51-7d5af24986b2",
+  "version": "1.0",
+  "payload": {
+    "transaccion_id": "286098c7-10a5-4831-8c7d-c972e70acf4e",
+    "suscripcion_id": "20b35e50-c0ac-4576-8a58-44fe60dc339f",
+    "cliente_id": "cli-1",
+    "idempotency_key": "cobro_prima:20b35e50-c0ac-4576-8a58-44fe60dc339f",
+    "tipo": "COBRO_PRIMA",
+    "estado": "APROBADA",
+    "monto": "175000.00",
+    "moneda": "COP",
+    "periodicidad_pago": "ANUAL",
+    "referencia_pasarela": "sim_d968d302543613ce36b3",
+    "ultimos4": "0757",
+    "resuelta_en": "2026-10-25T12:00:00+00:00",
+    "repeticion": false
+  }
+}
