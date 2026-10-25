@@ -25,6 +25,11 @@ Además, el servicio no exponía ninguna métrica propia (`/metrics`), y el clú
    - No cuentan `/metrics` ni `/health` (el scrape y los sondeos no son carga de usuario).
    - Sin etiquetas: una sola serie por pod, cardinalidad mínima.
    - Registro propio de `prometheus_client`; `/metrics` queda fuera del contrato OpenAPI.
+   - **Alcance de `/metrics` (aceptado):** no se publica por el borde (el API Gateway solo enruta los prefijos públicos
+     de cada servicio y `solventa-infra` lo impide con una validación), pero **es legible dentro de la VPC**: comparte
+     puerto con la app, así que llega por el NodePort del NLB interno y por el Service del clúster. Se acepta porque es
+     un único gauge, sin etiquetas ni datos de clientes. Servirlo en un puerto aparte, que ningún Service ni NodePort
+     expone (y, con NetworkPolicy, solo Prometheus), queda como mejora futura.
    - Un `Gauge` en memoria basta porque Cotización corre con un solo proceso de uvicorn por pod. Si algún día se usan varios workers, hay que pasar al modo multiproceso de `prometheus_client`.
 2. **Transporte (alternativa A).** Un Prometheus mínimo en el clúster (sin Grafana, Alertmanager ni node-exporter; retención corta en `emptyDir`) recoge `/metrics` de los pods anotados, y **Prometheus Adapter** publica la métrica en la API `custom.metrics.k8s.io` con una regla suavizada: `avg_over_time(http_requests_in_flight[30s])` por pod.
 3. **HPA nativo bajo Terraform** con dos métricas:
@@ -54,13 +59,16 @@ La implementación va en dos PRs: este (señal + ADR) y el de `solventa-infra` (
   - Dos componentes más en el clúster (Prometheus y el adaptador) que consumen recursos de los nodos fijos. Estimación previa, sin medir: del orden de 150 m de CPU y 400 Mi de memoria entre los dos; se mide en kind.
   - La configuración del adaptador es poco legible, aunque para una métrica son pocas líneas.
   - La cadena scrape → promedio de 30 s → ciclo del HPA agrega retraso a la reacción, y consume parte del presupuesto de 60 s del criterio 1.
-- **Seguimiento:** probar la cadena en kind; calibrar el objetivo en el humo de AWS; registrar en este ADR el objetivo final, el intervalo de scrape y la política de subida usados en la medición.
+- **Seguimiento:** puerto aparte para `/metrics` (mejora futura, ver Decisión 1); probar la cadena en kind; calibrar el objetivo en el humo de AWS; registrar en este ADR el objetivo final, el intervalo de scrape y la política de subida usados en la medición.
 
 ## Riesgos
 
 - **Retraso de la señal.** El tiempo de reacción suma el intervalo de scrape, la ventana de 30 s del promedio, el periodo del HPA (15 s por defecto en Kubernetes) y el arranque del pod hasta estar listo. Si no cabe en 60 s, hay que acortar la ventana o el scrape antes que relajar el criterio.
 - **Nodos fijos.** No hay cluster-autoscaler (decisión D6 de la sesión de HA03: `node_count = 6`). Si las 10 réplicas no caben, quedan `Pending` y el escalado se ve limitado por capacidad, no por la métrica; se declara como desviación.
 - **Prometheus sin persistencia.** Si su pod se reinicia, se pierde la historia corta y la métrica no está disponible durante un rato; el HPA marca `ScalingActive=False` para esa métrica y sigue con la CPU.
+- **`/metrics` legible dentro de la VPC.** Cualquier equipo de la VPC que llegue al NodePort, o cualquier pod del
+  clúster, puede leer el gauge. Expone solo cuántas solicitudes atiende el pod en ese momento; riesgo aceptado (ver
+  Decisión 1).
 - **Un solo worker por pod.** Si se cambia el modelo de procesos de uvicorn sin pasar a modo multiproceso, la métrica solo reflejaría un proceso.
 
 ## Supuestos y desviaciones
