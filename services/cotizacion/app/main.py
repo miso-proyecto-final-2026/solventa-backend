@@ -16,9 +16,9 @@ from app.cotizacion.niveles import ClasificadorSenales
 from app.cotizacion.perfil import AdaptadorPerfilProveedores
 from app.cotizacion.reglas import cargar_reglas
 from app.cotizacion.wiring import construir_servicio_cotizacion
-from app.logs import configurar_logs
 from app.proveedores.api import router as perfiles_router
 from app.proveedores.wiring import construir_servicio
+from app.registro_logs import configurar_logs
 
 
 @asynccontextmanager

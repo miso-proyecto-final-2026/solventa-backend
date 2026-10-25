@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from app.logs import configurar_logs
+from app.registro_logs import configurar_logs
 
 
 @pytest.fixture(autouse=True)
