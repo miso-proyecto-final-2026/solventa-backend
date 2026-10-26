@@ -59,7 +59,7 @@ app.include_router(asesor_router)
 app.include_router(metricas_router)
 registrar_errores(app)
 app.add_middleware(MiddlewareCorrelacion)
-# El último middleware añadido es el más externo: cuenta la solicitud completa (HA03, ADR-0014).
+# El último middleware añadido es el más externo: cuenta la solicitud completa (HA03, ADR-0015).
 app.add_middleware(MiddlewareSolicitudesEnCurso)
 
 

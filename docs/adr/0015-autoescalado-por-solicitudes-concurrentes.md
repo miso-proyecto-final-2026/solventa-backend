@@ -1,10 +1,12 @@
-# ADR-0014 — Autoescalado de Cotización por solicitudes concurrentes (Prometheus Adapter + HPA nativo)
+# ADR-0015 — Autoescalado de Cotización por solicitudes concurrentes (Prometheus Adapter + HPA nativo)
 
-- **Estado:** Propuesta (pasa a Aceptada con la medición de HA03 en staging; ver «Condición para aceptar»)
-- **Fecha:** 2026-10-25
+- **Estado:** Propuesta, **no aceptada**. La medición en staging del 2026-10-25 no cumple la «Condición para aceptar»
+  (c4) ni c2 y c3 de HA03. Se mantiene en Propuesta con las decisiones 6 a 8 hasta una nueva medición.
+- **Fecha:** 2026-10-25 (actualizado el mismo día con la medición en staging)
 - **Historia:** HA03 (arquitectura, Sprint 2) — [issue #44](https://github.com/miso-proyecto-final-2026/proyecto-final/issues/44), criterio 4 (métrica del HPA)
-- **Depende de:** [ADR-0001](0001-descomposicion-microservicios-bounded-contexts.md) (Cotización escala de forma independiente y más agresiva que el resto). **Relacionado:** [ADR-0013](0013-cache-aside-circuit-breaker-latencia-cotizacion.md) (el caché es lo que desacopla la CPU del volumen).
-- **Fuente de las cifras:** `solventa-experimentos/docs/resultados-finales-experimentacion.md` (§5, hallazgo transversal de HA02) para la relación CPU/volumen; ADR-0013 (ronda 2 de HA01) para las latencias internas.
+- **Depende de:** [ADR-0001](0001-descomposicion-microservicios-bounded-contexts.md) (Cotización escala de forma independiente y más agresiva que el resto). **Relacionado:** [ADR-0013](0013-cache-aside-circuit-breaker-latencia-cotizacion.md) (el caché es lo que desacopla la CPU del volumen) y [ADR-0016](0016-tolerancia-a-la-caida-de-una-zona.md) (HA04: readiness, timeouts y gauge acotado).
+- **Numeración:** se redactó como ADR-0014; ese número lo tomó en `main` el ADR de MS Pagos (#45), así que pasa a 0015.
+- **Fuente de las cifras:** `solventa-experimentos/docs/resultados-finales-experimentacion.md` (§5, hallazgo transversal de HA02) para la relación CPU/volumen; ADR-0013 (ronda 2 de HA01) para las latencias internas. Medición en staging: `informe-ha03.json` y `sesion.log` de la sesión del 2026-10-25 (paquete de evidencia de `solventa-experimentos/ha03-ha04/resultados/`, fuera de git).
 
 ## Contexto
 
@@ -70,11 +72,31 @@ La implementación va en dos PRs: este (señal + ADR) y el de `solventa-infra` (
   clúster, puede leer el gauge. Expone solo cuántas solicitudes atiende el pod en ese momento; riesgo aceptado (ver
   Decisión 1).
 - **Un solo worker por pod.** Si se cambia el modelo de procesos de uvicorn sin pasar a modo multiproceso, la métrica solo reflejaría un proceso.
+- **Conexiones a la base (observado en el humo de AWS, 2026-10-25).** Cada pod abre hasta 15 conexiones a
+  PostgreSQL (pool por defecto de SQLAlchemy: 5 + 10 de desborde, sin configurar). A 5.000/min el HPA llevó Cotización
+  a 10 réplicas y la RDS `db.t4g.micro` (≈ 100 conexiones) se agotó: `remaining connection slots are reserved` y
+  `too many clients already`, conexiones de 24 a 95 con la CPU de RDS en 39 %. Identidad tampoco pudo responder la
+  consulta de consentimiento, y Cotización emitió cotizaciones aproximadas (27 %) y 56 errores 500 (0,37 %).
+  **Escalar pods exige presupuestar conexiones:** réplicas máximas × conexiones por pod de todos los servicios que
+  comparten la instancia deben caber en `max_connections`. Opciones: RDS Proxy o PgBouncer delante de la base, o un
+  pool acotado por pod (`pool_size`/`max_overflow` configurables por variable de entorno). Queda como seguimiento
+  antes de aceptar este ADR para producción.
 
 ## Supuestos y desviaciones
 
 1. La estimación de concurrencia usa latencias de la ronda 2 de HA01 (Docker local, 1 réplica), no de staging con varias réplicas.
 2. La señal cuenta solicitudes **en curso dentro del proceso**: no ve las que esperan en la cola del socket o del balanceador antes de que uvicorn las acepte. Con un solo proceso asíncrono, la espera ocurre mayormente dentro del event loop y sí se cuenta.
+3. **Objetivo calibrado en el humo de AWS (2026-10-25): 16 por réplica** (antes 3). En la parte de la meseta del humo
+   (5.000/min) anterior a los errores de la base, la concurrencia total fue 13,1; por la ley de Little con la latencia
+   media (83 solicitudes/s × 168 ms) sale 14. Extrapolado ×10 a 50.000/min y repartido en 8 réplicas da 16. Las
+   ventanas posteriores (29 y 43) se descartaron porque las inflaban las solicitudes esperando conexión a la base.
+4. **Desviación de la medición de HA03: RDS `db.t4g.medium` en vez de `db.t4g.micro`.** Se subió solo para la sesión
+   (por `-var`, sin cambiar `staging.tfvars`) para que la medición del autoescalado no la limitaran las conexiones
+   a la base (ver «Conexiones a la base» en Riesgos). Con la instancia de staging, 10 réplicas agotan las conexiones.
+5. **Desviación de la medición de HA03: Identidad con mínimo 4 réplicas** (antes 2), solo para la sesión. Con 2, el
+   humo dejó 6 cotizaciones aproximadas (0,04 %) por `ConnectTimeout` a Identidad (timeout duro de 0,3 s, que no se
+   cambió). Con 4 quedaron 8 (0,05 %) en un único segundo, en pods ya calientes y con Identidad sin errores: **causa no
+   identificada**, se reporta como resultado medido.
 
 ## Condición para aceptar
 
@@ -83,6 +105,61 @@ Una corrida de HA03 en staging con este diseño que muestre:
 - que cumple los criterios 1 y 4 de HA03.
 
 Se registran el objetivo, la política y las cifras medidas.
+
+**Resultado (2026-10-25): no se cumple.** c1 cumple, pero los 3 escalados los disparó la CPU (c4 no cumple). Ver
+«Medición en staging».
+
+## Medición en staging (2026-10-25)
+
+Sesión sobre staging en la cuenta del autor (`us-east-1`), desplegada desde ramas sin fusionar: imagen `08f045b6` de
+`feature/HA03-metrica-solicitudes-en-curso` e infra `eeadf054` (HA03 + dispersión de HA04). Carga con k6 0.54.0 desde
+una `c5.xlarge` en us-east-1a contra el NLB interno; simulador de Open Finance a 200–500 ms; perfil completo de 29 min
+(500/min → 50.000/min en 5 min, 10 min de meseta, bajada y reposo). Corrida `20261026T005129Z-ha03-completo`
+(00:51:29–01:20:30 UTC). Configuración: objetivo de concurrencia **16** por pod, CPU de respaldo 70 %, 2–10 réplicas,
+subida de +4 pods o +100 % cada 15 s sin estabilización.
+
+| Criterio de HA03 | Veredicto | Evidencia |
+|---|---|---|
+| c1 — escalado ≤ 60 s | **Cumple** | 2 → 4 (00:56:54), 4 → 7 (00:57:22), 7 → 10 (00:57:36); peor evento 14 s. Resolución del muestreo: 14 s |
+| c2 — p95 ≤ 250 ms y p99 ≤ 500 ms en la meseta (cliente) | **No cumple** | p50 2.367,9 ms; p95 9.998,9 ms y p99 9.999,5 ms (los marca el timeout de 10 s de k6). Interna: p95 3.465,0 ms |
+| c3 — 0 errores por saturación y 0 % fallidas | **No cumple** | Meseta: 63.269 errores de saturación, 14,4 % fallidas. Corrida: 76.634 (13,1 %) |
+| c4 — el HPA escala por solicitudes concurrentes | **No cumple** | 3 de 3 escalados por CPU: 111 %, 237 % y 199 % frente a 70 %, con la concurrencia en 1,5, 1,625 y 2,166 frente a 16 |
+| Validez — 0 % de cotizaciones aproximadas en la meseta | **No cumple** | 89,9 % en la meseta (80 % en la corrida) |
+
+Capacidad observada en la meseta: 10 réplicas (el máximo, 5 por zona), CPU de hasta 332 % del request (unos 7,5 de los
+10 núcleos de límite), concurrencia de hasta 447,35 por pod, 2–3 reinicios por sondas fallidas. Se atendieron 335
+solicitudes/s de media frente a las 833 de la meseta, con 74.150 `dropped_iterations` (k6 sin usuarios virtuales por
+las latencias de 10 s; la CPU del generador no pasó del 23 %). La RDS llegó a 153 conexiones y 89 % de CPU, e Identidad
+dejó 9.741 `ReadTimeout` en Cotización (de ahí las aproximadas) y reinició 5–6 veces cada pod.
+
+Humos de 5 min (5.000/min) previos a la corrida completa:
+
+| Humo | Configuración | Fallidas | Aproximadas | Meseta p95 / p99 | Escalado |
+|---|---|---|---|---|---|
+| 1 | objetivo 3, RDS `db.t4g.micro` | 56 HTTP 500 (0,37 %) | 27,4 % | 1.205 / 2.545 ms | 2 → 10; la RDS se quedó sin conexiones |
+| 2 | objetivo 16, RDS `db.t4g.medium` | 0 | 6 (0,04 %) | 51 / 512 ms | 2 → 3 → 5 → 7, todo por CPU |
+| 3 | ídem + Identidad con mínimo 4 | 0 | 8 (0,05 %) | 47,7 / 272 ms | 2 → 3 → 5 → 7, todo por CPU |
+
+**Lectura:** el escalado es rápido (c1), pero a 50.000/min el límite es la capacidad fija (10 réplicas × 1 CPU, nodos
+fijos) y las dependencias (Identidad y RDS), no el objetivo de concurrencia. La señal de concurrencia, promediada a
+30 s, llega después que la CPU: en cada escalado la CPU ya estaba por encima del objetivo y la concurrencia todavía no.
+
+## Decisiones nuevas (propuestas, a partir de la medición)
+
+6. **Capacidad presupuestada.** Réplicas máximas × límite de CPU tiene que caber en los nodos, y los nodos tienen que
+   alcanzar para la carga objetivo. Con los números medidos, 335 solicitudes/s consumieron ~7,5 núcleos (≈ 22 ms de CPU
+   por solicitud, cálculo a partir de esas dos cifras); 833/s no caben en 10 réplicas de 1 CPU ni en 6 `t3.medium`.
+   Propuesta: estimar la capacidad para 833/s y elegir entre subir réplicas máximas con cluster-autoscaler (o
+   Karpenter), nodos más grandes, o bajar el costo de CPU por solicitud. Se decide antes de la siguiente medición.
+7. **Presupuesto de dependencias.** Escalar Cotización multiplica la carga sobre Identidad (una consulta de
+   consentimiento síncrona por cotización, timeout de 0,3 s) y sobre la base (hasta 15 conexiones por pod). Propuesta:
+   RDS Proxy o PgBouncer, o un pool acotado por pod; que Identidad escale con Cotización (por la misma señal o con un
+   mínimo acorde) o cachear el consentimiento con un TTL corto; y readiness y timeouts de consulta y de solicitud
+   (ADR-0016).
+8. **Señal de concurrencia que llegue antes que la CPU.** Acortar la ventana del adaptador (hoy 30 s) o usar la tasa de
+   llegada en vez del promedio, y subir el objetivo de CPU por encima de los picos de arranque observados (93–237 %),
+   para que la CPU quede solo como respaldo. Acotar el gauge para que solicitudes atascadas no escalen el HPA (hallazgo
+   de HA04, ADR-0016).
 
 ## Coherencia con el documento de arquitectura
 
@@ -93,7 +170,7 @@ Concreta el ajuste de parametrización registrado en `resultados-finales-experim
 - [ ] Artefacto versionado en el repositorio y enlazado desde el issue #44.
 - [ ] Revisado por al menos 1 integrante distinto del autor.
 - [x] Decisión, alternativas descartadas y consecuencias explícitas; supuestos declarados.
-- [ ] Medición en staging (criterios 1 y 4 de HA03) registrada en este ADR.
+- [x] Medición en staging (criterios 1 y 4 de HA03) registrada en este ADR (2026-10-25: c1 cumple, c4 no cumple).
 
 ## Enlaces
 

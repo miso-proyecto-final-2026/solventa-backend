@@ -1,4 +1,4 @@
-"""Métrica de solicitudes en curso para el HPA (HA03, criterio 4; ADR-0014)."""
+"""Métrica de solicitudes en curso para el HPA (HA03, criterio 4; ADR-0015)."""
 
 import asyncio
 

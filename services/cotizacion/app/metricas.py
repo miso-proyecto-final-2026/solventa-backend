@@ -1,4 +1,4 @@
-"""Solicitudes en curso para el autoescalado (HA03, criterio 4; ADR-0014).
+"""Solicitudes en curso para el autoescalado (HA03, criterio 4; ADR-0015).
 
 El HPA de Cotización escala por solicitudes concurrentes, no por CPU: el caché desacopla la CPU
 del volumen (hallazgo de HA02). Este módulo cuenta las solicitudes HTTP en curso en el proceso y
