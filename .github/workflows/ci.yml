@@ -67,8 +67,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install pytest
-      - run: pytest .github/scripts
+      - run: pip install pytest sqlalchemy
+      # Scripts del repo: el despliegue por comentario y el barrido de seguridad de HA05 (detector de PAN).
+      - run: pytest .github/scripts scripts/seguridad
 
   # Plantilla del cliente de eventos (HS2): se prueba contra un Kafka real en Docker, aparte de los servicios que la copian.
   pruebas-plantilla-eventos:
