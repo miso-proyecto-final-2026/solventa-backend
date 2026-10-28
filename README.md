@@ -9,7 +9,7 @@ services/
   identidad/     MS Identidad    HU01–HU08 (registro, KYC, consentimiento)
   cotizacion/    MS Cotización   HU09–HU14, HU37–HU38 (proveedores de datos, perfil, motor de rating)
   perfilamiento/ MS Perfilamiento HU23 (enriquecimiento del perfil de riesgo, linaje)
-  suscripcion/   MS Suscripción   HU15 y HU18 (saga de suscripción: decisión automática y paso de cobro; firma y emisión llegan con HU21 y HU20)
+  suscripcion/   MS Suscripción   HU15 y HU18 (saga de suscripción: decisión automática, paso de cobro y documento de la póliza con HU20; la firma y la emisión llegan con HU21)
   siniestros/    MS Siniestros   HU27 (recepción de eventos paramétricos; HU28 validará la condición)
   pagos/         MS Pagos        HU18 (cobro de la prima con pasarela simulada, idempotencia y conciliación)
 docs/adr/        decisiones de arquitectura (compartidas)
@@ -66,6 +66,9 @@ El CI corre `test` y `build` en matriz por servicio.
 | `COTIZACION_URL` | suscripcion | MS Cotización, de donde se lee la cotización (`GET /v1/cotizaciones/{id}`). Obligatoria siempre. |
 | `PERFILAMIENTO_URL`, `PERFILAMIENTO_SERVICE_KEY` | suscripcion | MS Perfilamiento y su clave de servicio (debe estar en su `PERFILAMIENTO_API_KEYS`). Si Perfilamiento no responde, el caso se deriva a revisión asistida. |
 | `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SEGURIDAD`, `AWS_REGION` | suscripcion | Brokers de MSK que la plataforma inyecta al servicio, `IAM` (por defecto) o `PLAINTEXT`, y la región para firmar. Sin brokers solo se arranca en modo desarrollo, con un publicador en memoria. Ver ADR-0010. |
+| `POLIZAS_BUCKET` | suscripcion | Bucket S3 donde se guarda el PDF de la póliza (HU20; cifrado AES256). Respeta `AWS_ENDPOINT_URL` (Moto en local). Sin él, solo en desarrollo, se usa `POLIZAS_DOCUMENTOS_DIR`. |
+| `POLIZAS_DOCUMENTOS_DIR` | suscripcion | Carpeta local de los PDF cuando no hay bucket (solo desarrollo; por defecto `./polizas-local`). |
+| `POLIZAS_VIGENCIA_MESES`, `POLIZAS_MAX_INTENTOS`, `POLIZAS_REINTENTO_BASE_S`, `POLIZAS_REINTENTO_MAXIMO_S` | suscripcion | Vigencia de la póliza desde el cobro (12 meses, provisional), intentos de generar el documento antes de `FALLIDO` (5) y espera inicial y máxima entre intentos (5 s y 300 s). |
 | `SUSCRIPCION_ESPERA_BARRIDO_S`, `SUSCRIPCION_TIMEOUT_S` | suscripcion | Segundos tras los que el barrido retoma una saga sin decidir (30) y timeout de las llamadas a servicios vecinos (2). |
 | `SINIESTROS_DATABASE_URL` | siniestros | Base de datos PostgreSQL (esquema `siniestros`, Alembic). Obligatoria fuera de desarrollo; admite `DATABASE_URL`. |
 | `SINIESTROS_API_KEYS` | siniestros | Llaves de los proveedores de eventos en `X-Service-Key`, como pares `fuente=clave` separados por coma; el evento debe traer esa misma `fuente`. Una clave sin nombre (la que entrega la plataforma en staging) es de la fuente `proveedor-simulado`. Vacía = nadie accede. Debe venir de un secreto. |

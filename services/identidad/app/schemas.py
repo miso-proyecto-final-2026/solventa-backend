@@ -175,3 +175,13 @@ class SesionActualOut(BaseModel):
     """Solo el dueño del token: sin nombre, correo ni documento."""
 
     cliente_id: str
+
+
+class ResumenClienteOut(BaseModel):
+    """Para el documento de la póliza (HU20): nombre completo y documento enmascarado, sin correo ni celular."""
+
+    cliente_id: str
+    nombre: str
+    apellido: str
+    tipo_documento: str
+    documento_enmascarado: str

@@ -10,3 +10,4 @@ testcontainers[postgres,redis]>=4.8
 openapi-spec-validator>=0.7
 jsonschema>=4.22
 moto[s3]>=5.0
+pypdf>=5.0

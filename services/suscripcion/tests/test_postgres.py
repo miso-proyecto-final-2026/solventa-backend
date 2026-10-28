@@ -15,20 +15,24 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from app.eventos import PublicadorMemoria
 from app.suscripcion import repositorio as repo
+from app.suscripcion.cobros import manejar_resultado_cobro
 from app.suscripcion.errores import CotizacionYaUsada
 from app.suscripcion.modelos_db import SCHEMA, BaseSuscripcion
 from app.suscripcion.reglas import cargar_reglas
 from app.suscripcion.relay import RelayEventos
 from app.suscripcion.servicio import ServicioSuscripcion
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from tests.dobles import AHORA, CotizacionesFalsas, IdentidadFalsa, PerfilesFalsos
+from tests.test_cobros import _resultado
+from tests.test_polizas import AlmacenMemoria, _generador
 
 pytestmark = pytest.mark.contenedores
 
 RAIZ = Path(__file__).parents[1]
-TABLAS = {"suscripciones", "revisiones_asistidas", "eventos_salida", "eventos_procesados"}
+TABLAS = {"suscripciones", "revisiones_asistidas", "eventos_salida", "eventos_procesados", "polizas"}
 REPLICAS = 8
 PEDIDO = {"token": "token-1", "cotizacion_id": "cot-1", "metodo_pago": "tok_visa_123", "acepta_terminos": True}
 
@@ -195,3 +199,58 @@ def test_dos_relevos_no_publican_el_mismo_evento(fabrica_pg):
 
     claves = [clave for p in publicadores for _, clave, _ in p.publicados]
     assert len(claves) == 6 and len(set(claves)) == 6  # ninguno repetido, ninguno perdido
+
+
+# --- póliza (HU20) ----------------------------------------------------------------------------------------------
+
+def _saga_cobrada(fabrica_pg):
+    servicio = _servicio(fabrica_pg)
+    susc, _ = asyncio.run(servicio.iniciar(clave="k", **PEDIDO))
+    asyncio.run(servicio.decidir(susc.id))
+    return susc
+
+
+def test_reentregas_concurrentes_del_mismo_cobro_dejan_una_sola_poliza(fabrica_pg):
+    susc = _saga_cobrada(fabrica_pg)
+
+    async def replica(i):
+        evento = _resultado(susc.id).model_copy(update={"event_id": f"ev-{i}"})
+        with fabrica_pg() as s, s.begin():
+            await manejar_resultado_cobro(evento, s)
+
+    resultados = _en_paralelo(REPLICAS, replica)
+
+    assert not [r for r in resultados if isinstance(r, Exception)], resultados
+    with fabrica_pg() as s:
+        assert s.execute(text(f"SELECT count(*) FROM {SCHEMA}.polizas")).scalar() == 1
+
+
+def test_varias_replicas_del_generador_producen_un_solo_documento_por_poliza(fabrica_pg):
+    susc = _saga_cobrada(fabrica_pg)
+    asyncio.run(manejar_resultado_cobro_en(fabrica_pg, susc.id))
+    almacen = AlmacenMemoria()
+
+    async def replica(_):
+        return await _generador(fabrica_pg, almacen).procesar_pendientes()
+
+    resultados = _en_paralelo(REPLICAS, replica)
+
+    assert not [r for r in resultados if isinstance(r, Exception)], resultados
+    assert sum(resultados) == 1 and almacen.llamadas == 1  # SKIP LOCKED y la reserva: solo una réplica la toma
+    with fabrica_pg() as s:
+        fila = s.execute(text(f"SELECT documento_estado, documento_intentos FROM {SCHEMA}.polizas")).one()
+    assert tuple(fila) == ("GENERADO", 1)
+
+
+async def manejar_resultado_cobro_en(fabrica, suscripcion_id):
+    with fabrica() as s, s.begin():
+        await manejar_resultado_cobro(_resultado(suscripcion_id), s)
+
+
+def test_la_base_rechaza_un_numero_de_poliza_con_formato_invalido(fabrica_pg):
+    susc = _saga_cobrada(fabrica_pg)
+    asyncio.run(manejar_resultado_cobro_en(fabrica_pg, susc.id))
+
+    for invalido in ("corto", "I" * 20, "a" * 20):  # largo, letra excluida (I) y minúsculas
+        with pytest.raises(IntegrityError), fabrica_pg() as s, s.begin():
+            s.execute(text(f"UPDATE {SCHEMA}.polizas SET numero_poliza = :n"), {"n": invalido})

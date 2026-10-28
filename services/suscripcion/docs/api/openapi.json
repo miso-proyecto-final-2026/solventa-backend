@@ -138,6 +138,125 @@
         }
       }
     },
+    "/v1/suscripciones/{suscripcion_id}/poliza": {
+      "get": {
+        "tags": [
+          "suscripciones"
+        ],
+        "summary": "Póliza de la suscripción (HU20)",
+        "operationId": "consultar_poliza_v1_suscripciones__suscripcion_id__poliza_get",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolizaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/polizas": {
+      "get": {
+        "tags": [
+          "polizas"
+        ],
+        "summary": "Pólizas del cliente (billetera)",
+        "description": "Un `cliente_id` distinto al dueño del token es 403.",
+        "operationId": "billetera_v1_polizas_get",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "title": "Cliente Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BilleteraOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -163,6 +282,27 @@
   },
   "components": {
     "schemas": {
+      "BilleteraOut": {
+        "properties": {
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "polizas": {
+            "items": {
+              "$ref": "#/components/schemas/PolizaOut"
+            },
+            "type": "array",
+            "title": "Polizas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cliente_id",
+          "polizas"
+        ],
+        "title": "BilleteraOut"
+      },
       "CobroOut": {
         "properties": {
           "estado": {
@@ -335,6 +475,166 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "PolizaOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "suscripcion_id": {
+            "type": "string",
+            "title": "Suscripcion Id"
+          },
+          "numero_poliza": {
+            "type": "string",
+            "title": "Numero Poliza"
+          },
+          "producto": {
+            "type": "string",
+            "title": "Producto"
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "documento_estado": {
+            "type": "string",
+            "title": "Documento Estado"
+          },
+          "documento_s3_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documento S3 Key"
+          },
+          "documento_generado_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documento Generado En"
+          },
+          "plantilla_version": {
+            "type": "string",
+            "title": "Plantilla Version"
+          },
+          "vigencia_desde": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Vigencia Desde"
+          },
+          "fecha_vencimiento": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Vencimiento"
+          },
+          "fecha_emision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Emision"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "monto_asegurado": {
+            "type": "integer",
+            "title": "Monto Asegurado"
+          },
+          "prima_anual": {
+            "type": "integer",
+            "title": "Prima Anual"
+          },
+          "prima_mensual": {
+            "type": "integer",
+            "title": "Prima Mensual"
+          },
+          "periodicidad_pago": {
+            "type": "string",
+            "title": "Periodicidad Pago"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "suscripcion_id",
+          "numero_poliza",
+          "producto",
+          "estado",
+          "documento_estado",
+          "documento_s3_key",
+          "documento_generado_en",
+          "plantilla_version",
+          "vigencia_desde",
+          "fecha_vencimiento",
+          "fecha_emision",
+          "moneda",
+          "monto_asegurado",
+          "prima_anual",
+          "prima_mensual",
+          "periodicidad_pago"
+        ],
+        "title": "PolizaOut",
+        "description": "Metadatos de la póliza. No trae URL de descarga: la entrega del documento es de HU22."
+      },
+      "PolizaResumenOut": {
+        "properties": {
+          "numero_poliza": {
+            "type": "string",
+            "title": "Numero Poliza"
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "documento_estado": {
+            "type": "string",
+            "title": "Documento Estado"
+          },
+          "documento_intentos": {
+            "type": "integer",
+            "title": "Documento Intentos"
+          },
+          "documento_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documento Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "numero_poliza",
+          "estado",
+          "documento_estado",
+          "documento_intentos",
+          "documento_error"
+        ],
+        "title": "PolizaResumenOut",
+        "description": "La póliza dentro de la saga: lo que el operador necesita ver si el documento no se genera."
+      },
       "SuscripcionIn": {
         "properties": {
           "cotizacion_id": {
@@ -429,6 +729,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/CobroOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "poliza": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PolizaResumenOut"
               },
               {
                 "type": "null"

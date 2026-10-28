@@ -71,6 +71,10 @@ class SuscripcionDB(BaseSuscripcion):
     cobro_motivo: Mapped[str | None] = mapped_column(String(200), nullable=True)
     cobro_gracia_hasta: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cobro_resuelto_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Copia de las coberturas [{tipo, monto, deducible}] y de la versión de reglas de la cotización aceptada (HU20):
+    # el documento muestra exactamente lo que se ofreció. Nulas en las sagas anteriores a HU20.
+    coberturas: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
+    cotizacion_version_reglas: Mapped[str | None] = mapped_column(String(40), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -86,6 +90,45 @@ class SuscripcionDB(BaseSuscripcion):
             sqlite_where=text("estado_saga NOT IN ('RECHAZADA', 'COMPENSADA')"),
         ),
         Index("ix_susc_pendientes", "decision", "created_at"),
+    )
+
+
+class PolizaDB(BaseSuscripcion):
+    """Póliza de una suscripción con el cobro confirmado (HU20). Una suscripción tiene a lo sumo una.
+
+    `estado`: PENDIENTE_FIRMA -> VIGENTE (HU21). `documento_estado`: PENDIENTE -> GENERADO | FALLIDO.
+    El nombre y el documento del cliente no se guardan aquí: viven solo dentro del PDF.
+    """
+
+    __tablename__ = "polizas"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    suscripcion_id: Mapped[str] = mapped_column(String(36), ForeignKey(f"{SCHEMA}.suscripciones.id"), unique=True)
+    cliente_id: Mapped[str] = mapped_column(String(64))
+    numero_poliza: Mapped[str] = mapped_column(String(30), unique=True)
+    estado: Mapped[str] = mapped_column(String(20), default="PENDIENTE_FIRMA")
+    documento_estado: Mapped[str] = mapped_column(String(20), default="PENDIENTE")
+    documento_intentos: Mapped[int] = mapped_column(Integer, default=0)
+    documento_proximo_intento: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    documento_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    documento_s3_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    documento_generado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    plantilla_version: Mapped[str] = mapped_column(String(20))
+    vigencia_desde: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    fecha_vencimiento: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    fecha_emision: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("idx_pol_estado", "estado"),
+        Index("idx_pol_cliente", "cliente_id"),
+        Index(
+            "idx_pol_documento_pendiente",
+            "documento_proximo_intento",
+            postgresql_where=text("documento_estado = 'PENDIENTE'"),
+            sqlite_where=text("documento_estado = 'PENDIENTE'"),
+        ),
     )
 
 
