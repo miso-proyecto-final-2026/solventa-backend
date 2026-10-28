@@ -125,6 +125,10 @@ subida de +4 pods o +100 % cada 15 s sin estabilización.
 | c3 — 0 errores por saturación y 0 % fallidas | **No cumple** | Meseta: 63.269 errores de saturación, 14,4 % fallidas. Corrida: 76.634 (13,1 %) |
 | c4 — el HPA escala por solicitudes concurrentes | **No cumple** | 3 de 3 escalados por CPU: 111 %, 237 % y 199 % frente a 70 %, con la concurrencia en 1,5, 1,625 y 2,166 frente a 16 |
 | Validez — 0 % de cotizaciones aproximadas en la meseta | **No cumple** | 89,9 % en la meseta (80 % en la corrida) |
+| c5 — capacidad existente: si 50.000/min cabe en el máximo de réplicas y en los nodos | **Determinada: no cabe** | Con 10 réplicas de 1 CPU (el máximo, 5 por zona) sobre 6 `t3.medium` fijos se atendieron 335 de las 833 solicitudes/s de la meseta, con la CPU hasta 332 % del request. El ajuste se decide con la Decisión 6 |
+| c6 — bajada sin oscilar y sin errores | **No cumple** | Sin oscilación: 10 → 9 → 8 → 7 → 6, un pod por minuto, hasta la captura del `describe` del HPA. Con errores: 1.152 de saturación y 4,6 % de fallidas en la fase de bajada, y 3 de saturación en el reposo. En los humos, la bajada dejó las réplicas en una sola zona (ADR-0016) |
+| c7 — evidencia cruda conservada | **Cumple, con salvedad** | Resultados de k6, estado y `describe` del HPA, réplicas, CPU y memoria por pod, reinicios y eventos en `solventa-experimentos/ha03-ha04/resultados/`. Salvedad: el paquete está fuera de git y solo en la máquina del autor |
+| c8 — informe con veredicto | **Cumple** | Este ADR (tabla de criterios y decisiones 6 a 8) e `informe-ha03.json` |
 
 Capacidad observada en la meseta: 10 réplicas (el máximo, 5 por zona), CPU de hasta 332 % del request (unos 7,5 de los
 10 núcleos de límite), concurrencia de hasta 447,35 por pod, 2–3 reinicios por sondas fallidas. Se atendieron 335
@@ -175,5 +179,8 @@ Concreta el ajuste de parametrización registrado en `resultados-finales-experim
 ## Enlaces
 
 - Issue de la historia: [proyecto-final#44](https://github.com/miso-proyecto-final-2026/proyecto-final/issues/44)
-- PR de infraestructura (Prometheus, adaptador y HPA): pendiente, se enlaza al crearlo.
+- PR de este ADR y de la métrica: [solventa-backend#48](https://github.com/miso-proyecto-final-2026/solventa-backend/pull/48) (reemplaza a #44, cerrado por error)
+- PR de infraestructura (Prometheus, adaptador y HPA): [solventa-infra#20](https://github.com/miso-proyecto-final-2026/solventa-infra/pull/20)
+- ADR-0016 (HA04): [solventa-backend#49](https://github.com/miso-proyecto-final-2026/solventa-backend/pull/49)
+- Scripts, runbook y analizadores: [solventa-experimentos#2](https://github.com/miso-proyecto-final-2026/solventa-experimentos/pull/2)
 - Dispersión por zona para HA04 (mismo módulo): [solventa-infra#18](https://github.com/miso-proyecto-final-2026/solventa-infra/pull/18)
