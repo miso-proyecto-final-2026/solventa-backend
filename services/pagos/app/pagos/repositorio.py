@@ -5,16 +5,19 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import Engine, create_engine, event, select, update
+from sqlalchemy import Engine, create_engine, event, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+from app.pagos.dominio import ESTADOS_CASO_ABIERTOS
 from app.pagos.modelos_db import (
     SCHEMA,
     BasePagos,
+    CasoCobroFallidoDB,
     EventoSalidaDB,
     IntentoCobroDB,
+    NotaCobroFallidoDB,
     TokenTarjetaDB,
     TransaccionDB,
 )
@@ -162,6 +165,79 @@ def intentos_de(sesion: Session, transaccion_id: str) -> list[IntentoCobroDB]:
     return list(
         sesion.execute(
             select(IntentoCobroDB).where(IntentoCobroDB.transaccion_id == transaccion_id).order_by(IntentoCobroDB.numero)
+        ).scalars()
+    )
+
+
+# --- cobros fallidos (HU19) ------------------------------------------------------------------------------------
+
+def caso(sesion: Session, caso_id: str, *, bloquear: bool = False) -> CasoCobroFallidoDB | None:
+    return sesion.get(CasoCobroFallidoDB, caso_id, with_for_update=bloquear or None)
+
+
+def caso_abierto_de(sesion: Session, suscripcion_id: str) -> CasoCobroFallidoDB | None:
+    """El caso sin recuperar de la suscripción, bloqueado: lo actualiza el cierre de un reintento."""
+    return sesion.execute(
+        select(CasoCobroFallidoDB)
+        .where(CasoCobroFallidoDB.suscripcion_id == suscripcion_id, CasoCobroFallidoDB.estado.in_(ESTADOS_CASO_ABIERTOS))
+        .with_for_update()
+    ).scalar_one_or_none()
+
+
+def buscar_casos(
+    sesion: Session, *, estados: list[str], gracia_antes_de: datetime | None, desplazamiento: int, limite: int
+) -> tuple[list[CasoCobroFallidoDB], int]:
+    """Página de casos (los más urgentes primero) y el total que cumple el filtro."""
+    filtros = [CasoCobroFallidoDB.estado.in_(estados)]
+    if gracia_antes_de is not None:
+        filtros.append(CasoCobroFallidoDB.gracia_hasta < gracia_antes_de)
+    total = sesion.execute(select(func.count()).select_from(CasoCobroFallidoDB).where(*filtros)).scalar_one()
+    pagina = sesion.execute(
+        select(CasoCobroFallidoDB)
+        .where(*filtros)
+        .order_by(CasoCobroFallidoDB.gracia_hasta, CasoCobroFallidoDB.id)
+        .offset(desplazamiento)
+        .limit(limite)
+    ).scalars()
+    return list(pagina), total
+
+
+def tokens_por_id(sesion: Session, ids: set[int]) -> dict[int, TokenTarjetaDB]:
+    if not ids:
+        return {}
+    return {t.id: t for t in sesion.execute(select(TokenTarjetaDB).where(TokenTarjetaDB.id.in_(ids))).scalars()}
+
+
+def casos_con_gracia_vencida(sesion: Session, ahora: datetime, limite: int) -> list[CasoCobroFallidoDB]:
+    """Casos pendientes cuya gracia ya terminó; SKIP LOCKED para que dos réplicas no avisen dos veces."""
+    return list(
+        sesion.execute(
+            select(CasoCobroFallidoDB)
+            .where(CasoCobroFallidoDB.estado == "PENDIENTE", CasoCobroFallidoDB.gracia_hasta <= ahora)
+            .order_by(CasoCobroFallidoDB.gracia_hasta)
+            .limit(limite)
+            .with_for_update(skip_locked=True)
+        ).scalars()
+    )
+
+
+def transacciones_de(sesion: Session, suscripcion_id: str) -> list[TransaccionDB]:
+    return list(
+        sesion.execute(
+            select(TransaccionDB)
+            .where(TransaccionDB.suscripcion_id == suscripcion_id)
+            # A igual hora, el cobro original (`cobro_prima:<id>`) antes que sus reintentos (`cobro_prima:<id>:<n>`).
+            .order_by(TransaccionDB.created_at, TransaccionDB.idempotency_key)
+        ).scalars()
+    )
+
+
+def notas_de(sesion: Session, caso_id: str) -> list[NotaCobroFallidoDB]:
+    return list(
+        sesion.execute(
+            select(NotaCobroFallidoDB)
+            .where(NotaCobroFallidoDB.caso_id == caso_id)
+            .order_by(NotaCobroFallidoDB.created_at, NotaCobroFallidoDB.id)
         ).scalars()
     )
 

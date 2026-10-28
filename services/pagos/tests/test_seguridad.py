@@ -8,7 +8,9 @@ pasarela (0 en logs; en la base, solo en `tokens_tarjeta.token`, que es donde la
 import json
 import logging
 import re
+from datetime import UTC, datetime, timedelta
 
+import jwt
 import pytest
 from app.logs import (
     ENMASCARADO_PAN,
@@ -17,9 +19,13 @@ from app.logs import (
     FormateadorJson,
     redactar,
 )
+from app.pagos.acceso import VerificadorJwtHs256
 from app.pagos.api import router
+from app.pagos.api_gestion import router as router_gestion
 from app.pagos.errores import SolicitudInvalida, registrar_errores
+from app.pagos.gestion import ServicioGestion
 from app.pagos.modelos_db import BasePagos
+from app.pagos.servicio import ComandoCobro
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
@@ -32,6 +38,7 @@ PANES = ["4111111111111111", "5555555555554444", "378282246310005"]
 TOKENS = ["tok_sim_seguridad_a", "tok_sim_seguridad_b", "tok_sim_seguridad_c", "tok_sim_seguridad_d"]
 _CANDIDATO = re.compile(r"(?<!\d)(?:\d[ -]?){12,18}\d(?!\d)")
 CLAVE = "clave-saga"
+SECRETO_JWT = "secreto-de-prueba-de-seguridad-hu19-32b"
 
 
 def _luhn(digitos: str) -> bool:
@@ -95,6 +102,37 @@ async def _recorrer_flujos(armar, fabrica, reloj):
         for pan in PANES:
             await c.post("/v1/pagos/tokenizar", json={"token": pan}, headers=cabeceras)
             await c.post("/v1/pagos/tokenizar", json={"token": TOKENS[0], "numero": pan}, headers=cabeceras)
+    await _recorrer_gestion(armar, fabrica, reloj)
+
+
+async def _recorrer_gestion(armar, fabrica, reloj):
+    """HU19: reintento rechazado y aprobado, notas (con un PAN que se rechaza), detalle, bandeja y aviso al operador."""
+    servicio = armar(PasarelaFalsa("rechazar", "rechazar", "aprobar", "rechazar"))
+    gestion = ServicioGestion(fabrica=fabrica, cobros=servicio, horas_por_vencer=24, reloj=reloj)
+    app = FastAPI()
+    app.include_router(router_gestion)
+    registrar_errores(app)
+    app.state.servicio_gestion = gestion
+    app.state.verificador_gestion = VerificadorJwtHs256(SECRETO_JWT, "solventa-identidad")
+    ahora = datetime.now(UTC)
+    jwt_asesor = jwt.encode(
+        {"sub": "ase-1", "rol": "ASESOR", "nombre": "Asesora", "iss": "solventa-identidad", "iat": ahora,
+         "exp": ahora + timedelta(minutes=30)},
+        SECRETO_JWT, algorithm="HS256",
+    )
+    cabeceras = {"Authorization": f"Bearer {jwt_asesor}"}
+    tx, _ = await servicio.cobrar(ComandoCobro.desde_evento(comando("susc-gestion", metodo_pago=TOKENS[2])))
+    vencido, _ = await servicio.cobrar(ComandoCobro.desde_evento(comando("susc-vencida", metodo_pago=TOKENS[3])))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        await c.post(f"/v1/pagos/cobros-fallidos/{tx.id}/reintentar", headers=cabeceras)
+        await c.post(f"/v1/pagos/cobros-fallidos/{tx.id}/notas", json={"texto": "Cliente avisado"}, headers=cabeceras)
+        for pan in PANES:
+            await c.post(f"/v1/pagos/cobros-fallidos/{tx.id}/notas", json={"texto": f"su tarjeta {pan}"}, headers=cabeceras)
+        await c.post(f"/v1/pagos/cobros-fallidos/{tx.id}/reintentar", headers=cabeceras)
+        await c.get(f"/v1/pagos/cobros-fallidos/{tx.id}", headers=cabeceras)
+        await c.get("/v1/pagos/cobros-fallidos?estado=RECUPERADO&estado=PENDIENTE", headers=cabeceras)
+    reloj.avanzar(60 * 60 * 24 * 4)
+    assert gestion.vencer_casos() >= 1, vencido.id
 
 
 async def test_cero_datos_de_tarjeta_en_logs_y_en_la_base(armar, fabrica, reloj, caplog):

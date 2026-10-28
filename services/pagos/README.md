@@ -2,8 +2,8 @@
 
 Cobro de la prima (HU18) con una pasarela de pago detrás de un puerto del dominio. Registra transacciones e intentos,
 cobra una sola vez por `idempotency_key` y concilia cuando la respuesta de la pasarela no llega. Decisión completa en el
-[ADR-0014](../../docs/adr/0014-ms-pagos-cobro-idempotente-y-conciliacion.md). Fuera de alcance: indemnizaciones
-(HU29/HU30) y gestión humana de cobros fallidos (HU19).
+[ADR-0014](../../docs/adr/0014-ms-pagos-cobro-idempotente-y-conciliacion.md). También expone a la consola web la
+gestión de cobros fallidos (HU19, enmienda del ADR-0014). Fuera de alcance: indemnizaciones (HU29/HU30).
 
 ## Cómo fluye un cobro
 
@@ -20,7 +20,7 @@ MS Suscripción ◀──cobro_prima_confirmado / rechazado── solventa.pagos
 
 `POST /v1/pagos/cobros` es una entrada interna al mismo caso de uso (pruebas y operación); la saga usa el evento.
 
-## Endpoints (internos, sin borde público)
+## Endpoints internos (sin borde público)
 
 Todos exigen `X-Service-Key` con una clave de `PAGOS_API_KEYS` (401 sin cabecera, 403 con una clave desconocida).
 Contrato en [`docs/api/openapi.json`](docs/api/openapi.json); colección en `postman/` (carpeta «MS Pagos (HU18)»).
@@ -30,6 +30,24 @@ Contrato en [`docs/api/openapi.json`](docs/api/openapi.json); colección en `pos
 | `POST /v1/pagos/tokenizar` | Registra un **token de la pasarela** con su marca y últimos 4 (`tokens_tarjeta`). Rechaza con 422 `DATO_DE_TARJETA_NO_PERMITIDO` cualquier texto con forma de número de tarjeta (SAQ-A: el PAN solo lo ve la pasarela). |
 | `POST /v1/pagos/cobros` | Cobra la prima. 201 con el resultado, 202 si queda `PENDIENTE` (sin respuesta de la pasarela), 200 + `Idempotent-Replay: true` al repetir la clave, 409 si la clave ya se usó con otro monto o suscripción. |
 | `GET /v1/pagos/transacciones/{id}` | Estado de la transacción: `PENDIENTE`, `APROBADA` o `RECHAZADA` (con código, motivo y `gracia_hasta`). Nunca devuelve el token. |
+
+## Cobros fallidos (HU19, publicado en el borde)
+
+Único prefijo de Pagos publicado en el borde. Exige `Authorization: Bearer <JWT>` emitido por Identidad con rol
+`ASESOR` u `OPERADOR` (401 `NO_AUTENTICADO` sin token o con uno vencido, 403 `SIN_PERMISO` con otro rol). La clave de
+servicio no abre estas rutas. Colección: carpeta «Cobros fallidos (HU19)».
+
+| Método y ruta | Qué hace |
+|---|---|
+| `GET /v1/pagos/cobros-fallidos` | Bandeja paginada (`pagina`, `tamano` 1–100, `estado` repetible, `por_vencer`), ordenada por `gracia_hasta`. Cada caso: monto, intentos, último intento, motivo, `gracia_hasta`, `estado_gracia` (`VIGENTE`, `POR_VENCER` si quedan menos de `PAGOS_HORAS_POR_VENCER` horas, `VENCIDA`) y la tarjeta (marca y últimos 4). |
+| `GET /v1/pagos/cobros-fallidos/{id}` | Detalle: cada cobro (original y reintentos) con sus intentos, códigos de la pasarela y notas. 404 `CASO_NO_ENCONTRADO`. |
+| `POST /v1/pagos/cobros-fallidos/{id}/notas` | Nota de seguimiento (1–1000 caracteres) con el autor del JWT. 422 `DATO_DE_TARJETA_NO_PERMITIDO` si trae algo con forma de número de tarjeta. |
+| `POST /v1/pagos/cobros-fallidos/{id}/reintentar` | Cobra otra vez con el token ya registrado y la clave `cobro_prima:<suscripcion_id>:<n>`. 200 con `APROBADO`/`RECHAZADO`, 202 con `EN_PROCESO` (`detalle_pasarela` = `NO_DISPONIBLE` o `SIN_RESPUESTA`), 409 `CASO_YA_RECUPERADO`. La misma `Idempotency-Key` (o un reintento aún `PENDIENTE`) devuelve el mismo reintento con `Idempotent-Replay: true`. |
+
+Un cobro de prima rechazado abre el caso (`PENDIENTE`). Cuando termina la gracia sin recuperarlo, un detector (cada
+`PAGOS_DETECTOR_GRACIA_S` segundos) lo pasa a `VENCIDO` y publica `cobro_gracia_vencida` en `solventa.notificaciones`
+para el operador. Un reintento aprobado lo deja `RECUPERADO` y el resultado sigue llegando a la saga por
+`solventa.pagos.resultados`. La bandeja y el detalle nunca devuelven el token ni datos de contacto del cliente.
 
 ## Pasarela simulada
 
@@ -80,7 +98,7 @@ Una transacción nunca se crea dos veces ni se da por perdida: queda `PENDIENTE`
 cd services/pagos
 pip install -r requirements.txt -r ../../requirements-dev.txt
 pytest                                    # las pruebas con contenedores se omiten sin Docker
-SOLVENTA_MODO_DESARROLLO=1 PAGOS_API_KEYS=postman=dev-pagos-key uvicorn app.main:app --port 8005
+SOLVENTA_MODO_DESARROLLO=1 PAGOS_API_KEYS=postman=dev-pagos-key \n  ASESOR_JWT_SECRETO=dev-secreto-asesor-de-al-menos-32-bytes uvicorn app.main:app --port 8005
 ```
 
 Variables: ver la tabla del [README del monorepo](../../README.md).
