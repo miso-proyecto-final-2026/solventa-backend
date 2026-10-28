@@ -279,3 +279,29 @@ def test_revertir_la_0005_conserva_los_registros_y_quita_las_columnas(engine_pg,
     with engine_pg.connect() as c:
         assert c.execute(text(f"SELECT count(*) FROM {SCHEMA}.consentimiento_registros")).scalar() == 1
     alembic("upgrade", "head")
+
+
+def test_0006_solo_admite_los_roles_asesor_y_operador(base_migrada):
+    with base_migrada.begin() as c:
+        for i, rol in enumerate(("ASESOR", "OPERADOR")):
+            c.execute(
+                text(
+                    f"INSERT INTO {SCHEMA}.usuarios_internos (id, email, nombre, password_hash, rol, creado_en) "
+                    f"VALUES ('u{i}', 'u{i}@solventa.test', 'U', 'h', '{rol}', now())"
+                )
+            )
+    with pytest.raises(DBAPIError, match="ck_usuarios_internos_rol"), base_migrada.begin() as c:
+        c.execute(
+            text(
+                f"INSERT INTO {SCHEMA}.usuarios_internos (id, email, nombre, password_hash, rol, creado_en) "
+                "VALUES ('u9', 'u9@solventa.test', 'U', 'h', 'SUPERUSUARIO', now())"
+            )
+        )
+
+
+def test_revertir_la_0006_quita_la_restriccion_de_roles(engine_pg, alembic):
+    alembic("upgrade", "head")
+    alembic("downgrade", "0005")
+    restricciones = {r["name"] for r in inspect(engine_pg).get_check_constraints("usuarios_internos", schema=SCHEMA)}
+    assert "ck_usuarios_internos_rol" not in restricciones
+    alembic("upgrade", "head")

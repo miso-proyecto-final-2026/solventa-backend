@@ -27,3 +27,10 @@ def test_los_clientes_demo_tienen_consentimientos_distintos(sesion_bd):
     assert estados["00000000-0000-4000-8000-0000000000a1"] == "OTORGADO"
     assert estados["00000000-0000-4000-8000-0000000000d4"] == "REVOCADO"
     assert "00000000-0000-4000-8000-0000000000e5" not in estados
+
+
+def test_el_operador_demo_es_opcional_e_idempotente(sesion_bd):
+    for _ in range(2):
+        sembrar_demo.sembrar(sesion_bd, "asesor@solventa.test", "Asesor1234", ("operador@solventa.test", "Operador1234"))
+    roles = sorted(u.rol for u in sesion_bd.query(UsuarioInterno).all())
+    assert roles == ["ASESOR", "OPERADOR"]
