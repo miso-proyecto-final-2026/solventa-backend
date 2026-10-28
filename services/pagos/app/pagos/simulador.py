@@ -8,6 +8,7 @@ redesplegar):
 - `TARDAR`: cobra, pero tarda `PASARELA_SIM_DEMORA_S` en responder (con el tiempo de espera del adaptador, la respuesta
   no llega a tiempo y el cobro queda para conciliar).
 - `PERDER_RESPUESTA`: cobra y la respuesta se pierde (EC-D1.2). Consultar la clave sí devuelve el cobro.
+- `NO_DISPONIBLE`: la pasarela está caída y no recibe la orden (conexión rechazada): no cobra ni registra nada.
 
 Es idempotente por `idempotency_key`, como una pasarela real: repetir la orden devuelve el primer resultado sin cobrar
 otra vez. El libro (`simulador_cargos`) está en la base para que cualquier réplica pueda conciliar.
@@ -28,6 +29,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.pagos.dominio import (
     DatosToken,
+    PasarelaNoDisponible,
     PasarelaSinRespuesta,
     ResultadoCobro,
     SolicitudCobro,
@@ -41,6 +43,7 @@ class ModoSimulador(StrEnum):
     RECHAZAR = "RECHAZAR"
     TARDAR = "TARDAR"
     PERDER_RESPUESTA = "PERDER_RESPUESTA"
+    NO_DISPONIBLE = "NO_DISPONIBLE"
 
 
 # Prefijo del token → modo. El token por defecto de la app (HU17) es `tok_sim_<aleatorio>` y usa el modo configurado.
@@ -49,6 +52,7 @@ _PREFIJOS = {
     "tok_sim_rechazar_": ModoSimulador.RECHAZAR,
     "tok_sim_tardar_": ModoSimulador.TARDAR,
     "tok_sim_perder_": ModoSimulador.PERDER_RESPUESTA,
+    "tok_sim_caida_": ModoSimulador.NO_DISPONIBLE,
 }
 _TOKEN_VALIDO = re.compile(r"^tok_[A-Za-z0-9_-]{1,190}$")
 _MARCAS = ("VISA", "MASTERCARD", "AMEX")
@@ -91,6 +95,8 @@ class PasarelaSimulada:
         if not _TOKEN_VALIDO.match(solicitud.token):
             return ResultadoCobro(aprobado=False, codigo="TOKEN_INVALIDO", motivo="La pasarela no reconoce el token.")
         modo = self.modo_para(solicitud.token)
+        if modo is ModoSimulador.NO_DISPONIBLE:
+            raise PasarelaNoDisponible("simulador: la pasarela no está disponible (no recibió la orden)")
         resultado = await asyncio.to_thread(self._registrar, solicitud, modo)
         if modo is ModoSimulador.PERDER_RESPUESTA:
             raise PasarelaSinRespuesta("simulador: la respuesta se perdió (el cobro sí se hizo)")

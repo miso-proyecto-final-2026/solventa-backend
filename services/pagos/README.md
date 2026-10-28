@@ -66,6 +66,7 @@ cambia por cobro.
 | `APROBAR` (por defecto) | `tok_sim_aprobar_…` | Cobra y responde aprobado. | `APROBADA` con la referencia; publica `cobro_prima_confirmado`. | Criterio 1 |
 | `RECHAZAR` | `tok_sim_rechazar_…` | No cobra; responde `FONDOS_INSUFICIENTES`. | `RECHAZADA` con código y motivo, abre el período de gracia (`gracia_hasta`); publica `cobro_prima_rechazado`. | Criterio 2 |
 | `TARDAR` | `tok_sim_tardar_…` | Cobra, pero responde tras `PASARELA_SIM_DEMORA_S` (10 s), más que `PASARELA_TIMEOUT_S` (5 s). | El intento queda `SIN_RESPUESTA`; el siguiente consulta la clave, encuentra el cobro y lo marca `CONCILIADO`. | Criterio 4 |
+| `NO_DISPONIBLE` | `tok_sim_caida_…` | La pasarela está caída: no recibe la orden (como una conexión rechazada) y no cobra. | El intento queda `NO_DISPONIBLE` y el procesador reintenta con la misma clave; un reintento desde la consola responde `EN_PROCESO` con `detalle_pasarela = NO_DISPONIBLE` (HU19). | HU19, criterio 4 |
 | `PERDER_RESPUESTA` | `tok_sim_perder_…` | Cobra y la respuesta se pierde. | Igual que `TARDAR`: concilia sin volver a cobrar (un solo cargo en el libro). | Criterio 4, EC-D1.2 |
 
 El token de la app móvil (`tok_sim_<aleatorio>`, HU17) usa el modo por defecto. Un token que no empieza por `tok_` se
