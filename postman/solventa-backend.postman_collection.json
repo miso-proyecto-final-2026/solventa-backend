@@ -7155,6 +7155,493 @@
             },
             "description": ""
           }
+        },
+        {
+          "name": "Cobros fallidos (HU19)",
+          "description": "Consola web: bandeja, detalle, notas y reintento. JWT de asesor u operador (ADR-0008); único prefijo de Pagos publicado en el borde.",
+          "item": [
+            {
+              "name": "Bandeja - asesor",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const p = pm.response.json();",
+                      "pm.test('página con total', () => { pm.expect(p.items).to.be.an('array'); pm.expect(p.total).to.be.at.least(1); });",
+                      "const c = p.items[0];",
+                      "pm.test('monto, intentos, motivo y gracia', () => { pm.expect(c).to.include.keys('monto','intentos','ultimo_intento_en','motivo_rechazo','gracia_hasta','estado_gracia'); });",
+                      "pm.test('de la tarjeta solo marca y últimos 4', () => { pm.expect(pm.response.text()).to.not.include('tok_sim_'); pm.expect(c.tarjeta.ultimos4).to.match(/^\\d{4}$/); });",
+                      "pm.collectionVariables.set('caso_id', c.id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{asesor_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{pagos_url}}/v1/pagos/cobros-fallidos?pagina=1&tamano=20",
+                  "host": [
+                    "{{pagos_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "pagos",
+                    "cobros-fallidos"
+                  ],
+                  "query": [
+                    {
+                      "key": "pagina",
+                      "value": "1"
+                    },
+                    {
+                      "key": "tamano",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "HU19. Requiere el asesor demo (carpeta del asesor) y un cobro rechazado (`Cobrar prima - rechazado`). Guarda `caso_id`."
+              }
+            },
+            {
+              "name": "Bandeja - solo próximos a vencer",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "pm.test('solo POR_VENCER o VENCIDA', () => pm.response.json().items.forEach(c => pm.expect(['POR_VENCER','VENCIDA']).to.include(c.estado_gracia)));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{asesor_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{pagos_url}}/v1/pagos/cobros-fallidos?por_vencer=true",
+                  "host": [
+                    "{{pagos_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "pagos",
+                    "cobros-fallidos"
+                  ],
+                  "query": [
+                    {
+                      "key": "por_vencer",
+                      "value": "true"
+                    }
+                  ]
+                },
+                "description": "Casos con menos de 24 h de gracia (supuesto de HU19)."
+              }
+            },
+            {
+              "name": "Bandeja - sin token",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                      "pm.test('NO_AUTENTICADO (el portal lo trata como sesión vencida)', () => pm.expect(pm.response.json().error.code).to.eql('NO_AUTENTICADO'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{pagos_url}}/v1/pagos/cobros-fallidos",
+                  "host": [
+                    "{{pagos_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "pagos",
+                    "cobros-fallidos"
+                  ]
+                },
+                "description": "Sin JWT. La clave de servicio tampoco abre la gestión."
+              }
+            },
+            {
+              "name": "Bandeja - tamaño fuera de rango",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{asesor_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{pagos_url}}/v1/pagos/cobros-fallidos?tamano=101",
+                  "host": [
+                    "{{pagos_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "pagos",
+                    "cobros-fallidos"
+                  ],
+                  "query": [
+                    {
+                      "key": "tamano",
+                      "value": "101"
+                    }
+                  ]
+                },
+                "description": "La página admite de 1 a 100 casos."
+              }
+            },
+            {
+              "name": "Detalle del caso",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const d = pm.response.json();",
+                      "pm.test('historial de cobros con sus intentos y notas', () => { pm.expect(d.cobros[0].intentos).to.be.an('array'); pm.expect(d.notas).to.be.an('array'); });",
+                      "pm.test('sin token ni datos de contacto', () => { pm.expect(pm.response.text()).to.not.include('tok_sim_'); pm.expect(d).to.not.have.any.keys('email','celular'); });"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{asesor_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{pagos_url}}/v1/pagos/cobros-fallidos/{{caso_id}}",
+                  "host": [
+                    "{{pagos_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "pagos",
+                    "cobros-fallidos",
+                    "{{caso_id}}"
+                  ]
+                },
+                "description": "Historial de intentos, motivo, código de la pasarela y notas. Sin datos de contacto del cliente (ADR-0008)."
+              }
+            },
+            {
+              "name": "Detalle - inexistente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                      "pm.test('CASO_NO_ENCONTRADO', () => pm.expect(pm.response.json().error.code).to.eql('CASO_NO_ENCONTRADO'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{asesor_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{pagos_url}}/v1/pagos/cobros-fallidos/no-existe",
+                  "host": [
+                    "{{pagos_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "pagos",
+                    "cobros-fallidos",
+                    "no-existe"
+                  ]
+                },
+                "description": "Caso que no existe."
+              }
+            },
+            {
+              "name": "Nota de seguimiento",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "pm.test('con autor y fecha', () => { const n = pm.response.json(); pm.expect(n.autor_rol).to.eql('ASESOR'); pm.expect(n.creada_en).to.be.a('string'); });"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{asesor_token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{pagos_url}}/v1/pagos/cobros-fallidos/{{caso_id}}/notas",
+                  "host": [
+                    "{{pagos_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "pagos",
+                    "cobros-fallidos",
+                    "{{caso_id}}",
+                    "notas"
+                  ]
+                },
+                "description": "Queda con autor (del JWT) y fecha.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"texto\": \"Cliente contactado; actualiza su método de pago mañana.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Nota - con número de tarjeta (rechazada)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                      "pm.test('sin eco del dato', () => { pm.expect(pm.response.json().error.code).to.eql('DATO_DE_TARJETA_NO_PERMITIDO'); pm.expect(pm.response.text()).to.not.include('4111111111111111'); });"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{asesor_token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{pagos_url}}/v1/pagos/cobros-fallidos/{{caso_id}}/notas",
+                  "host": [
+                    "{{pagos_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "pagos",
+                    "cobros-fallidos",
+                    "{{caso_id}}",
+                    "notas"
+                  ]
+                },
+                "description": "Número de prueba público de Visa: una nota no puede llevar datos de tarjeta.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"texto\": \"pagará con 4111111111111111\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Reintentar cobro",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.collectionVariables.set('reintento_clave', pm.variables.replaceIn('{{$guid}}'));"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200 o 202', () => pm.expect(pm.response.code).to.be.oneOf([200, 202]));",
+                      "const r = pm.response.json();",
+                      "pm.test('resultado distinguible', () => pm.expect(['APROBADO','RECHAZADO','EN_PROCESO']).to.include(r.resultado));",
+                      "pm.test('repeticion false en el primer clic', () => pm.expect(r.repeticion).to.eql(false));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{asesor_token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{reintento_clave}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{pagos_url}}/v1/pagos/cobros-fallidos/{{caso_id}}/reintentar",
+                  "host": [
+                    "{{pagos_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "pagos",
+                    "cobros-fallidos",
+                    "{{caso_id}}",
+                    "reintentar"
+                  ]
+                },
+                "description": "Cobra con el token registrado del cliente y la clave `cobro_prima:<suscripcion_id>:<n>`. Con el simulador, el resultado depende del modo del token."
+              }
+            },
+            {
+              "name": "Reintentar - segundo clic con la misma clave",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200, 202 o 409 si ya se recuperó', () => pm.expect(pm.response.code).to.be.oneOf([200, 202, 409]));",
+                      "if (pm.response.code !== 409) { pm.test('no cobra otra vez', () => { pm.expect(pm.response.json().repeticion).to.eql(true); pm.expect(pm.response.headers.get('Idempotent-Replay')).to.eql('true'); }); }"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{asesor_token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{reintento_clave}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{pagos_url}}/v1/pagos/cobros-fallidos/{{caso_id}}/reintentar",
+                  "host": [
+                    "{{pagos_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "pagos",
+                    "cobros-fallidos",
+                    "{{caso_id}}",
+                    "reintentar"
+                  ]
+                },
+                "description": "Dos clics con la misma `Idempotency-Key` devuelven el mismo reintento."
+              }
+            }
+          ]
         }
       ]
     }
@@ -7329,6 +7816,14 @@
       "key": "transaccion_perdida_id",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "caso_id",
+      "value": ""
+    },
+    {
+      "key": "reintento_clave",
+      "value": ""
     }
   ]
 }

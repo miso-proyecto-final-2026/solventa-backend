@@ -34,7 +34,9 @@ from app.pagos import repositorio as repo
 from app.pagos.config import MONEDA, TOPIC_RESULTADOS
 from app.pagos.dominio import (
     ESTADOS_FINALES,
+    ORIGEN_GESTION,
     DatosToken,
+    EstadoCaso,
     EstadoTransaccion,
     PasarelaNoDisponible,
     PasarelaPago,
@@ -52,7 +54,7 @@ from app.pagos.errores import (
     SolicitudInvalida,
     TokenNoReconocido,
 )
-from app.pagos.modelos_db import IntentoCobroDB, TransaccionDB
+from app.pagos.modelos_db import CasoCobroFallidoDB, IntentoCobroDB, TransaccionDB
 
 log = logging.getLogger("pagos")
 
@@ -297,12 +299,48 @@ class ServicioCobros:
             tx.proximo_intento_en = None
             tx.resuelta_en = ahora
             tx.updated_at = ahora
+            self._actualizar_caso(s, tx, ahora)
             self._encolar_resultado(s, tx, repeticion=False)
         log.info(
             "cobro resuelto transaccion_id=%s estado=%s intento=%d desenlace=%s duracion_ms=%d",
             transaccion_id, tx.estado, numero, desenlace.value, duracion_ms,
         )
         return tx
+
+    def _actualizar_caso(self, s: Session, tx: TransaccionDB, ahora: datetime) -> None:
+        """HU19: un rechazo abre el caso de gestión; el cierre de un reintento lo actualiza (en la misma transacción)."""
+        if tx.origen == ORIGEN_GESTION:
+            caso = repo.caso_abierto_de(s, tx.suscripcion_id)
+            if caso is None:
+                return
+            caso.ultimo_intento_en = ahora
+            caso.updated_at = ahora
+            if tx.estado == EstadoTransaccion.APROBADA.value:
+                caso.estado = EstadoCaso.RECUPERADO.value
+                caso.resuelto_en = ahora
+            else:
+                tx.gracia_hasta = caso.gracia_hasta  # un reintento rechazado no extiende la gracia
+                caso.codigo_rechazo, caso.motivo_rechazo = tx.codigo_rechazo, tx.motivo_rechazo
+            return
+        if tx.estado == EstadoTransaccion.RECHAZADA.value and repo.caso(s, tx.id) is None:
+            s.add(
+                CasoCobroFallidoDB(
+                    id=tx.id,
+                    suscripcion_id=tx.suscripcion_id,
+                    cliente_id=tx.cliente_id,
+                    monto=tx.monto,
+                    moneda=tx.moneda,
+                    token_id=tx.token_id,
+                    estado=EstadoCaso.PENDIENTE.value,
+                    gracia_hasta=tx.gracia_hasta,
+                    codigo_rechazo=tx.codigo_rechazo,
+                    motivo_rechazo=tx.motivo_rechazo,
+                    ultimo_intento_en=ahora,
+                    reintentos=0,
+                    created_at=ahora,
+                    updated_at=ahora,
+                )
+            )
 
     async def procesar_pendientes(self, limite: int = 20) -> int:
         """Una vuelta del procesador: cobros nuevos, reintentos y conciliaciones que ya vencieron."""

@@ -134,6 +134,59 @@ class EventoSalidaDB(BasePagos):
     )
 
 
+class CasoCobroFallidoDB(BasePagos):
+    """Un cobro de prima rechazado que gestiona un asesor u operador (HU19).
+
+    El `id` es el de la transacción rechazada que lo abrió. Los reintentos son transacciones nuevas de la misma suscripción
+    (`origen = gestion`, clave `cobro_prima:<suscripcion_id>:<n>`) y no extienden el período de gracia.
+    """
+
+    __tablename__ = "cobros_fallidos"
+
+    id: Mapped[str] = mapped_column(String(36), ForeignKey(f"{SCHEMA}.transacciones.id"), primary_key=True)
+    suscripcion_id: Mapped[str] = mapped_column(String(36))
+    cliente_id: Mapped[str] = mapped_column(String(64))
+    monto: Mapped[Decimal] = mapped_column(Numeric(15, 2))
+    moneda: Mapped[str] = mapped_column(String(3))
+    # El token ya registrado del cliente: el reintento lo reutiliza (no se registra una tarjeta nueva en HU19).
+    token_id: Mapped[int] = mapped_column(Integer, ForeignKey(f"{SCHEMA}.tokens_tarjeta.id"))
+    estado: Mapped[str] = mapped_column(String(20), default="PENDIENTE")  # PENDIENTE | VENCIDO | RECUPERADO
+    gracia_hasta: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Del último cobro rechazado (el original o un reintento).
+    codigo_rechazo: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    motivo_rechazo: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    ultimo_intento_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    reintentos: Mapped[int] = mapped_column(Integer, default=0)
+    # El último reintento y la clave de la solicitud que lo pidió: dos clics con la misma clave devuelven el mismo.
+    transaccion_vigente_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    clave_solicitud: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    operador_notificado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resuelto_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("ix_caso_estado_gracia", "estado", "gracia_hasta"),
+        Index("ix_caso_suscripcion", "suscripcion_id"),
+    )
+
+
+class NotaCobroFallidoDB(BasePagos):
+    """Nota de seguimiento de un caso, con su autor y fecha (HU19, criterio 5). Nunca lleva datos de tarjeta."""
+
+    __tablename__ = "notas_cobro_fallido"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    caso_id: Mapped[str] = mapped_column(String(36), ForeignKey(f"{SCHEMA}.cobros_fallidos.id"))
+    autor_id: Mapped[str] = mapped_column(String(64))
+    autor_nombre: Mapped[str] = mapped_column(String(200))
+    autor_rol: Mapped[str] = mapped_column(String(20))
+    texto: Mapped[str] = mapped_column(String(1000))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_nota_caso", "caso_id", "created_at"),)
+
+
 class CargoSimuladoDB(BasePagos):
     """Libro de la pasarela SIMULADA. Solo lo lee y escribe `simulador.py`; con una pasarela real no existe.
 

@@ -67,3 +67,23 @@ def test_la_aplicacion_arranca_y_responde_health(monkeypatch):
         assert cliente.get("/health").json() == {"status": "ok"}
         r = cliente.get("/v1/pagos/transacciones/x")
         assert r.status_code == 401 and r.json()["error"]["code"] == "NO_AUTENTICADO"
+        r = cliente.get("/v1/pagos/cobros-fallidos")
+        assert r.status_code == 401 and r.json()["error"]["code"] == "NO_AUTENTICADO"
+
+
+def test_sin_secreto_del_jwt_la_gestion_solo_arranca_en_modo_desarrollo(monkeypatch):
+    from app.pagos.acceso import construir_verificador
+
+    assert construir_verificador(ConfigPagos.desde_entorno(ENTORNO)) is not None
+    monkeypatch.delenv("SOLVENTA_MODO_DESARROLLO")
+    with pytest.raises(ErrorConfiguracion):
+        construir_verificador(ConfigPagos.desde_entorno(ENTORNO))
+
+
+def test_la_configuracion_de_la_gestion_se_lee_del_entorno():
+    c = ConfigPagos.desde_entorno(
+        {**ENTORNO, "ASESOR_JWT_SECRETO": "s", "PAGOS_HORAS_POR_VENCER": "12", "PAGOS_DETECTOR_GRACIA_S": "5"}
+    )
+    assert (c.asesor_jwt_secreto, c.asesor_jwt_emisor, c.horas_por_vencer, c.detector_gracia_intervalo_s) == (
+        "s", "solventa-identidad", 12, 5.0,
+    )

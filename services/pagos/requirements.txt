@@ -3,5 +3,6 @@ uvicorn[standard]>=0.30
 sqlalchemy>=2.0
 psycopg[binary]>=3.2
 alembic>=1.13
+PyJWT>=2.8
 aiokafka==0.14.0
 aws-msk-iam-sasl-signer-python==1.0.2

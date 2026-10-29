@@ -63,6 +63,16 @@ class PasarelaNoResponde(ErrorPagos):
     status, code, mensaje = 503, "PASARELA_NO_DISPONIBLE", "La pasarela no responde; reintente."
 
 
+# --- gestión de cobros fallidos (HU19) -------------------------------------------------------------------------
+
+class CasoNoEncontrado(ErrorPagos):
+    status, code, mensaje = 404, "CASO_NO_ENCONTRADO", "El cobro fallido no existe."
+
+
+class CasoYaRecuperado(ErrorPagos):
+    status, code, mensaje = 409, "CASO_YA_RECUPERADO", "El cobro ya se recuperó; no se puede reintentar."
+
+
 def cuerpo_error(code: str, message: str, detalles: list[dict[str, str]] | None = None, trace_id: str | None = None) -> dict[str, Any]:
     traza = trace_id or traza_id.get() or str(uuid.uuid4())
     return {"error": {"code": code, "message": message, "details": detalles or [], "trace_id": traza}}
