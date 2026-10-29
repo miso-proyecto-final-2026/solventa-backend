@@ -1,4 +1,4 @@
-# ADR-0015 — MS Suscripción: documento de la póliza tras el cobro confirmado
+# ADR-0017 — MS Suscripción: documento de la póliza tras el cobro confirmado
 
 - **Estado:** Propuesto (pendiente de revisión por un integrante distinto del autor)
 - **Fecha:** 2026-10-28
@@ -36,7 +36,8 @@ confirmado**: no puede bloquearse ni deshacerse por culpa del documento.
 4. **Estados.** `polizas.estado`: `PENDIENTE_FIRMA` → `VIGENTE`. El esquema documentado del hub dice `DEFAULT 'VIGENTE'`;
    se desvía a propósito porque la póliza solo es vigente tras la firma de HU21. `polizas.documento_estado`:
    `PENDIENTE` → `GENERADO` | `FALLIDO`. La saga sigue en `COBRO_REALIZADO` / `FIRMA` hasta emitir. El `GET` de la suscripción
-   muestra el bloque `poliza` (estado del documento, intentos y nombre del último error) para el operador.
+   muestra el bloque `poliza` (estado del documento, intentos y nombre del último error). Hoy ese `GET` solo acepta el token
+   del cliente; el acceso del operador con el JWT del rol `OPERADOR` (HU19, ADR-0008) queda pendiente.
 5. **Contenido fiel (criterio 9).** Al iniciar la saga se guarda una copia de `coberturas[{tipo, monto, deducible}]` y de la
    versión de reglas de la cotización (antes solo se guardaba el monto máximo). Para sagas anteriores a HU20 el generador relee
    la cotización por REST, solo lectura y sin recalcular. Las primas salen de `suscripciones`, nunca se recalculan.
@@ -70,5 +71,6 @@ confirmado**: no puede bloquearse ni deshacerse por culpa del documento.
   - El documento no incluye los datos del bien asegurado (tipo y antigüedad del dispositivo): Cotización no expone `datos` en
     `CotizacionOut`. Queda como mejora.
   - La vigencia de 12 meses desde el cobro (`POLIZAS_VIGENCIA_MESES`) es provisional: ningún documento la define.
-  - Una póliza `FALLIDO` no se reintenta sola; el reintento manual del operador queda fuera de alcance (probablemente HU19).
+  - Una póliza `FALLIDO` no se reintenta sola; el reintento manual del operador queda fuera de alcance. HU19 no lo cubre
+    (gestiona los cobros fallidos en Pagos), así que queda pendiente, sin historia asignada.
   - La retención de las pólizas en producción está por definir (en staging el bucket no expira objetos).

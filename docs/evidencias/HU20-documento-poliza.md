@@ -5,7 +5,7 @@
 - **Alcance de la evidencia:** pruebas automatizadas en local (Windows, Python 3.11, con PostgreSQL 16 y Kafka reales en contenedores), la colección de
   Postman con Newman y una prueba de humo con los servicios en ejecución. **Todavía no hay evidencia en staging**: falta aplicar infra y desplegar (lo hace una persona).
   Este informe se actualiza cuando exista.
-- **Decisión de diseño:** [ADR-0015](../adr/0015-ms-suscripcion-documento-de-poliza.md)
+- **Decisión de diseño:** [ADR-0017](../adr/0017-ms-suscripcion-documento-de-poliza.md)
 
 ## Criterios de aceptación
 
