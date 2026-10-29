@@ -172,6 +172,25 @@ async def test_un_cobro_rechazado_no_registra_poliza(armar, fabrica):
     assert _poliza(fabrica, susc.id) is None
 
 
+async def test_el_reintento_aprobado_tras_un_rechazo_registra_una_sola_poliza(armar, fabrica):
+    # HU19: tras el rechazo la saga sigue en APROBADA / COBRO; el reintento de la consola llega como otro cobro confirmado.
+    servicio = armar()
+    susc, _ = await _iniciar(servicio)
+    await servicio.decidir(susc.id)
+    with fabrica() as s, s.begin():
+        await manejar_resultado_cobro(_resultado(susc.id, "cobro_prima_rechazado", codigo="FONDOS", motivo="x"), s)
+
+    await _confirmar(fabrica, susc.id, transaccion_id="tx-2", resuelta_en="2026-10-27T09:30:00+00:00")
+    await _confirmar(fabrica, susc.id, transaccion_id="tx-2", resuelta_en="2026-10-27T09:30:00+00:00")
+
+    with fabrica() as s:
+        assert s.query(PolizaDB).count() == 1
+        saga = repo.obtener(s, susc.id)
+    poliza = _poliza(fabrica, susc.id)
+    assert (saga.estado_saga, saga.cobro_transaccion_id, saga.cobro_gracia_hasta) == ("COBRO_REALIZADO", "tx-2", None)
+    assert repo.utc(poliza.vigencia_desde) == datetime(2026, 10, 27, 9, 30, tzinfo=UTC)
+
+
 # --- vigencia ------------------------------------------------------------------------------------------------------
 
 async def test_la_vigencia_son_12_meses_desde_el_cobro(armar, fabrica):
