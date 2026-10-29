@@ -25,6 +25,7 @@ Cada petición lleva pruebas (`pm.test`) y guarda las variables que necesita la 
 | MS Siniestros (HU27) | `POST /v1/siniestros/eventos` (202 acuse, 200 duplicado, 400 inválido/fuente ajena, 401) y `GET …/eventos/resumen` |
 | MS Perfilamiento (HU23) | `POST /v1/perfilamiento/{id}/enriquecer`, `GET …/perfil` y `GET …/linaje` (con credencial; 401/403/404/422) |
 | MS Suscripción (HU15) | `POST /v1/suscripciones` (202, idempotencia, cotización ya usada, 401/404/422), `GET /v1/suscripciones/{id}`. Usa el cliente y la cotización de las carpetas anteriores. Quedan fuera `COTIZACION_VENCIDA` (exige una cotización vencida) y las decisiones rechazada/derivada (dependen del perfil del cliente; se prueban en pytest). |
+| MS Pagos (HU18) | `POST /v1/pagos/tokenizar` (201, PAN rechazado 422), `POST /v1/pagos/cobros` (aprobado 201, repetición 200, clave con otro monto 409, rechazado con gracia, respuesta perdida 202) y `GET /v1/pagos/transacciones/{id}` (200/401/403/404). Servicio interno: todo con `X-Service-Key`. |
 | MS Cotización / Perfiles | `GET /perfiles/{cliente_id}` (exige clave de servicio; 401/403) |
 | MS Identidad / Asesor - login y búsqueda (HU38) | `POST /v1/sesiones-internas`, `GET /v1/clientes/busqueda` (200/401/404/422) |
 | MS Cotización / Cotización asistida (HU38) | `GET /v1/productos` (200/304), `GET /v1/asesor/clientes/{id}/perfil`, `POST /v1/asesor/cotizaciones` (cliente existente, sin cuenta, 401/422) |
@@ -76,6 +77,14 @@ uvicorn app.main:app --port 8004
 ```
 
 Sin `IDENTIDAD_URL`, Perfilamiento usa el consentimiento «siempre otorgado» (solo desarrollo). Con ella, un cliente sin consentimiento vigente recibe 403 `CONSENTIMIENTO_NO_VIGENTE` y el intento queda registrado con el nombre de la clave (`postman`) como origen.
+
+```bash
+# MS Pagos (puerto 8005, HU18) — en otra terminal. Pasarela simulada; sin Kafka no hay consumidor (se usa POST /v1/pagos/cobros).
+cd services/pagos
+SOLVENTA_MODO_DESARROLLO=1 PAGOS_API_KEYS=postman=dev-pagos-key uvicorn app.main:app --port 8005
+```
+
+En staging MS Pagos no tiene borde público: abra un túnel con `kubectl -n staging port-forward svc/solventa-pagos 8005:80`, cambie `pagos_url` a `http://localhost:8005` y ponga en `pagos_key` la clave de `solventa/staging/pagos-api-key` (Secrets Manager) como valor **actual** de la variable secreta del entorno, nunca en el archivo versionado.
 
 La llave de Siniestros se asocia a una fuente (`proveedor-sismos`): el evento debe traer esa misma `fuente` o recibe 400 `FUENTE_DESCONOCIDA`. Sin `KAFKA_BOOTSTRAP_SERVERS`, en desarrollo se publica en memoria y no hay consumidor, así que `procesados` queda en 0; con un Kafka local (`KAFKA_SEGURIDAD=PLAINTEXT`) el consumidor corre dentro del mismo proceso. `GET /v1/siniestros/eventos/resumen` muestra recibidos, publicados, procesados y reentregas.
 

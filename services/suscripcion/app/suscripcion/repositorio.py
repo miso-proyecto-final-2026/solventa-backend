@@ -70,6 +70,7 @@ def nueva_suscripcion(
     ahora: datetime,
     correlacion_id: str | None = None,
     metodo_pago_token: str | None = None,
+    periodicidad_pago: str = "ANUAL",
 ) -> SuscripcionDB:
     """Crea la saga en `EN_PROGRESO` / `DECISION`. Puede lanzar IntegrityError (clave repetida o cotización ya usada)."""
     suscripcion = SuscripcionDB(
@@ -84,6 +85,7 @@ def nueva_suscripcion(
         monto_asegurado=monto_asegurado,
         prima_mensual=Decimal(str(prima_mensual)),
         prima_anual=Decimal(str(prima_anual)),
+        periodicidad_pago=periodicidad_pago,
         motivos=[],
         correlacion_id=correlacion_id,
         metodo_pago_token=metodo_pago_token,

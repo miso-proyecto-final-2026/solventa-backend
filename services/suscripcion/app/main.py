@@ -11,7 +11,11 @@ from app.suscripcion.api import router as suscripciones_router
 from app.suscripcion.config import ConfigSuscripcion
 from app.suscripcion.errores import registrar_errores
 from app.suscripcion.relay import RelayEventos
-from app.suscripcion.wiring import construir_publicador, construir_servicio
+from app.suscripcion.wiring import (
+    construir_consumidor_cobros,
+    construir_publicador,
+    construir_servicio,
+)
 
 log = logging.getLogger("suscripcion")
 
@@ -33,15 +37,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if hasattr(publicador, "iniciar"):
         await publicador.iniciar()
     relay = RelayEventos(sessionmaker(bind=engine, expire_on_commit=False), publicador)
+    # Resultados del cobro de MS Pagos (HU18): avanzan la saga a COBRO_REALIZADO o registran el rechazo.
+    consumidor = construir_consumidor_cobros(engine, publicador)
     app.state.servicio_suscripcion = servicio
     app.state.tareas = set()
     segundo_plano = [
         asyncio.create_task(relay.ejecutar()),
         asyncio.create_task(_barrer(servicio, config.espera_barrido_s)),
     ]
+    if consumidor is not None:
+        await consumidor.iniciar()
+        segundo_plano.append(asyncio.create_task(consumidor.ejecutar()))
     try:
         yield
     finally:
+        if consumidor is not None:
+            await consumidor.detener()
         for t in segundo_plano:
             t.cancel()
         await asyncio.gather(*segundo_plano, return_exceptions=True)

@@ -1,0 +1,22 @@
+{
+  "event_id": "4bf7621b-a39d-4739-8f69-d8ad6ec7808e",
+  "event_type": "cobro_prima_solicitado",
+  "source": "ms-suscripcion",
+  "timestamp": "2026-10-23T12:00:00Z",
+  "correlation_id": "20b35e50-c0ac-4576-8a58-44fe60dc339f",
+  "trace_id": "783587f0-e7d6-4bbb-9c51-7d5af24986b2",
+  "version": "1.0",
+  "payload": {
+    "suscripcion_id": "20b35e50-c0ac-4576-8a58-44fe60dc339f",
+    "cotizacion_id": "cot-1",
+    "cliente_id": "cli-1",
+    "decision": "APROBADA",
+    "moneda": "COP",
+    "prima_mensual": 14583,
+    "prima_anual": 175000,
+    "periodicidad_pago": "ANUAL",
+    "monto": "175000.00",
+    "idempotency_key": "cobro_prima:20b35e50-c0ac-4576-8a58-44fe60dc339f",
+    "metodo_pago": "tok_sim_contrato01"
+  }
+}

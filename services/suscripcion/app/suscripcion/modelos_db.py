@@ -51,6 +51,8 @@ class SuscripcionDB(BaseSuscripcion):
     monto_asegurado: Mapped[int] = mapped_column(BigInteger)
     prima_mensual: Mapped[Decimal] = mapped_column(Numeric(15, 2))
     prima_anual: Mapped[Decimal] = mapped_column(Numeric(15, 2))
+    # El cliente elige cómo paga (HU18); se cobra el primer período. ANUAL por defecto: la app anterior no lo envía.
+    periodicidad_pago: Mapped[str] = mapped_column(String(10), default="ANUAL", server_default="ANUAL")
     # Token de la pasarela (nunca el PAN). Se borra en cuanto deja de hacer falta (cobro encolado o rechazo).
     metodo_pago_token: Mapped[str | None] = mapped_column(String(200), nullable=True)
     # Resultado de la decisión: nulo mientras no se decide.
@@ -61,6 +63,14 @@ class SuscripcionDB(BaseSuscripcion):
     decidido_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     duracion_decision_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     correlacion_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Resultado del paso COBRO tal como lo informa MS Pagos (HU18). Nulos mientras no hay respuesta.
+    cobro_estado: Mapped[str | None] = mapped_column(String(20), nullable=True)  # APROBADO | RECHAZADO
+    cobro_transaccion_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    cobro_referencia: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    cobro_codigo: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    cobro_motivo: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    cobro_gracia_hasta: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cobro_resuelto_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 

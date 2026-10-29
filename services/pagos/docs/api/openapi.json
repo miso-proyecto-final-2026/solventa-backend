@@ -1,0 +1,569 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Solventa — MS Pagos",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/v1/pagos/tokenizar": {
+      "post": {
+        "tags": [
+          "pagos"
+        ],
+        "summary": "Registra un token de la pasarela (nunca el PAN) con su marca y últimos 4 dígitos",
+        "operationId": "tokenizar_v1_pagos_tokenizar_post",
+        "parameters": [
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pagos/cobros": {
+      "post": {
+        "tags": [
+          "pagos"
+        ],
+        "summary": "Cobra la prima (entrada interna; la saga usa normalmente el evento cobro_prima_solicitado)",
+        "operationId": "cobrar_v1_pagos_cobros_post",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CobroIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransaccionOut"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Repetición de la misma clave: el resultado del primer cobro"
+          },
+          "202": {
+            "description": "Sin respuesta cierta de la pasarela todavía: queda PENDIENTE y se concilia"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pagos/transacciones/{transaccion_id}": {
+      "get": {
+        "tags": [
+          "pagos"
+        ],
+        "summary": "Estado de una transacción",
+        "operationId": "consultar_v1_pagos_transacciones__transaccion_id__get",
+        "parameters": [
+          {
+            "name": "transaccion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Transaccion Id"
+            }
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransaccionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CobroIn": {
+        "properties": {
+          "suscripcion_id": {
+            "type": "string",
+            "maxLength": 36,
+            "minLength": 1,
+            "title": "Suscripcion Id"
+          },
+          "cliente_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Cliente Id"
+          },
+          "metodo_pago": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Metodo Pago",
+            "description": "Token de la pasarela; nunca el número de tarjeta"
+          },
+          "monto": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Monto"
+          },
+          "moneda": {
+            "type": "string",
+            "const": "COP",
+            "title": "Moneda",
+            "default": "COP"
+          },
+          "periodicidad_pago": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ANUAL",
+                  "MENSUAL"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Periodicidad Pago"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "suscripcion_id",
+          "cliente_id",
+          "metodo_pago",
+          "monto"
+        ],
+        "title": "CobroIn"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "RechazoOut": {
+        "properties": {
+          "codigo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codigo"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "codigo",
+          "motivo"
+        ],
+        "title": "RechazoOut"
+      },
+      "TokenIn": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Token",
+            "description": "Token emitido por la pasarela; nunca el número de tarjeta"
+          },
+          "cliente_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "TokenIn"
+      },
+      "TokenOut": {
+        "properties": {
+          "token_id": {
+            "type": "integer",
+            "title": "Token Id"
+          },
+          "ultimos4": {
+            "type": "string",
+            "title": "Ultimos4"
+          },
+          "marca": {
+            "type": "string",
+            "title": "Marca"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token_id",
+          "ultimos4",
+          "marca"
+        ],
+        "title": "TokenOut"
+      },
+      "TransaccionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "suscripcion_id": {
+            "type": "string",
+            "title": "Suscripcion Id"
+          },
+          "monto": {
+            "type": "string",
+            "title": "Monto"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "periodicidad_pago": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Periodicidad Pago"
+          },
+          "referencia_pasarela": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referencia Pasarela"
+          },
+          "ultimos4": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultimos4"
+          },
+          "marca": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marca"
+          },
+          "rechazo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RechazoOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gracia_hasta": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gracia Hasta"
+          },
+          "intentos": {
+            "type": "integer",
+            "title": "Intentos"
+          },
+          "creada_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creada En"
+          },
+          "resuelta_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resuelta En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tipo",
+          "estado",
+          "suscripcion_id",
+          "monto",
+          "moneda",
+          "periodicidad_pago",
+          "referencia_pasarela",
+          "ultimos4",
+          "marca",
+          "rechazo",
+          "gracia_hasta",
+          "intentos",
+          "creada_en",
+          "resuelta_en"
+        ],
+        "title": "TransaccionOut"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

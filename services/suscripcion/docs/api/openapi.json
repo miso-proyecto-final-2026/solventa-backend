@@ -163,6 +163,94 @@
   },
   "components": {
     "schemas": {
+      "CobroOut": {
+        "properties": {
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "transaccion_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transaccion Id"
+          },
+          "referencia_pasarela": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referencia Pasarela"
+          },
+          "codigo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codigo"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          },
+          "gracia_hasta": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gracia Hasta"
+          },
+          "resuelto_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resuelto En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "estado",
+          "transaccion_id",
+          "referencia_pasarela",
+          "codigo",
+          "motivo",
+          "gracia_hasta",
+          "resuelto_en"
+        ],
+        "title": "CobroOut",
+        "description": "Resultado del paso COBRO según MS Pagos. Nunca incluye el token ni datos de la tarjeta."
+      },
       "DecisionOut": {
         "properties": {
           "decision": {
@@ -265,6 +353,16 @@
           "acepta_terminos": {
             "type": "boolean",
             "title": "Acepta Terminos"
+          },
+          "periodicidad_pago": {
+            "type": "string",
+            "enum": [
+              "ANUAL",
+              "MENSUAL"
+            ],
+            "title": "Periodicidad Pago",
+            "description": "Cómo paga el cliente; se cobra el primer período (HU18)",
+            "default": "ANUAL"
           }
         },
         "additionalProperties": false,
@@ -313,10 +411,24 @@
             "type": "integer",
             "title": "Monto Asegurado"
           },
+          "periodicidad_pago": {
+            "type": "string",
+            "title": "Periodicidad Pago"
+          },
           "decision": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/DecisionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cobro": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CobroOut"
               },
               {
                 "type": "null"
@@ -343,7 +455,9 @@
           "producto",
           "moneda",
           "monto_asegurado",
+          "periodicidad_pago",
           "decision",
+          "cobro",
           "revision_asistida",
           "creada_en"
         ],

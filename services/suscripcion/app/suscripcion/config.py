@@ -8,6 +8,9 @@ from dataclasses import dataclass
 SQLITE_LOCAL = "sqlite:///./suscripcion.db"
 TOPIC_COMANDOS = "solventa.suscripcion.comandos"
 TOPIC_REVISION = "solventa.suscripcion.revision"
+TOPIC_RESULTADOS_PAGOS = "solventa.pagos.resultados"
+# El grupo de consumo debe empezar por el nombre del servicio: es lo único que permite su política de IAM.
+GRUPO_PAGOS = "solventa-suscripcion.pagos"
 
 
 @dataclass(frozen=True)

@@ -8,9 +8,11 @@ from sqlalchemy.orm import sessionmaker
 
 from app.configuracion import permitir_sustituto_local
 from app.eventos import (
+    ConsumidorEventos,
     PublicadorEventos,
     PublicadorKafka,
     PublicadorMemoria,
+    RegistroEventos,
     brokers_desde_entorno,
     parametros_seguridad,
 )
@@ -19,7 +21,14 @@ from app.suscripcion.clientes import (
     ClienteIdentidad,
     ClientePerfilamiento,
 )
-from app.suscripcion.config import SQLITE_LOCAL, ConfigSuscripcion
+from app.suscripcion.cobros import manejar_resultado_cobro
+from app.suscripcion.config import (
+    GRUPO_PAGOS,
+    SQLITE_LOCAL,
+    TOPIC_RESULTADOS_PAGOS,
+    ConfigSuscripcion,
+)
+from app.suscripcion.modelos_db import TABLA_EVENTOS_PROCESADOS
 from app.suscripcion.reglas import cargar_reglas
 from app.suscripcion.repositorio import crear_engine, crear_tablas_locales
 from app.suscripcion.servicio import ServicioSuscripcion
@@ -64,3 +73,21 @@ def construir_publicador() -> PublicadorEventos:
         permitir_sustituto_local("KAFKA_BOOTSTRAP_SERVERS", "un publicador en memoria (los eventos no salen del proceso)")
         return PublicadorMemoria()
     return PublicadorKafka(brokers_desde_entorno(), parametros_seguridad(), client_id="ms-suscripcion")
+
+
+def construir_consumidor_cobros(engine: Engine, publicador: PublicadorEventos) -> ConsumidorEventos | None:
+    """Consumidor de los resultados de MS Pagos (HU18). Sin Kafka (solo desarrollo) no hay nada que consumir."""
+    import os
+
+    if not os.environ.get("KAFKA_BOOTSTRAP_SERVERS"):
+        return None
+    return ConsumidorEventos(
+        brokers=brokers_desde_entorno(),
+        seguridad=parametros_seguridad(),
+        topic=TOPIC_RESULTADOS_PAGOS,
+        grupo=GRUPO_PAGOS,
+        manejador=manejar_resultado_cobro,
+        fabrica_sesiones=sessionmaker(bind=engine, expire_on_commit=False),
+        registro=RegistroEventos(TABLA_EVENTOS_PROCESADOS),
+        publicador=publicador,
+    )
