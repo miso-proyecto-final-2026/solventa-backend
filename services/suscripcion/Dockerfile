@@ -5,6 +5,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY reglas ./reglas
+COPY plantillas ./plantillas
 # Migraciones del esquema suscripcion: alembic upgrade head (ver docs/adr/0003)
 COPY alembic.ini ./
 COPY migrations ./migrations

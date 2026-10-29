@@ -13,6 +13,24 @@ from app.suscripcion.errores import DependenciaNoDisponible
 
 
 @dataclass(frozen=True)
+class Cobertura:
+    tipo: str
+    monto: int
+    deducible: int
+
+
+@dataclass(frozen=True)
+class ResumenCliente:
+    """Lo que el documento de la póliza necesita del cliente. El documento llega ya enmascarado desde Identidad."""
+
+    cliente_id: str
+    nombre: str
+    apellido: str
+    tipo_documento: str
+    documento_enmascarado: str
+
+
+@dataclass(frozen=True)
 class CotizacionDatos:
     id: str
     cliente_id: str
@@ -22,10 +40,14 @@ class CotizacionDatos:
     prima_anual: int
     monto_asegurado: int  # la cobertura principal (la de mayor monto): las demás son parte de ella, no se suman
     vigente_hasta: datetime
+    coberturas: tuple[Cobertura, ...] = ()
+    version_reglas: str | None = None
 
 
 class Identidad(Protocol):
     async def cliente_de_token(self, token: str) -> str | None: ...
+
+    async def resumen_cliente(self, cliente_id: str) -> ResumenCliente | None: ...
 
 
 class Cotizaciones(Protocol):
@@ -56,6 +78,25 @@ class ClienteIdentidad:
             raise DependenciaNoDisponible(f"Identidad respondió {r.status_code}.")
         return str(r.json()["cliente_id"])
 
+    async def resumen_cliente(self, cliente_id: str) -> ResumenCliente | None:
+        """`GET /v1/resumenes-cliente/{id}` (interno, HU20): nombre y documento enmascarado para el PDF de la póliza."""
+        try:
+            r = await self._http.get(f"/v1/resumenes-cliente/{cliente_id}", headers={"X-Service-Key": self._clave})
+        except httpx.HTTPError as error:
+            raise DependenciaNoDisponible("Identidad no responde.") from error
+        if r.status_code == 404:
+            return None
+        if r.status_code != 200:
+            raise DependenciaNoDisponible(f"Identidad respondió {r.status_code}.")
+        d = r.json()
+        return ResumenCliente(
+            cliente_id=d["cliente_id"],
+            nombre=d["nombre"],
+            apellido=d["apellido"],
+            tipo_documento=d["tipo_documento"],
+            documento_enmascarado=d["documento_enmascarado"],
+        )
+
 
 class ClienteCotizacion:
     """`GET /v1/cotizaciones/{id}`."""
@@ -83,6 +124,11 @@ class ClienteCotizacion:
             prima_anual=int(c["prima_anual"]),
             monto_asegurado=max((int(x["monto"]) for x in c.get("coberturas", [])), default=0),
             vigente_hasta=vigente if vigente.tzinfo else vigente.replace(tzinfo=UTC),
+            coberturas=tuple(
+                Cobertura(tipo=str(x["tipo"]), monto=int(x["monto"]), deducible=int(x.get("deducible", 0)))
+                for x in c.get("coberturas", [])
+            ),
+            version_reglas=c.get("version_reglas"),
         )
 
 

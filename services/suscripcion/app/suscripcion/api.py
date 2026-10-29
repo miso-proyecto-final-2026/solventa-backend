@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Header, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.suscripcion.dominio import PASOS
-from app.suscripcion.modelos_db import SuscripcionDB
+from app.suscripcion.modelos_db import PolizaDB, SuscripcionDB
 from app.suscripcion.servicio import ServicioSuscripcion
 
 log = logging.getLogger("suscripcion")
@@ -63,6 +63,16 @@ class CobroOut(BaseModel):
     resuelto_en: datetime | None
 
 
+class PolizaResumenOut(BaseModel):
+    """La póliza dentro de la saga: lo que el operador necesita ver si el documento no se genera."""
+
+    numero_poliza: str
+    estado: str
+    documento_estado: str
+    documento_intentos: int
+    documento_error: str | None
+
+
 class SuscripcionOut(BaseModel):
     id: str
     cotizacion_id: str
@@ -75,11 +85,12 @@ class SuscripcionOut(BaseModel):
     periodicidad_pago: str
     decision: DecisionOut | None
     cobro: CobroOut | None
+    poliza: PolizaResumenOut | None = None
     revision_asistida: bool
     creada_en: datetime
 
 
-def a_salida(s: SuscripcionDB, revision: bool) -> SuscripcionOut:
+def a_salida(s: SuscripcionDB, revision: bool, poliza: PolizaDB | None = None) -> SuscripcionOut:
     decision = None
     if s.decision is not None:
         decision = DecisionOut(
@@ -113,6 +124,15 @@ def a_salida(s: SuscripcionDB, revision: bool) -> SuscripcionOut:
         periodicidad_pago=s.periodicidad_pago,
         decision=decision,
         cobro=cobro,
+        poliza=None
+        if poliza is None
+        else PolizaResumenOut(
+            numero_poliza=poliza.numero_poliza,
+            estado=poliza.estado,
+            documento_estado=poliza.documento_estado,
+            documento_intentos=poliza.documento_intentos,
+            documento_error=poliza.documento_error,
+        ),
         revision_asistida=revision,
         creada_en=s.created_at,
     )
@@ -168,4 +188,59 @@ async def consultar(
 ) -> SuscripcionOut:
     susc = await servicio.consultar(suscripcion_id, _token(authorization))
     revisiones = await asyncio.to_thread(servicio.revisiones, suscripcion_id)
-    return a_salida(susc, revision=bool(revisiones))
+    poliza = await asyncio.to_thread(servicio.poliza_de_suscripcion, suscripcion_id)
+    return a_salida(susc, revision=bool(revisiones), poliza=poliza)
+
+
+class PolizaOut(BaseModel):
+    """Metadatos de la póliza. No trae URL de descarga: la entrega del documento es de HU22."""
+
+    id: str
+    suscripcion_id: str
+    numero_poliza: str
+    producto: str
+    estado: str
+    documento_estado: str
+    documento_s3_key: str | None
+    documento_generado_en: datetime | None
+    plantilla_version: str
+    vigencia_desde: datetime
+    fecha_vencimiento: datetime
+    fecha_emision: datetime | None
+    moneda: str
+    monto_asegurado: int
+    prima_anual: int
+    prima_mensual: int
+    periodicidad_pago: str
+
+
+def poliza_a_salida(p: PolizaDB, s: SuscripcionDB) -> PolizaOut:
+    return PolizaOut(
+        id=p.id,
+        suscripcion_id=p.suscripcion_id,
+        numero_poliza=p.numero_poliza,
+        producto=s.producto,
+        estado=p.estado,
+        documento_estado=p.documento_estado,
+        documento_s3_key=p.documento_s3_key,
+        documento_generado_en=p.documento_generado_en,
+        plantilla_version=p.plantilla_version,
+        vigencia_desde=p.vigencia_desde,
+        fecha_vencimiento=p.fecha_vencimiento,
+        fecha_emision=p.fecha_emision,
+        moneda=s.moneda,
+        monto_asegurado=int(s.monto_asegurado),
+        prima_anual=int(s.prima_anual),
+        prima_mensual=int(s.prima_mensual),
+        periodicidad_pago=s.periodicidad_pago,
+    )
+
+
+@router.get("/{suscripcion_id}/poliza", response_model=PolizaOut, summary="Póliza de la suscripción (HU20)")
+async def consultar_poliza(
+    suscripcion_id: str,
+    servicio: Servicio,
+    authorization: Annotated[str | None, Header()] = None,
+) -> PolizaOut:
+    poliza, susc = await servicio.consultar_poliza(suscripcion_id, _token(authorization))
+    return poliza_a_salida(poliza, susc)

@@ -24,14 +24,16 @@ from app.suscripcion.config import TOPIC_COMANDOS, TOPIC_REVISION
 from app.suscripcion.decision import decidir
 from app.suscripcion.dominio import Decision, EstadoSaga, PasoSaga, SolicitudDecision
 from app.suscripcion.errores import (
+    AccesoDenegado,
     ClaveReutilizada,
     CotizacionNoEncontrada,
     CotizacionVencida,
     CotizacionYaUsada,
     NoAutenticado,
+    PolizaNoEncontrada,
     SolicitudInvalida,
 )
-from app.suscripcion.modelos_db import SuscripcionDB
+from app.suscripcion.modelos_db import PolizaDB, SuscripcionDB
 from app.suscripcion.reglas import Reglas
 
 log = logging.getLogger("suscripcion")
@@ -163,6 +165,8 @@ class ServicioSuscripcion:
                 correlacion_id=correlacion_id.get(),
                 metodo_pago_token=metodo_pago,
                 periodicidad_pago=periodicidad_pago,
+                coberturas=[{"tipo": x.tipo, "monto": x.monto, "deducible": x.deducible} for x in c.coberturas] or None,
+                cotizacion_version_reglas=c.version_reglas,
             )
 
     # --- consultar ----------------------------------------------------------------------------------------------
@@ -184,6 +188,44 @@ class ServicioSuscripcion:
         if susc is None or susc.cliente_id != cliente_id:
             raise SuscripcionNoEncontrada
         return susc
+
+    def poliza_de_suscripcion(self, suscripcion_id: str) -> PolizaDB | None:
+        with self._fabrica() as s:
+            return repo.poliza_de_suscripcion(s, suscripcion_id)
+
+    async def _cliente_del_token(self, token: str | None) -> str:
+        if not token:
+            raise NoAutenticado
+        cliente_id = await self._identidad.cliente_de_token(token)
+        if cliente_id is None:
+            raise NoAutenticado
+        return cliente_id
+
+    async def consultar_poliza(self, suscripcion_id: str, token: str | None) -> tuple[PolizaDB, SuscripcionDB]:
+        """La póliza de una suscripción. La de otro cliente responde igual que una inexistente."""
+        cliente_id = await self._cliente_del_token(token)
+
+        def leer() -> tuple[PolizaDB, SuscripcionDB] | None:
+            with self._fabrica() as s:
+                susc = repo.obtener(s, suscripcion_id)
+                poliza = repo.poliza_de_suscripcion(s, suscripcion_id)
+                return (poliza, susc) if susc is not None and poliza is not None else None
+
+        encontrada = await asyncio.to_thread(leer)
+        if encontrada is None or encontrada[1].cliente_id != cliente_id:
+            raise PolizaNoEncontrada
+        return encontrada
+
+    async def billetera(self, cliente_id: str, token: str | None) -> list[tuple[PolizaDB, SuscripcionDB]]:
+        """Las pólizas del cliente. Un `cliente_id` distinto al del token es 403."""
+        if await self._cliente_del_token(token) != cliente_id:
+            raise AccesoDenegado
+
+        def leer() -> list[tuple[PolizaDB, SuscripcionDB]]:
+            with self._fabrica() as s:
+                return repo.polizas_de_cliente(s, cliente_id)
+
+        return await asyncio.to_thread(leer)
 
     def revisiones(self, suscripcion_id: str) -> list[Any]:
         with self._fabrica() as s:

@@ -1,0 +1,44 @@
+# Plantilla del documento de la póliza (HU20), es-CO. Es la plantilla propia del servicio: no hay plantilla legal externa.
+# Por producto define el nombre y la naturaleza del riesgo; los amparos y las condiciones generales son comunes.
+# Un producto que no esté aquí no hace fallar la generación: el documento usa la clave del producto y un texto genérico.
+version: "v1"
+
+productos:
+  microseguro_vida:
+    nombre: Microseguro de vida
+    naturaleza_riesgo: >-
+      Riesgo de fallecimiento o de incapacidad total del asegurado durante la vigencia de la póliza. La aseguradora
+      asume el pago del valor asegurado al beneficiario, o al asegurado en caso de incapacidad total, cuando ocurra
+      alguno de los amparos cubiertos.
+  proteccion_dispositivos:
+    nombre: Protección de dispositivos
+    naturaleza_riesgo: >-
+      Riesgo de daño accidental o de robo del dispositivo asegurado durante la vigencia de la póliza. La aseguradora
+      asume el costo de la reparación o de la reposición del dispositivo, hasta el valor asegurado y descontado el
+      deducible que corresponda.
+
+# Nombre legible de cada tipo de cobertura de la cotización.
+amparos:
+  muerte: Muerte
+  incapacidad_total: Incapacidad total
+  dano_accidental: Daño accidental
+  robo: Robo
+
+generico:
+  naturaleza_riesgo: >-
+    Riesgo descrito en las condiciones del producto contratado, hasta el valor asegurado y durante la vigencia de la
+    póliza.
+
+condiciones_generales:
+  - >-
+    Esta póliza se emite con base en la información entregada por el cliente y en la cotización aceptada. Los importes
+    del documento coinciden con esa cotización y no se recalculan.
+  - >-
+    La cobertura rige durante la vigencia indicada, siempre que la prima se haya pagado. El deducible, cuando aplica, es
+    la parte del daño que asume el asegurado.
+  - >-
+    El cliente debe informar cualquier cambio en los datos declarados. La inexactitud o la reticencia pueden afectar la
+    cobertura.
+  - >-
+    Para avisar un siniestro o resolver dudas, el cliente puede usar los canales de atención de Solventa indicando el
+    número de póliza.

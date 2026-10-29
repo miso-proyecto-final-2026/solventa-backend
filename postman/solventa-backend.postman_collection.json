@@ -2841,6 +2841,164 @@
               }
             }
           ]
+        },
+        {
+          "name": "Resumen de cliente para la póliza (HU20)",
+          "item": [
+            {
+              "name": "Resumen del cliente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const r = pm.response.json();",
+                      "pm.test('trae nombre, apellido y tipo de documento', () => { pm.expect(r.cliente_id).to.eql(pm.collectionVariables.get('cliente_id')); pm.expect(r.nombre).to.be.a('string').and.not.empty; pm.expect(r.apellido).to.be.a('string').and.not.empty; pm.expect(r.tipo_documento).to.be.a('string'); });",
+                      "pm.test('el documento sale enmascarado y no hay datos de contacto', () => { pm.expect(r.documento_enmascarado).to.match(/^\\*+\\d{1,3}$/); pm.expect(r).to.not.have.any.keys('email', 'celular', 'numero_documento'); });"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{service_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/resumenes-cliente/{{cliente_id}}",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "resumenes-cliente",
+                    "{{cliente_id}}"
+                  ]
+                },
+                "description": "Interno: solo con clave de servicio y fuera del prefijo de borde /v1/clientes."
+              }
+            },
+            {
+              "name": "Resumen sin clave de servicio",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/resumenes-cliente/{{cliente_id}}",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "resumenes-cliente",
+                    "{{cliente_id}}"
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Resumen con el token del cliente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401: el token de un cliente no reemplaza la clave de servicio', () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/resumenes-cliente/{{cliente_id}}",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "resumenes-cliente",
+                    "{{cliente_id}}"
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Resumen de un cliente inexistente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 404', () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{service_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/resumenes-cliente/no-existe",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "resumenes-cliente",
+                    "no-existe"
+                  ]
+                },
+                "description": ""
+              }
+            }
+          ]
         }
       ],
       "description": "Registro, consentimiento y KYC. Cada carpeta depende de las variables que deja la anterior: ejecútalas en orden (Runner / Newman)."
@@ -5679,6 +5837,337 @@
               ]
             },
             "description": "404 con el formato estándar."
+          }
+        }
+      ]
+    },
+    {
+      "name": "MS Suscripción — póliza (HU20)",
+      "item": [
+        {
+          "name": "Póliza antes del cobro",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404: la póliza se registra al confirmarse el cobro', () => pm.response.to.have.status(404));",
+                  "pm.test('error estándar POLIZA_NO_ENCONTRADA', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('POLIZA_NO_ENCONTRADA'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/{{suscripcion_id}}/poliza",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "{{suscripcion_id}}",
+                "poliza"
+              ]
+            },
+            "description": "La saga de la carpeta de HU15 sigue en el paso COBRO (MS Pagos no está en la cadena), así que aún no hay póliza. Con el cobro confirmado el mismo GET devuelve 200 (ver pytest y el README)."
+          }
+        },
+        {
+          "name": "Póliza de una suscripción inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error estándar POLIZA_NO_ENCONTRADA', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('POLIZA_NO_ENCONTRADA'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/no-existe/poliza",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "no-existe",
+                "poliza"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Póliza de otro cliente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404, igual que una inexistente', () => pm.response.to.have.status(404));",
+                  "pm.test('error estándar POLIZA_NO_ENCONTRADA', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('POLIZA_NO_ENCONTRADA'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{otro_access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/{{suscripcion_id}}/poliza",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "{{suscripcion_id}}",
+                "poliza"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Póliza sin sesión",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/{{suscripcion_id}}/poliza",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "{{suscripcion_id}}",
+                "poliza"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Billetera del cliente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('trae el cliente y la lista de pólizas', () => { pm.expect(b.cliente_id).to.eql(pm.collectionVariables.get('cliente_id')); pm.expect(b.polizas).to.be.an('array'); });",
+                  "pm.test('cada póliza trae estado, vigencia y prima, sin URL de descarga', () => b.polizas.forEach(p => { pm.expect(p.numero_poliza).to.match(/^[0-9A-HJKMNP-TV-Z]{20}$/); pm.expect(p.estado).to.be.a('string'); pm.expect(p.vigencia_desde).to.be.a('string'); pm.expect(p.fecha_vencimiento).to.be.a('string'); pm.expect(p.prima_anual).to.be.a('number'); pm.expect(JSON.stringify(p)).to.not.include('url'); }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/polizas?cliente_id={{cliente_id}}?cliente_id={{cliente_id}}",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "polizas"
+              ],
+              "query": [
+                {
+                  "key": "cliente_id",
+                  "value": "{{cliente_id}}"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Billetera de otro cliente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 403', () => pm.response.to.have.status(403));",
+                  "pm.test('error estándar ACCESO_DENEGADO', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('ACCESO_DENEGADO'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/polizas?cliente_id={{otro_cliente_id}}?cliente_id={{otro_cliente_id}}",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "polizas"
+              ],
+              "query": [
+                {
+                  "key": "cliente_id",
+                  "value": "{{otro_cliente_id}}"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Billetera sin cliente_id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('error estándar VALIDATION_ERROR', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('VALIDATION_ERROR'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/polizas",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "polizas"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Billetera sin sesión",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/polizas?cliente_id={{cliente_id}}?cliente_id={{cliente_id}}",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "polizas"
+              ],
+              "query": [
+                {
+                  "key": "cliente_id",
+                  "value": "{{cliente_id}}"
+                }
+              ]
+            },
+            "description": ""
           }
         }
       ]
