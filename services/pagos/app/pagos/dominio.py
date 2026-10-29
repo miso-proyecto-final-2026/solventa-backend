@@ -36,6 +36,19 @@ class EstadoTransaccion(StrEnum):
 ESTADOS_FINALES = (EstadoTransaccion.APROBADA.value, EstadoTransaccion.RECHAZADA.value)
 
 
+class EstadoCaso(StrEnum):
+    """Cobro fallido en gestión (HU19). `VENCIDO`: la gracia terminó sin recuperarlo y ya se avisó al operador."""
+
+    PENDIENTE = "PENDIENTE"
+    VENCIDO = "VENCIDO"
+    RECUPERADO = "RECUPERADO"
+
+
+ESTADOS_CASO_ABIERTOS = (EstadoCaso.PENDIENTE.value, EstadoCaso.VENCIDO.value)
+# `origen` de las transacciones que crea un reintento desde la consola web (las otras son `kafka` y `rest`).
+ORIGEN_GESTION = "gestion"
+
+
 class ResultadoIntento(StrEnum):
     EN_CURSO = "EN_CURSO"              # se va a llamar a la pasarela (si queda así, el proceso cayó a mitad)
     APROBADO = "APROBADO"

@@ -203,6 +203,446 @@
         }
       }
     },
+    "/v1/pagos/cobros-fallidos": {
+      "get": {
+        "tags": [
+          "cobros-fallidos"
+        ],
+        "summary": "Bandeja de cobros fallidos (los más urgentes primero)",
+        "operationId": "bandeja_v1_pagos_cobros_fallidos_get",
+        "parameters": [
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "PENDIENTE",
+                      "VENCIDO",
+                      "RECUPERADO"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Por defecto, PENDIENTE y VENCIDO",
+              "title": "Estado"
+            },
+            "description": "Por defecto, PENDIENTE y VENCIDO"
+          },
+          {
+            "name": "por_vencer",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Solo los que vencen en menos de 24 h (o ya vencidos)",
+              "default": false,
+              "title": "Por Vencer"
+            },
+            "description": "Solo los que vencen en menos de 24 h (o ya vencidos)"
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Pagina"
+            }
+          },
+          {
+            "name": "tamano",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Tamano"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaCasosOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, no es válido o venció (sesión vencida).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de un asesor ni de un operador.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pagos/cobros-fallidos/{caso_id}": {
+      "get": {
+        "tags": [
+          "cobros-fallidos"
+        ],
+        "summary": "Detalle: historial de cobros e intentos, motivo, código de la pasarela y notas",
+        "operationId": "detalle_v1_pagos_cobros_fallidos__caso_id__get",
+        "parameters": [
+          {
+            "name": "caso_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Caso Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CasoDetalleOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, no es válido o venció (sesión vencida).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de un asesor ni de un operador.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El caso no existe",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pagos/cobros-fallidos/{caso_id}/notas": {
+      "post": {
+        "tags": [
+          "cobros-fallidos"
+        ],
+        "summary": "Registra una nota de seguimiento con autor y fecha",
+        "operationId": "agregar_nota_v1_pagos_cobros_fallidos__caso_id__notas_post",
+        "parameters": [
+          {
+            "name": "caso_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Caso Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotaIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotaOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, no es válido o venció (sesión vencida).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de un asesor ni de un operador.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El caso no existe",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Texto vacío, demasiado largo o con un número de tarjeta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pagos/cobros-fallidos/{caso_id}/reintentar": {
+      "post": {
+        "tags": [
+          "cobros-fallidos"
+        ],
+        "summary": "Reintenta el cobro con el método de pago registrado del cliente (idempotente)",
+        "operationId": "reintentar_v1_pagos_cobros_fallidos__caso_id__reintentar_post",
+        "parameters": [
+          {
+            "name": "caso_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Caso Id"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReintentoOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, no es válido o venció (sesión vencida).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de un asesor ni de un operador.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "La pasarela aún no da una respuesta cierta: queda EN_PROCESO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReintentoOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El caso no existe",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "El cobro ya se recuperó",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -228,6 +668,267 @@
   },
   "components": {
     "schemas": {
+      "CasoDetalleOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "suscripcion_id": {
+            "type": "string",
+            "title": "Suscripcion Id"
+          },
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "PENDIENTE",
+              "VENCIDO",
+              "RECUPERADO"
+            ],
+            "title": "Estado"
+          },
+          "monto": {
+            "type": "string",
+            "title": "Monto"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "intentos": {
+            "type": "integer",
+            "title": "Intentos",
+            "description": "Cobros hechos: el original más los reintentos"
+          },
+          "ultimo_intento_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ultimo Intento En"
+          },
+          "codigo_rechazo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codigo Rechazo"
+          },
+          "motivo_rechazo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Rechazo"
+          },
+          "gracia_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Gracia Hasta"
+          },
+          "estado_gracia": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "VIGENTE",
+                  "POR_VENCER",
+                  "VENCIDA"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado Gracia",
+            "description": "None si el cobro ya se recuperó"
+          },
+          "tarjeta": {
+            "$ref": "#/components/schemas/TarjetaOut"
+          },
+          "reintentos": {
+            "type": "integer",
+            "title": "Reintentos"
+          },
+          "operador_notificado_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operador Notificado En"
+          },
+          "resuelto_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resuelto En"
+          },
+          "cobros": {
+            "items": {
+              "$ref": "#/components/schemas/CobroOut"
+            },
+            "type": "array",
+            "title": "Cobros"
+          },
+          "notas": {
+            "items": {
+              "$ref": "#/components/schemas/NotaOut"
+            },
+            "type": "array",
+            "title": "Notas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "suscripcion_id",
+          "cliente_id",
+          "estado",
+          "monto",
+          "moneda",
+          "intentos",
+          "ultimo_intento_en",
+          "codigo_rechazo",
+          "motivo_rechazo",
+          "gracia_hasta",
+          "estado_gracia",
+          "tarjeta",
+          "reintentos",
+          "operador_notificado_en",
+          "resuelto_en",
+          "cobros",
+          "notas"
+        ],
+        "title": "CasoDetalleOut"
+      },
+      "CasoOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "suscripcion_id": {
+            "type": "string",
+            "title": "Suscripcion Id"
+          },
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "PENDIENTE",
+              "VENCIDO",
+              "RECUPERADO"
+            ],
+            "title": "Estado"
+          },
+          "monto": {
+            "type": "string",
+            "title": "Monto"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "intentos": {
+            "type": "integer",
+            "title": "Intentos",
+            "description": "Cobros hechos: el original más los reintentos"
+          },
+          "ultimo_intento_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ultimo Intento En"
+          },
+          "codigo_rechazo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codigo Rechazo"
+          },
+          "motivo_rechazo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Rechazo"
+          },
+          "gracia_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Gracia Hasta"
+          },
+          "estado_gracia": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "VIGENTE",
+                  "POR_VENCER",
+                  "VENCIDA"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado Gracia",
+            "description": "None si el cobro ya se recuperó"
+          },
+          "tarjeta": {
+            "$ref": "#/components/schemas/TarjetaOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "suscripcion_id",
+          "cliente_id",
+          "estado",
+          "monto",
+          "moneda",
+          "intentos",
+          "ultimo_intento_en",
+          "codigo_rechazo",
+          "motivo_rechazo",
+          "gracia_hasta",
+          "estado_gracia",
+          "tarjeta"
+        ],
+        "title": "CasoOut"
+      },
       "CobroIn": {
         "properties": {
           "suscripcion_id": {
@@ -293,6 +994,122 @@
         ],
         "title": "CobroIn"
       },
+      "CobroOut": {
+        "properties": {
+          "transaccion_id": {
+            "type": "string",
+            "title": "Transaccion Id"
+          },
+          "es_reintento": {
+            "type": "boolean",
+            "title": "Es Reintento"
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "monto": {
+            "type": "string",
+            "title": "Monto"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          },
+          "resuelto_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resuelto En"
+          },
+          "intentos": {
+            "items": {
+              "$ref": "#/components/schemas/IntentoOut"
+            },
+            "type": "array",
+            "title": "Intentos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "transaccion_id",
+          "es_reintento",
+          "estado",
+          "monto",
+          "creado_en",
+          "resuelto_en",
+          "intentos"
+        ],
+        "title": "CobroOut"
+      },
+      "ErrorCuerpoOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "details": {
+            "items": {
+              "$ref": "#/components/schemas/ErrorDetalleOut"
+            },
+            "type": "array",
+            "title": "Details"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "details",
+          "trace_id"
+        ],
+        "title": "ErrorCuerpoOut"
+      },
+      "ErrorDetalleOut": {
+        "properties": {
+          "campo": {
+            "type": "string",
+            "title": "Campo"
+          },
+          "motivo": {
+            "type": "string",
+            "title": "Motivo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campo",
+          "motivo"
+        ],
+        "title": "ErrorDetalleOut"
+      },
+      "ErrorOut": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorCuerpoOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "title": "ErrorOut"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -305,6 +1122,152 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "IntentoOut": {
+        "properties": {
+          "numero": {
+            "type": "integer",
+            "title": "Numero"
+          },
+          "resultado": {
+            "type": "string",
+            "title": "Resultado"
+          },
+          "codigo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codigo"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          },
+          "referencia_pasarela": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referencia Pasarela"
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha"
+          }
+        },
+        "type": "object",
+        "required": [
+          "numero",
+          "resultado",
+          "codigo",
+          "motivo",
+          "referencia_pasarela",
+          "fecha"
+        ],
+        "title": "IntentoOut"
+      },
+      "NotaIn": {
+        "properties": {
+          "texto": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Texto"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "texto"
+        ],
+        "title": "NotaIn"
+      },
+      "NotaOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "autor_id": {
+            "type": "string",
+            "title": "Autor Id"
+          },
+          "autor_nombre": {
+            "type": "string",
+            "title": "Autor Nombre"
+          },
+          "autor_rol": {
+            "type": "string",
+            "title": "Autor Rol"
+          },
+          "texto": {
+            "type": "string",
+            "title": "Texto"
+          },
+          "creada_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creada En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "autor_id",
+          "autor_nombre",
+          "autor_rol",
+          "texto",
+          "creada_en"
+        ],
+        "title": "NotaOut"
+      },
+      "PaginaCasosOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CasoOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "pagina": {
+            "type": "integer",
+            "title": "Pagina"
+          },
+          "tamano": {
+            "type": "integer",
+            "title": "Tamano"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "pagina",
+          "tamano"
+        ],
+        "title": "PaginaCasosOut"
       },
       "RechazoOut": {
         "properties": {
@@ -337,6 +1300,124 @@
           "motivo"
         ],
         "title": "RechazoOut"
+      },
+      "ReintentoOut": {
+        "properties": {
+          "caso_id": {
+            "type": "string",
+            "title": "Caso Id"
+          },
+          "transaccion_id": {
+            "type": "string",
+            "title": "Transaccion Id"
+          },
+          "numero_reintento": {
+            "type": "integer",
+            "title": "Numero Reintento"
+          },
+          "resultado": {
+            "type": "string",
+            "enum": [
+              "APROBADO",
+              "RECHAZADO",
+              "EN_PROCESO"
+            ],
+            "title": "Resultado"
+          },
+          "codigo_rechazo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codigo Rechazo"
+          },
+          "motivo_rechazo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Rechazo"
+          },
+          "detalle_pasarela": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalle Pasarela",
+            "description": "Con EN_PROCESO: NO_DISPONIBLE (la pasarela no recibió la orden) o SIN_RESPUESTA (se concilia)"
+          },
+          "estado_caso": {
+            "type": "string",
+            "enum": [
+              "PENDIENTE",
+              "VENCIDO",
+              "RECUPERADO"
+            ],
+            "title": "Estado Caso"
+          },
+          "repeticion": {
+            "type": "boolean",
+            "title": "Repeticion",
+            "description": "True si no se cobró otra vez: dos clics o un reintento ya en curso"
+          }
+        },
+        "type": "object",
+        "required": [
+          "caso_id",
+          "transaccion_id",
+          "numero_reintento",
+          "resultado",
+          "codigo_rechazo",
+          "motivo_rechazo",
+          "detalle_pasarela",
+          "estado_caso",
+          "repeticion"
+        ],
+        "title": "ReintentoOut"
+      },
+      "TarjetaOut": {
+        "properties": {
+          "marca": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marca"
+          },
+          "ultimos4": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultimos4"
+          }
+        },
+        "type": "object",
+        "required": [
+          "marca",
+          "ultimos4"
+        ],
+        "title": "TarjetaOut"
       },
       "TokenIn": {
         "properties": {

@@ -25,6 +25,7 @@ from app.eventos import (
 )
 from app.pagos.config import GRUPO_COBROS, SQLITE_LOCAL, TOPIC_COMANDOS, ConfigPagos
 from app.pagos.dominio import PasarelaPago
+from app.pagos.gestion import ServicioGestion
 from app.pagos.modelos_db import TABLA_EVENTOS_PROCESADOS
 from app.pagos.relay import RelayEventos
 from app.pagos.repositorio import crear_engine, crear_tablas_locales
@@ -43,11 +44,13 @@ def construir_pasarela(config: ConfigPagos, fabrica: sessionmaker[Session]) -> P
 @dataclass
 class Ensamblado:
     servicio: ServicioCobros
+    gestion: ServicioGestion
     engine: Engine
     publicador: PublicadorEventos
     relay: RelayEventos
     # None solo en desarrollo sin Kafka: el publicador es en memoria y nadie consume.
     consumidor: ConsumidorEventos | None = None
+    detector_intervalo_s: float = 60.0
     _tareas: list[asyncio.Task[None]] = field(default_factory=list, init=False)
 
     async def iniciar(self) -> None:
@@ -56,7 +59,11 @@ class Ensamblado:
         if self.consumidor is not None:
             await self.consumidor.iniciar()
             self._tareas.append(asyncio.create_task(self.consumidor.ejecutar()))
-        self._tareas += [asyncio.create_task(self.relay.ejecutar()), asyncio.create_task(self.servicio.ejecutar())]
+        self._tareas += [
+            asyncio.create_task(self.relay.ejecutar()),
+            asyncio.create_task(self.servicio.ejecutar()),
+            asyncio.create_task(self.gestion.ejecutar_detector(self.detector_intervalo_s)),
+        ]
 
     async def detener(self) -> None:
         if self.consumidor is not None:
@@ -89,11 +96,15 @@ def construir_ensamblado(config: ConfigPagos | None = None) -> Ensamblado:
         reintento_base_s=config.reintento_base_s,
         reintento_maximo_s=config.reintento_maximo_s,
     )
+    gestion = ServicioGestion(fabrica=fabrica, cobros=servicio, horas_por_vencer=config.horas_por_vencer)
+    intervalo = config.detector_gracia_intervalo_s
 
     if config.kafka_brokers is None:
         permitir_sustituto_local("KAFKA_BOOTSTRAP_SERVERS", "un publicador en memoria sin consumidor (no hay Kafka)")
         publicador: PublicadorEventos = PublicadorMemoria()
-        return Ensamblado(servicio, engine, publicador, RelayEventos(fabrica, publicador))
+        return Ensamblado(
+            servicio, gestion, engine, publicador, RelayEventos(fabrica, publicador), detector_intervalo_s=intervalo
+        )
 
     brokers = brokers_desde_entorno()
     seguridad = parametros_seguridad()
@@ -108,4 +119,6 @@ def construir_ensamblado(config: ConfigPagos | None = None) -> Ensamblado:
         registro=RegistroEventos(TABLA_EVENTOS_PROCESADOS),
         publicador=publicador,
     )
-    return Ensamblado(servicio, engine, publicador, RelayEventos(fabrica, publicador), consumidor)
+    return Ensamblado(
+        servicio, gestion, engine, publicador, RelayEventos(fabrica, publicador), consumidor, detector_intervalo_s=intervalo
+    )

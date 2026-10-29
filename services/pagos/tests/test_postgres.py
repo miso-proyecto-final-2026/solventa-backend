@@ -16,6 +16,8 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from app.eventos import RegistroEventos
 from app.pagos import repositorio as repo
+from app.pagos.acceso import Gestor
+from app.pagos.gestion import ServicioGestion
 from app.pagos.modelos_db import SCHEMA, TABLA_EVENTOS_PROCESADOS, BasePagos
 from app.pagos.servicio import ComandoCobro, ServicioCobros
 from app.pagos.simulador import ModoSimulador, PasarelaSimulada
@@ -27,7 +29,10 @@ from tests.dobles import Reloj, comando, evento
 pytestmark = pytest.mark.contenedores
 
 RAIZ = Path(__file__).parents[1]
-TABLAS = {"transacciones", "tokens_tarjeta", "intentos_cobro", "eventos_salida", "eventos_procesados", "simulador_cargos"}
+TABLAS = {
+    "transacciones", "tokens_tarjeta", "intentos_cobro", "eventos_salida", "eventos_procesados", "simulador_cargos",
+    "cobros_fallidos", "notas_cobro_fallido",
+}
 REPLICAS = 8
 
 
@@ -182,3 +187,28 @@ def test_respuesta_perdida_conciliada_por_otra_replica_no_duplica_el_cargo(fabri
         assert tx.estado == "APROBADA"
         assert [i.resultado for i in repo.intentos_de(s, tx.id)] == ["SIN_RESPUESTA", "CONCILIADO"]
     assert _contar(fabrica_pg, "simulador_cargos") == 1
+
+
+# --- HU19: dos clics desde réplicas distintas no cobran dos veces ------------------------------------------------
+
+def test_varias_replicas_reintentando_el_mismo_caso_crean_un_solo_reintento_y_un_solo_cargo(fabrica_pg):
+    rechazo = _servicio(fabrica_pg, ModoSimulador.RECHAZAR)
+    tx, _ = asyncio.run(rechazo.cobrar(ComandoCobro.desde_evento(comando("susc-clics"))))
+    assert tx.estado == "RECHAZADA"
+    asesora = Gestor("ase-1", "Asesora", "ASESOR")
+
+    async def replica(_i):
+        cobros = _servicio(fabrica_pg)
+        gestion = ServicioGestion(fabrica=fabrica_pg, cobros=cobros, horas_por_vencer=24)
+        return await gestion.reintentar(tx.id, asesora)
+
+    resultados = _en_paralelo(REPLICAS, replica)
+
+    errores = [r for r in resultados if isinstance(r, Exception)]
+    # Una réplica cobra; las demás ven el reintento en curso o el caso ya recuperado (409), nunca un segundo cargo.
+    assert all(type(e).__name__ == "CasoYaRecuperado" for e in errores), errores
+    assert sum(1 for r in resultados if not isinstance(r, Exception) and r.creado) == 1
+    with fabrica_pg() as s:
+        assert s.execute(text(f"SELECT count(*) FROM {SCHEMA}.transacciones WHERE origen = 'gestion'")).scalar() == 1
+        assert repo.caso(s, tx.id).estado == "RECUPERADO"
+    assert _contar(fabrica_pg, "simulador_cargos") == 2  # el rechazo original y un solo reintento aprobado

@@ -2,7 +2,7 @@
 
 - **Estado:** Propuesto (pendiente de revisión por un integrante distinto del autor)
 - **Fecha:** 2026-10-25
-- **Historia:** HU18 (Sprint 2, F09). Requisitos RQ-S2 (EC-S2.1), RQ-D1 (EC-D1.2), RQ-M2 (EC-M2.2); HA05, HA08
+- **Historia:** HU18 (Sprint 2, F09); enmienda por HU19 (2026-10-28, al final). Requisitos RQ-S2 (EC-S2.1), RQ-D1 (EC-D1.2), RQ-M2 (EC-M2.2); HA05, HA08
 - **Depende de:** [ADR-0001](0001-descomposicion-microservicios-bounded-contexts.md) (Pagos dueño de `Transacción` y `Token_Tarjeta`; el PAN nunca se persiste), [ADR-0002](0002-comunicacion-sincrona-asincrona-por-flujo.md) (suscripción y cobro por Kafka), [ADR-0004](0004-patron-adaptadores-cambio-de-proveedor.md) (puerto, adaptador, selección por configuración y suite de contrato), [ADR-0010](0010-eventos-sobre-msk-plantilla-por-servicio.md) (plantilla de eventos) y [ADR-0012](0012-ms-suscripcion-saga-decision-y-outbox.md) (saga y cola de salida)
 
 ## Contexto
@@ -70,3 +70,39 @@ pasarela que se pueda cambiar tocando solo el adaptador (EC-M2.2).
 - **REST síncrono desde la saga:** contradice ADR-0002 y bloquea a Suscripción si Pagos o la pasarela están lentos.
 - **Libro del simulador en memoria:** otra réplica no vería el cobro y no podría conciliar en staging.
 - **Recibir el PAN y tokenizar en Pagos:** amplía el alcance PCI más allá de SAQ-A.
+
+## Enmienda 2026-10-28 — Gestión de cobros fallidos (HU19)
+
+**Estado de la enmienda:** Propuesta. Los puntos marcados como *supuesto* se confirman con el equipo en la revisión del PR.
+
+- **Exposición en el borde (cambia «sin borde público»).** El borde publica **solo** el prefijo
+  `/v1/pagos/cobros-fallidos`. `/v1/pagos/cobros`, `/v1/pagos/tokenizar` y `/v1/pagos/transacciones` siguen internos
+  (clave de servicio, sin ruta en el borde); infra valida que ningún otro prefijo de Pagos se publique. *Supuesto.*
+- **Autenticación de la gestión.** Las rutas de cobros fallidos exigen el JWT HS256 que emite Identidad (patrón
+  [ADR-0008](0008-autenticacion-provisional-del-asesor-y-cotizacion-sin-cuenta.md)), con rol `ASESOR` u `OPERADOR`; la clave de servicio no las abre.
+  El verificador se copia en Pagos, como en Cotización, para no acoplar servicios por una librería compartida. Sin
+  `ASESOR_JWT_SECRETO` el servicio no arranca fuera de desarrollo. Identidad agrega el rol interno `OPERADOR`
+  (restricción `ck_usuarios_internos_rol`, migración 0006).
+- **Caso de cobro fallido.** Cada `COBRO_PRIMA` rechazado abre un caso (`cobros_fallidos`, id = transacción rechazada)
+  con el monto, el token ya registrado, el motivo y `gracia_hasta`. Estados: `PENDIENTE` → `VENCIDO` (terminó la gracia
+  y se avisó al operador) → `RECUPERADO` (un reintento aprobado). Un caso `VENCIDO` todavía se puede reintentar. La
+  migración 0002 crea los casos de los rechazos anteriores. Las notas (`notas_cobro_fallido`) guardan autor y fecha y
+  rechazan texto con forma de número de tarjeta.
+- **Reintento.** Usa el token ya registrado del cliente (registrar una tarjeta nueva desde mobile queda fuera de HU19;
+  *supuesto*) y una transacción nueva con `origen = gestion` y clave `cobro_prima:<suscripcion_id>:<n>`, así que la
+  pasarela cobra una sola vez por reintento. La cabecera `Idempotency-Key` de la consola hace que dos clics devuelvan el
+  mismo reintento (`Idempotent-Replay: true`), y mientras uno está `PENDIENTE` no se crea otro. El reintento no extiende
+  la gracia. El resultado se publica a `solventa.pagos.resultados` igual que el cobro original, así que la saga de
+  Suscripción avanza con un `cobro_prima_confirmado` posterior.
+- **Aviso de gracia vencida.** Un detector periódico (`PAGOS_DETECTOR_GRACIA_S`, 60 s) pasa los casos `PENDIENTE` con la
+  gracia vencida a `VENCIDO` y deja en la cola de salida el evento `cobro_gracia_vencida` para
+  `solventa.notificaciones` (clave = cliente, destinatario `OPERADOR`, acción sugerida `EVALUAR_SUSPENSION_COBERTURA`).
+  `SKIP LOCKED` evita que dos réplicas avisen dos veces. Todavía no hay consumidor de ese topic; Pagos necesita permiso
+  de escritura sobre él, porque la cola de salida se detiene en el primer evento que no puede publicar.
+- **Gracia y urgencia.** 3 días (`PERIODO_GRACIA_DIAS`, provisional) y «próximo a vencer» = menos de 24 h
+  (`PAGOS_HORAS_POR_VENCER`). *Supuestos.*
+- **Datos visibles.** La bandeja y el detalle muestran monto, intentos, último intento, motivo, código de la pasarela,
+  marca y últimos 4. Nunca el token ni datos de contacto del cliente (viven en Identidad; ADR-0008). *Supuesto.*
+- **Consecuencias.** Pagos pasa de servicio interno a tener una superficie pública acotada (más pruebas de seguridad:
+  `tests/test_seguridad.py` recorre también la gestión). La bandeja se ordena por `gracia_hasta` y pagina en la base
+  (índice `ix_caso_estado_gracia`).

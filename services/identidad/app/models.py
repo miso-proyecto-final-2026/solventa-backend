@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -45,8 +46,14 @@ class Cliente(Base):
     )
 
 
+ROL_ASESOR = "ASESOR"
+# HU19: gestiona cobros fallidos y recibe el aviso de gracia vencida para evaluar la suspensión.
+ROL_OPERADOR = "OPERADOR"
+ROLES_INTERNOS = (ROL_ASESOR, ROL_OPERADOR)
+
+
 class UsuarioInterno(Base):
-    """Personal de Solventa (HU38): hoy solo asesores. Provisional hasta la gestión de usuarios internos (E11)."""
+    """Personal de Solventa: asesores (HU38) y operadores (HU19). Provisional hasta la gestión de usuarios internos (E11)."""
 
     __tablename__ = "usuarios_internos"
 
@@ -54,9 +61,11 @@ class UsuarioInterno(Base):
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     nombre: Mapped[str] = mapped_column(String(200))
     password_hash: Mapped[str] = mapped_column(String(200))
-    rol: Mapped[str] = mapped_column(String(20))  # ASESOR
+    rol: Mapped[str] = mapped_column(String(20))  # ASESOR | OPERADOR (restricción de la migración 0006)
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    __table_args__ = (CheckConstraint("rol IN ('ASESOR', 'OPERADOR')", name="ck_usuarios_internos_rol"),)
 
 
 class Sesion(Base):
