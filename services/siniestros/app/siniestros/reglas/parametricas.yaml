@@ -1,0 +1,50 @@
+# Reglas de disparo de las pólizas paramétricas (HU28, criterio 8). Versionadas: un cambio de umbrales es una versión
+# nueva y cada evaluación guarda la versión con la que se decidió.
+#
+# PROPUESTA (a confirmar con producto): la documentación no define la estructura de la condición de disparo ni los
+# productos paramétricos, y el catálogo actual de Cotización no tiene ninguno. Se parte de un producto de clima y uno de
+# vuelo; los umbrales y montos son valores iniciales.
+#
+# Una regla se aplica a un producto y a un tipo de evento. Se cumple si TODAS sus condiciones se cumplen sobre
+# `datos` del evento. Con `exige_zona: true` además la zona del evento debe ser la zona asegurada de la póliza.
+version: "v1"
+productos:
+  parametrico_clima:
+    reglas:
+      - id: sismo-magnitud
+        tipo_evento: sismo
+        exige_zona: true
+        monto_indemnizacion: 5000000
+        condiciones:
+          - { campo: magnitud, operador: ">=", umbral: 6.0 }
+      - id: inundacion-nivel
+        tipo_evento: inundacion
+        exige_zona: true
+        monto_indemnizacion: 3000000
+        condiciones:
+          - { campo: nivel_rio_cm, operador: ">=", umbral: 150 }
+      - id: sequia-precipitacion
+        tipo_evento: sequia
+        exige_zona: true
+        monto_indemnizacion: 2000000
+        condiciones:
+          - { campo: precipitacion_mm_30d, operador: "<=", umbral: 20 }
+      - id: tormenta-viento
+        tipo_evento: tormenta
+        exige_zona: true
+        monto_indemnizacion: 1500000
+        condiciones:
+          - { campo: viento_kmh, operador: ">=", umbral: 90 }
+  parametrico_vuelo:
+    reglas:
+      - id: vuelo-retraso
+        tipo_evento: vuelo_retrasado
+        exige_zona: false
+        monto_indemnizacion: 400000
+        condiciones:
+          - { campo: retraso_minutos, operador: ">=", umbral: 180 }
+      - id: vuelo-cancelado
+        tipo_evento: vuelo_cancelado
+        exige_zona: false
+        monto_indemnizacion: 600000
+        condiciones: []

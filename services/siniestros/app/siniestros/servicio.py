@@ -124,8 +124,8 @@ class Receptor:
 
 
 async def procesar_evento(evento: Evento, sesion: Session) -> None:
-    """Manejador del consumidor de este sprint: la constancia de procesado la deja la reserva de idempotencia.
+    """Manejador sin efecto: la constancia de procesado la deja la reserva de idempotencia.
 
-    HU28 agrega aquí (o en otro grupo `solventa-siniestros.*`) la evaluación de la condición de cada
-    póliza, escribiendo con `sesion` para que se confirme junto con la reserva.
+    Lo usan las pruebas de recepción. En el servicio la evaluación de la condición paramétrica la hace
+    `app.siniestros.evaluacion.Evaluador` (HU28).
     """
