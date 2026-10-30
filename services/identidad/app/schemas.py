@@ -185,3 +185,11 @@ class ResumenClienteOut(BaseModel):
     apellido: str
     tipo_documento: str
     documento_enmascarado: str
+
+
+class ContactoClienteOut(BaseModel):
+    """Para el servicio de Notificaciones (HU22): a quién escribirle y cómo saludarlo. Sin documento ni celular."""
+
+    cliente_id: str
+    nombre: str
+    email: str

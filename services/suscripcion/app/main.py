@@ -11,6 +11,7 @@ from app.logs import configurar_logs
 from app.suscripcion.acceso import construir_verificador
 from app.suscripcion.api import router as suscripciones_router
 from app.suscripcion.api_asistida import router as asistida_router
+from app.suscripcion.api_certificado import router as certificado_router
 from app.suscripcion.api_firma import router as firma_router
 from app.suscripcion.api_polizas import router as polizas_router
 from app.suscripcion.config import ConfigSuscripcion
@@ -22,6 +23,7 @@ from app.suscripcion.wiring import (
     construir_publicador,
     construir_servicio,
     construir_servicio_asistida,
+    construir_servicio_certificado,
     construir_servicio_firma,
 )
 
@@ -56,6 +58,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.servicio_firma = firma
     app.state.servicio_asistida = construir_servicio_asistida(servicio, firma, engine, clientes, config)
     app.state.verificador_asesor = construir_verificador(config)
+    app.state.servicio_certificado = construir_servicio_certificado(config, engine, clientes)
     app.state.tareas = set()
     segundo_plano = [
         asyncio.create_task(relay.ejecutar()),
@@ -87,6 +90,7 @@ app.include_router(asistida_router)
 app.include_router(suscripciones_router)
 app.include_router(polizas_router)
 app.include_router(firma_router)
+app.include_router(certificado_router)
 registrar_errores(app)
 app.add_middleware(MiddlewareCorrelacion)
 

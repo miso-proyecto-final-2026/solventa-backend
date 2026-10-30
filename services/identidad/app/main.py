@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from app.db import DATABASE_URL, Base, engine
 from app.routers.clientes import router as clientes_router
 from app.routers.consentimientos import router as consentimientos_router
+from app.routers.contactos_cliente import router as contactos_cliente_router
 from app.routers.resumenes_cliente import router as resumenes_cliente_router
 from app.routers.sesion import router as sesion_router
 from app.routers.sesiones_internas import router as sesiones_internas_router
@@ -19,6 +20,7 @@ app.include_router(verificaciones_router)
 app.include_router(sesiones_internas_router)
 app.include_router(sesion_router)
 app.include_router(resumenes_cliente_router)
+app.include_router(contactos_cliente_router)
 
 
 @app.get("/health")

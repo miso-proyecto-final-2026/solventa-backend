@@ -1144,6 +1144,180 @@
         }
       }
     },
+    "/v1/suscripciones/{suscripcion_id}/certificado": {
+      "get": {
+        "tags": [
+          "certificado"
+        ],
+        "summary": "Certificado de cobertura en PDF (solo el titular)",
+        "description": "El idioma sale de `Accept-Language` (es-CO por defecto). Una póliza ajena responde como inexistente.",
+        "operationId": "descargar_certificado_v1_suscripciones__suscripcion_id__certificado_get",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "accept-language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/pdf": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/interno/certificados/enlaces": {
+      "post": {
+        "tags": [
+          "certificado"
+        ],
+        "summary": "Emite un enlace de descarga con vencimiento (interno: clave de servicio)",
+        "operationId": "emitir_enlace_v1_interno_certificados_enlaces_post",
+        "parameters": [
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnlaceIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnlaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/certificados/{token}": {
+      "get": {
+        "tags": [
+          "certificado"
+        ],
+        "summary": "Descarga el certificado con un enlace firmado y vigente",
+        "operationId": "descargar_por_enlace_v1_certificados__token__get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/pdf": {}
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "410": {
+            "description": "Gone"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -1218,6 +1392,29 @@
         ],
         "title": "ClienteResumenOut",
         "description": "Lo mínimo para identificar al cliente (ADR-0008): sin apellido completo, documento completo ni datos de contacto."
+      },
+      "CoberturaOut": {
+        "properties": {
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "monto": {
+            "type": "integer",
+            "title": "Monto"
+          },
+          "deducible": {
+            "type": "integer",
+            "title": "Deducible"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tipo",
+          "monto",
+          "deducible"
+        ],
+        "title": "CoberturaOut"
       },
       "CobroOut": {
         "properties": {
@@ -1468,6 +1665,51 @@
         ],
         "title": "DocumentoFirmaOut",
         "description": "Lo que el cliente necesita para revisar y firmar. El PDF se descarga aparte, en `documento-firma/pdf`."
+      },
+      "EnlaceIn": {
+        "properties": {
+          "poliza_id": {
+            "type": "string",
+            "maxLength": 36,
+            "minLength": 1,
+            "title": "Poliza Id"
+          },
+          "idioma": {
+            "type": "string",
+            "enum": [
+              "es-CO",
+              "en-US"
+            ],
+            "title": "Idioma",
+            "default": "es-CO"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "poliza_id"
+        ],
+        "title": "EnlaceIn"
+      },
+      "EnlaceOut": {
+        "properties": {
+          "ruta": {
+            "type": "string",
+            "title": "Ruta",
+            "description": "Ruta pública del enlace; el servicio que lo envía le antepone la URL base del borde"
+          },
+          "vence_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Vence En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ruta",
+          "vence_en"
+        ],
+        "title": "EnlaceOut"
       },
       "EstadoSaga": {
         "type": "string",
@@ -1842,6 +2084,14 @@
           "periodicidad_pago": {
             "type": "string",
             "title": "Periodicidad Pago"
+          },
+          "coberturas": {
+            "items": {
+              "$ref": "#/components/schemas/CoberturaOut"
+            },
+            "type": "array",
+            "title": "Coberturas",
+            "default": []
           }
         },
         "type": "object",

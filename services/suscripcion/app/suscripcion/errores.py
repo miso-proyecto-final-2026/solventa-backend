@@ -89,6 +89,26 @@ class FirmaNoEncontrada(ErrorSuscripcion):
     status, code, mensaje = 404, "FIRMA_NO_ENCONTRADA", "La póliza aún no está firmada."
 
 
+class CertificadoNoDisponible(ErrorSuscripcion):
+    status, code, mensaje = 409, "CERTIFICADO_NO_DISPONIBLE", "El certificado estará disponible cuando la póliza esté emitida."
+
+
+class EnlaceInvalido(ErrorSuscripcion):
+    status, code, mensaje = 401, "ENLACE_INVALIDO", "El enlace no es válido."
+
+
+class EnlaceVencido(ErrorSuscripcion):
+    status, code, mensaje = 410, "ENLACE_VENCIDO", "El enlace venció. Descargue el certificado desde la aplicación."
+
+
+class EnlacesNoConfigurados(ErrorSuscripcion):
+    status, code, mensaje = 503, "ENLACES_NO_CONFIGURADOS", "La descarga por enlace no está disponible por ahora."
+
+
+class ClaveDeServicioInvalida(ErrorSuscripcion):
+    status, code, mensaje = 401, "CLAVE_DE_SERVICIO_INVALIDA", "Se requiere la clave de un servicio."
+
+
 class CotizacionVencida(ErrorSuscripcion):
     status, code, mensaje = 409, "COTIZACION_VENCIDA", "La cotización venció; genere una nueva."
 

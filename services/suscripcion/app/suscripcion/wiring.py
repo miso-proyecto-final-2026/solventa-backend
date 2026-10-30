@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import httpx
 from sqlalchemy import Engine
 from sqlalchemy.orm import sessionmaker
@@ -17,6 +19,7 @@ from app.eventos import (
     parametros_seguridad,
 )
 from app.suscripcion.almacen import AlmacenDocumentos, AlmacenLocal, AlmacenS3
+from app.suscripcion.certificado import FirmadorEnlaces, ServicioCertificado
 from app.suscripcion.clientes import (
     ClienteCotizacion,
     ClienteIdentidad,
@@ -113,6 +116,21 @@ def construir_servicio_asistida(
         suscripciones=servicio,
         firma=firma,
         identidad=ClienteIdentidad(clientes[0], config.identidad_key),
+    )
+
+
+def construir_servicio_certificado(config: ConfigSuscripcion, engine: Engine, clientes: list[httpx.AsyncClient]) -> ServicioCertificado:
+    """Certificado de cobertura (HU22). Sin la clave de enlaces el servicio arranca, pero no emite ni acepta enlaces."""
+    firmador = (
+        FirmadorEnlaces(config.certificados_clave_enlaces, timedelta(hours=config.certificados_vigencia_enlace_h))
+        if config.certificados_clave_enlaces
+        else None
+    )
+    return ServicioCertificado(
+        fabrica=sessionmaker(bind=engine, expire_on_commit=False),
+        identidad=ClienteIdentidad(clientes[0], config.identidad_key),
+        almacen=construir_almacen(config),
+        firmador=firmador,
     )
 
 
