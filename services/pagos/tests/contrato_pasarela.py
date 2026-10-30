@@ -34,7 +34,7 @@ class ContratoPasarela:
 
     def test_implementa_el_puerto(self, preparar: Preparar):
         pasarela = preparar("aprobar")
-        for metodo in ("cobrar", "consultar", "describir_token"):
+        for metodo in ("cobrar", "consultar", "reembolsar", "describir_token"):
             assert inspect.iscoroutinefunction(getattr(pasarela, metodo)), metodo
 
     async def test_aprobar_devuelve_un_resultado_del_dominio_con_referencia(self, preparar: Preparar):
@@ -66,6 +66,20 @@ class ContratoPasarela:
             await pasarela.cobrar(_solicitud())
         conciliado = await pasarela.consultar("k-contrato")
         assert conciliado is not None and conciliado.aprobado
+
+    async def test_reembolsar_devuelve_un_resultado_aprobado_con_referencia(self, preparar: Preparar):
+        pasarela = preparar("aprobar")
+        await pasarela.cobrar(_solicitud())
+        resultado = await pasarela.reembolsar(_solicitud("reembolso-contrato"))
+        assert isinstance(resultado, ResultadoCobro)
+        assert resultado.aprobado and resultado.referencia_pasarela
+
+    async def test_la_misma_clave_no_reembolsa_dos_veces(self, preparar: Preparar):
+        pasarela = preparar("aprobar")
+        await pasarela.cobrar(_solicitud())
+        primero = await pasarela.reembolsar(_solicitud("reembolso-contrato"))
+        segundo = await pasarela.reembolsar(_solicitud("reembolso-contrato"))
+        assert primero == segundo
 
     async def test_describir_token_da_marca_y_cuatro_digitos_sin_el_token(self, preparar: Preparar):
         datos = await preparar("aprobar").describir_token(TOKEN)

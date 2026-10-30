@@ -10,6 +10,8 @@ redesplegar):
 - `PERDER_RESPUESTA`: cobra y la respuesta se pierde (EC-D1.2). Consultar la clave sí devuelve el cobro.
 - `NO_DISPONIBLE`: la pasarela está caída y no recibe la orden (conexión rechazada): no cobra ni registra nada.
 
+Los reembolsos (HU21) siempre se aprueban, salvo con `NO_DISPONIBLE`, y son idempotentes por su propia clave.
+
 Es idempotente por `idempotency_key`, como una pasarela real: repetir la orden devuelve el primer resultado sin cobrar
 otra vez. El libro (`simulador_cargos`) está en la base para que cualquier réplica pueda conciliar.
 """
@@ -56,6 +58,8 @@ _PREFIJOS = {
 }
 _TOKEN_VALIDO = re.compile(r"^tok_[A-Za-z0-9_-]{1,190}$")
 _MARCAS = ("VISA", "MASTERCARD", "AMEX")
+TIPO_COBRO = "COBRO"
+TIPO_REEMBOLSO = "REEMBOLSO"
 RECHAZO = ("FONDOS_INSUFICIENTES", "La tarjeta no tiene fondos suficientes.")
 
 
@@ -104,6 +108,11 @@ class PasarelaSimulada:
             await asyncio.sleep(self._demora_s)
         return resultado
 
+    async def reembolsar(self, solicitud: SolicitudCobro) -> ResultadoCobro:
+        if self.modo_para(solicitud.token) is ModoSimulador.NO_DISPONIBLE:
+            raise PasarelaNoDisponible("simulador: la pasarela no está disponible (no recibió la orden)")
+        return await asyncio.to_thread(self._registrar, solicitud, ModoSimulador.APROBAR, TIPO_REEMBOLSO)
+
     async def consultar(self, idempotency_key: str) -> ResultadoCobro | None:
         def leer() -> ResultadoCobro | None:
             with self._fabrica() as s:
@@ -122,17 +131,29 @@ class PasarelaSimulada:
     def cargos(self) -> int:
         """Cobros hechos de verdad (aprobados) por el simulador: la evidencia de «cero cobros duplicados»."""
         with self._fabrica() as s:
-            return s.execute(select(func.count()).select_from(CargoSimuladoDB).where(CargoSimuladoDB.aprobado)).scalar_one()
+            return s.execute(
+                select(func.count())
+                .select_from(CargoSimuladoDB)
+                .where(CargoSimuladoDB.aprobado, CargoSimuladoDB.tipo == TIPO_COBRO)
+            ).scalar_one()
 
-    def _registrar(self, solicitud: SolicitudCobro, modo: ModoSimulador) -> ResultadoCobro:
+    def reembolsos(self) -> int:
+        """Reembolsos hechos de verdad: la evidencia de que la compensación devolvió el cobro una sola vez."""
+        with self._fabrica() as s:
+            return s.execute(
+                select(func.count()).select_from(CargoSimuladoDB).where(CargoSimuladoDB.tipo == TIPO_REEMBOLSO)
+            ).scalar_one()
+
+    def _registrar(self, solicitud: SolicitudCobro, modo: ModoSimulador, tipo: str = "COBRO") -> ResultadoCobro:
         aprobado = modo is not ModoSimulador.RECHAZAR
         codigo, motivo = (None, None) if aprobado else RECHAZO
         nuevo = CargoSimuladoDB(
             idempotency_key=solicitud.idempotency_key,
-            referencia="sim_" + hashlib.sha256(solicitud.idempotency_key.encode()).hexdigest()[:20],
+            referencia=("simrf_" if tipo == TIPO_REEMBOLSO else "sim_") + hashlib.sha256(solicitud.idempotency_key.encode()).hexdigest()[:20],
             monto=solicitud.monto,
             moneda=solicitud.moneda,
             aprobado=aprobado,
+            tipo=tipo,
             codigo=codigo,
             motivo=motivo,
             solicitudes=1,

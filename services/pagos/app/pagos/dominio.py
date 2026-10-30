@@ -23,6 +23,7 @@ def parece_pan(texto: str) -> bool:
 
 class TipoTransaccion(StrEnum):
     COBRO_PRIMA = "COBRO_PRIMA"
+    REEMBOLSO_PRIMA = "REEMBOLSO_PRIMA"  # compensación de una firma fallida o vencida (HU21)
 
 
 class EstadoTransaccion(StrEnum):
@@ -100,6 +101,10 @@ class PasarelaPago(Protocol):
 
     async def consultar(self, idempotency_key: str) -> ResultadoCobro | None:
         """El resultado de un cobro ya hecho con esa clave, o None si la pasarela no lo tiene."""
+        ...
+
+    async def reembolsar(self, solicitud: SolicitudCobro) -> ResultadoCobro:
+        """Devuelve un cobro una sola vez por `idempotency_key` (la del reembolso, distinta a la del cobro)."""
         ...
 
     async def describir_token(self, token: str) -> DatosToken:

@@ -73,6 +73,14 @@ class PolizaResumenOut(BaseModel):
     documento_error: str | None
 
 
+class FirmaResumenOut(BaseModel):
+    """Estado del paso FIRMA dentro de la saga (HU21). `compensacion`: el cobro se devuelve por una firma vencida o fallida."""
+
+    estado: str  # PENDIENTE | FIRMADA | VENCIDA | FALLIDA
+    vence_en: datetime | None
+    compensacion: str | None
+
+
 class SuscripcionOut(BaseModel):
     id: str
     cotizacion_id: str
@@ -86,8 +94,21 @@ class SuscripcionOut(BaseModel):
     decision: DecisionOut | None
     cobro: CobroOut | None
     poliza: PolizaResumenOut | None = None
+    firma: FirmaResumenOut | None = None
     revision_asistida: bool
     creada_en: datetime
+
+
+def _firma_resumen(s: SuscripcionDB) -> FirmaResumenOut | None:
+    if s.cobro_estado != "APROBADO":
+        return None
+    if s.compensacion_motivo is not None:
+        estado = "FALLIDA" if s.compensacion_motivo == "FIRMA_FALLIDA" else "VENCIDA"
+    elif s.estado_saga in ("FIRMADA", "EMITIDA"):
+        estado = "FIRMADA"
+    else:
+        estado = "PENDIENTE"
+    return FirmaResumenOut(estado=estado, vence_en=s.firma_vence_en, compensacion=s.compensacion_estado)
 
 
 def a_salida(s: SuscripcionDB, revision: bool, poliza: PolizaDB | None = None) -> SuscripcionOut:
@@ -133,6 +154,7 @@ def a_salida(s: SuscripcionDB, revision: bool, poliza: PolizaDB | None = None) -
             documento_intentos=poliza.documento_intentos,
             documento_error=poliza.documento_error,
         ),
+        firma=_firma_resumen(s),
         revision_asistida=revision,
         creada_en=s.created_at,
     )

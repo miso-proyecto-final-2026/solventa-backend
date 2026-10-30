@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from app.correlacion import MiddlewareCorrelacion
 from app.logs import configurar_logs
 from app.suscripcion.api import router as suscripciones_router
+from app.suscripcion.api_firma import router as firma_router
 from app.suscripcion.api_polizas import router as polizas_router
 from app.suscripcion.config import ConfigSuscripcion
 from app.suscripcion.errores import registrar_errores
@@ -18,6 +19,7 @@ from app.suscripcion.wiring import (
     construir_generador,
     construir_publicador,
     construir_servicio,
+    construir_servicio_firma,
 )
 
 configurar_logs()
@@ -45,12 +47,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     consumidor = construir_consumidor_cobros(engine, publicador)
     # Genera el PDF de las pólizas registradas por el consumidor del cobro (HU20), sin bloquear el pago.
     generador = construir_generador(config, engine, clientes)
+    # Firma de la póliza (HU21): el servicio atiende la API y su barrido compensa las firmas vencidas y emite las firmadas.
+    firma = construir_servicio_firma(config, engine, clientes)
     app.state.servicio_suscripcion = servicio
+    app.state.servicio_firma = firma
     app.state.tareas = set()
     segundo_plano = [
         asyncio.create_task(relay.ejecutar()),
         asyncio.create_task(_barrer(servicio, config.espera_barrido_s)),
         asyncio.create_task(generador.ejecutar()),
+        asyncio.create_task(firma.ejecutar(config.firma_barrido_s)),
     ]
     if consumidor is not None:
         await consumidor.iniciar()
@@ -73,6 +79,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Solventa — MS Suscripción", version="0.1.0", lifespan=lifespan)
 app.include_router(suscripciones_router)
 app.include_router(polizas_router)
+app.include_router(firma_router)
 registrar_errores(app)
 app.add_middleware(MiddlewareCorrelacion)
 

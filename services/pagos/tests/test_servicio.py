@@ -191,7 +191,7 @@ async def test_si_el_proceso_cae_a_mitad_de_un_cobro_el_siguiente_intento_concil
     await _recibir(servicio, fabrica)
     (tx,) = _transacciones(fabrica)
     # La réplica tomó la transacción y cobró, pero cayó antes de anotar el resultado.
-    _, solicitud, _ = servicio._tomar(tx.id)
+    _, solicitud, *_ = servicio._tomar(tx.id)
     await pasarela.cobrar(solicitud)
 
     assert await servicio.procesar_pendientes() == 0  # sigue prestada a la réplica caída

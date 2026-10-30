@@ -59,3 +59,38 @@ async def test_la_saga_aplica_el_resultado_que_publica_pagos(armar, fabrica, nom
     assert actual.cobro_transaccion_id == evento.payload["transaccion_id"]
     if cobro == "RECHAZADO":
         assert actual.cobro_codigo == evento.payload["codigo"] and actual.cobro_gracia_hasta is not None
+
+
+# --- compensación de la firma (HU21) -------------------------------------------------------------------------------
+
+async def test_el_comando_de_reembolso_tiene_la_forma_publicada(armar, fabrica):
+    from datetime import timedelta
+
+    from tests.test_firma import COBRO, _comandos, _lista
+
+    firma, _, _, reloj = await _lista(armar, fabrica)
+    reloj.ahora = COBRO + timedelta(hours=25)
+    await firma.compensar_vencidas()
+    (salida,) = [c for c in _comandos(fabrica) if c.payload["event_type"] == "reembolso_cobro_solicitado"]
+    publicado = json.loads((CONTRATOS / "reembolso_cobro_solicitado.json").read_text(encoding="utf-8"))
+
+    assert set(salida.payload) == set(publicado)
+    assert set(salida.payload["payload"]) == set(publicado["payload"])  # el consumidor (Pagos) lee estos campos
+
+
+async def test_la_saga_aplica_el_reembolso_que_publica_pagos(armar, fabrica):
+    from datetime import timedelta
+
+    from tests.test_firma import COBRO, _lista
+
+    firma, susc, _, reloj = await _lista(armar, fabrica)
+    reloj.ahora = COBRO + timedelta(hours=25)
+    await firma.compensar_vencidas()
+    evento = _ejemplo("cobro_prima_reembolsado", susc.id)
+
+    with fabrica() as s, s.begin():
+        await manejar_resultado_cobro(evento, s)
+
+    with fabrica() as s:
+        actual = repo.obtener(s, susc.id)
+    assert (actual.estado_saga, actual.compensacion_estado) == ("COMPENSADA", "COMPLETADA")

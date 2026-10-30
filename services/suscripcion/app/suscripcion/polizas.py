@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import calendar
+import hashlib
 import logging
 import secrets
 from collections.abc import Callable
@@ -304,18 +305,21 @@ class GeneradorDocumentos:
         clave = clave_documento(base.suscripcion_id, base.numero_poliza)
         await asyncio.to_thread(self._almacen.guardar, clave, contenido, "application/pdf")
         generado_en = self._reloj()
-        await asyncio.to_thread(self._marcar_generado, poliza_id, clave, generado_en)
+        await asyncio.to_thread(
+            self._marcar_generado, poliza_id, clave, generado_en, hashlib.sha256(contenido).hexdigest()
+        )
         log.info(
             "documento de poliza generado poliza_id=%s bytes=%s duracion_ms=%s desde_el_registro_ms=%s",
             poliza_id, len(contenido), int((generado_en - inicio).total_seconds() * 1000),
             int((generado_en - base.creada_en).total_seconds() * 1000),
         )
 
-    def _marcar_generado(self, poliza_id: str, clave: str, ahora: datetime) -> None:
+    def _marcar_generado(self, poliza_id: str, clave: str, ahora: datetime, sha256: str) -> None:
         with self._fabrica() as s, s.begin():
             p = s.get(PolizaDB, poliza_id, with_for_update=True)
             p.documento_estado = DOC_GENERADO
             p.documento_s3_key = clave
+            p.documento_sha256 = sha256
             p.documento_generado_en = ahora
             p.documento_proximo_intento = None
             p.documento_error = None

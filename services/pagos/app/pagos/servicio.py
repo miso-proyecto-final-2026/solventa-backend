@@ -62,6 +62,8 @@ FUENTE = "ms-pagos"
 TIPO_COMANDO = "cobro_prima_solicitado"
 CONFIRMADO = "cobro_prima_confirmado"
 RECHAZADO = "cobro_prima_rechazado"
+TIPO_COMANDO_REEMBOLSO = "reembolso_cobro_solicitado"  # HU21: la firma falló o venció y la saga compensa el cobro
+REEMBOLSADO = "cobro_prima_reembolsado"
 PERIODICIDADES = ("ANUAL", "MENSUAL")
 
 
@@ -154,12 +156,66 @@ class ServicioCobros:
 
     async def manejar_evento(self, evento: Evento, sesion: Session) -> None:
         """Manejador del consumidor de `solventa.suscripcion.comandos` (corre en la transacción de la plantilla)."""
-        if evento.event_type != TIPO_COMANDO:
+        if evento.event_type not in (TIPO_COMANDO, TIPO_COMANDO_REEMBOLSO):
             log.info("evento ignorado event_type=%s event_id=%s", evento.event_type, evento.event_id)
             return
         traza_id.set(evento.trace_id)
         correlacion_id.set(evento.correlation_id)
+        if evento.event_type == TIPO_COMANDO_REEMBOLSO:
+            self.registrar_reembolso(sesion, evento.payload)
+            return
         self.registrar(sesion, ComandoCobro.desde_evento(evento.payload), origen="kafka")
+
+    def registrar_reembolso(self, sesion: Session, payload: dict[str, Any]) -> tuple[TransaccionDB, bool]:
+        """Registra la devolución del cobro aprobado de la suscripción (HU21). Una clave, un reembolso.
+
+        Como el cobro, no llama a la pasarela aquí: queda `PENDIENTE` y lo procesa el procesador, que reintenta.
+        """
+        suscripcion_id = str(payload.get("suscripcion_id") or "")
+        clave = str(payload.get("idempotency_key") or f"reembolso_prima:{suscripcion_id}")
+        if not suscripcion_id or not 1 <= len(clave) <= 100:
+            raise SolicitudInvalida(detalles=[{"campo": "suscripcion_id", "motivo": "es obligatorio"}])
+        existente = repo.por_clave(sesion, clave)
+        if existente is not None:
+            existente = repo.contar_reentrega(sesion, existente, self._reloj())
+            if existente.estado == EstadoTransaccion.APROBADA.value:
+                self._encolar_resultado(sesion, existente, repeticion=True)
+            return existente, False
+        cobro = next(
+            (
+                t for t in repo.transacciones_de(sesion, suscripcion_id)
+                if t.tipo == TipoTransaccion.COBRO_PRIMA.value and t.estado == EstadoTransaccion.APROBADA.value
+            ),
+            None,
+        )
+        if cobro is None:
+            # Sin cobro aprobado no hay qué devolver: el mensaje va a la cola de fallidos para que lo revise una persona.
+            raise SolicitudInvalida(detalles=[{"campo": "suscripcion_id", "motivo": "no tiene un cobro aprobado que reembolsar"}])
+        ahora = self._reloj()
+        nueva = TransaccionDB(
+            id=str(uuid4()),
+            tipo=TipoTransaccion.REEMBOLSO_PRIMA.value,
+            idempotency_key=clave,
+            suscripcion_id=suscripcion_id,
+            cliente_id=cobro.cliente_id,
+            monto=cobro.monto,
+            moneda=cobro.moneda,
+            periodicidad_pago=cobro.periodicidad_pago,
+            estado=EstadoTransaccion.PENDIENTE.value,
+            token_id=cobro.token_id,
+            intentos=0,
+            proximo_intento_en=ahora,
+            origen="kafka",
+            reentregas=0,
+            correlacion_id=correlacion_id.get(),
+            traza_id=traza_id.get(),
+            created_at=ahora,
+            updated_at=ahora,
+        )
+        if repo.insertar_transaccion(sesion, nueva):
+            log.info("reembolso registrado transaccion_id=%s suscripcion_id=%s", nueva.id, suscripcion_id)
+            return nueva, True
+        return repo.por_clave(sesion, clave), False  # otra réplica ganó la carrera
 
     def registrar(self, sesion: Session, comando: ComandoCobro, *, origen: str) -> tuple[TransaccionDB, bool]:
         """Devuelve (transacción, creada). Con `creada=False` es una repetición: se cuenta y no se cobra otra vez."""
@@ -212,18 +268,22 @@ class ServicioCobros:
         tomado = await asyncio.to_thread(self._tomar, transaccion_id)
         if tomado is None:
             return None
-        numero, solicitud, describir = tomado
+        numero, solicitud, describir, reembolso = tomado
         datos_token = await self._describir(solicitud.token) if describir else None
         inicio = time.monotonic()
         resultado: ResultadoCobro | None = None
         desenlace = ResultadoIntento.SIN_RESPUESTA
         try:
-            if numero > 1:
+            if reembolso:
+                # La pasarela es idempotente por la clave del reembolso: repetir la orden no devuelve dos veces.
+                resultado = await asyncio.wait_for(self._pasarela.reembolsar(solicitud), self._timeout_s)
+                desenlace = ResultadoIntento.APROBADO if resultado.aprobado else ResultadoIntento.RECHAZADO
+            elif numero > 1:
                 # Un intento anterior no supo si cobró: primero se pregunta (EC-D1.2).
                 resultado = await asyncio.wait_for(self._pasarela.consultar(solicitud.idempotency_key), self._timeout_s)
                 if resultado is not None:
                     desenlace = ResultadoIntento.CONCILIADO
-            if resultado is None:
+            if resultado is None and not reembolso:
                 resultado = await asyncio.wait_for(self._pasarela.cobrar(solicitud), self._timeout_s)
                 desenlace = ResultadoIntento.APROBADO if resultado.aprobado else ResultadoIntento.RECHAZADO
         except PasarelaNoDisponible as error:
@@ -246,7 +306,7 @@ class ServicioCobros:
             log.warning("no se pudo describir el token: %s", type(error).__name__)
             return None
 
-    def _tomar(self, transaccion_id: str) -> tuple[int, SolicitudCobro, bool] | None:
+    def _tomar(self, transaccion_id: str) -> tuple[int, SolicitudCobro, bool, bool] | None:
         ahora = self._reloj()
         with self._fabrica() as s, s.begin():
             tx = repo.tomar_pendiente(s, transaccion_id, ahora)
@@ -263,7 +323,7 @@ class ServicioCobros:
                 moneda=tx.moneda,
                 referencia=tx.suscripcion_id,
             )
-            return intento.numero, solicitud, token.ultimos4 is None
+            return intento.numero, solicitud, token.ultimos4 is None, tx.tipo == TipoTransaccion.REEMBOLSO_PRIMA.value
 
     def _cerrar_intento(
         self,
@@ -295,7 +355,8 @@ class ServicioCobros:
             if not resultado.aprobado:
                 tx.codigo_rechazo = (resultado.codigo or "RECHAZADO")[:50]
                 tx.motivo_rechazo = (resultado.motivo or "La pasarela rechazó el cobro.")[:200]
-                tx.gracia_hasta = ahora + self._gracia
+                if tx.tipo == TipoTransaccion.COBRO_PRIMA.value:
+                    tx.gracia_hasta = ahora + self._gracia
             tx.proximo_intento_en = None
             tx.resuelta_en = ahora
             tx.updated_at = ahora
@@ -309,6 +370,8 @@ class ServicioCobros:
 
     def _actualizar_caso(self, s: Session, tx: TransaccionDB, ahora: datetime) -> None:
         """HU19: un rechazo abre el caso de gestión; el cierre de un reintento lo actualiza (en la misma transacción)."""
+        if tx.tipo == TipoTransaccion.REEMBOLSO_PRIMA.value:
+            return  # un reembolso no es un cobro fallido que gestionar
         if tx.origen == ORIGEN_GESTION:
             caso = repo.caso_abierto_de(s, tx.suscripcion_id)
             if caso is None:
@@ -371,6 +434,10 @@ class ServicioCobros:
 
     def _encolar_resultado(self, s: Session, tx: TransaccionDB, *, repeticion: bool) -> None:
         aprobado = tx.estado == EstadoTransaccion.APROBADA.value
+        if tx.tipo == TipoTransaccion.REEMBOLSO_PRIMA.value and not aprobado:
+            # Un reembolso rechazado no se anuncia: la saga sigue esperando y la transacción queda visible para el operador.
+            log.error("reembolso rechazado transaccion_id=%s suscripcion_id=%s", tx.id, tx.suscripcion_id)
+            return
         token = repo.token_de(s, tx)
         payload: dict[str, Any] = {
             "transaccion_id": tx.id,
@@ -394,7 +461,9 @@ class ServicioCobros:
                 "gracia_hasta": repo.utc(tx.gracia_hasta).isoformat(),
             }
         evento = Evento(
-            event_type=CONFIRMADO if aprobado else RECHAZADO,
+            event_type=(
+                REEMBOLSADO if tx.tipo == TipoTransaccion.REEMBOLSO_PRIMA.value else CONFIRMADO if aprobado else RECHAZADO
+            ),
             source=FUENTE,
             timestamp=self._reloj(),
             correlation_id=tx.correlacion_id or tx.suscripcion_id,

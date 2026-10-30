@@ -49,3 +49,26 @@ def test_las_copias_de_los_contratos_son_identicas_en_los_dos_servicios():
         pytest.skip("MS Suscripción no está en este árbol")
     for archivo in CONTRATOS.glob("*.json"):
         assert archivo.read_text(encoding="utf-8") == (otra / archivo.name).read_text(encoding="utf-8"), archivo.name
+
+
+# --- compensación de la firma (HU21) -------------------------------------------------------------------------------
+
+async def test_el_comando_de_reembolso_de_la_saga_produce_el_resultado_con_la_forma_publicada(armar, fabrica):
+    servicio = armar(PasarelaFalsa("aprobar"))
+    with fabrica() as s, s.begin():
+        await servicio.manejar_evento(_ejemplo("cobro_prima_solicitado"), s)
+    await servicio.procesar_pendientes()
+    suscripcion_id = _ejemplo("cobro_prima_solicitado").payload["suscripcion_id"]
+    comando = _ejemplo("reembolso_cobro_solicitado")
+    comando = comando.model_copy(update={"payload": {**comando.payload, "suscripcion_id": suscripcion_id}})
+
+    with fabrica() as s, s.begin():
+        await servicio.manejar_evento(comando, s)
+    await servicio.procesar_pendientes()
+
+    with fabrica() as s:
+        emitido = list(s.execute(select(EventoSalidaDB).order_by(EventoSalidaDB.id)).scalars())[-1].payload
+    publicado = json.loads((CONTRATOS / "cobro_prima_reembolsado.json").read_text(encoding="utf-8"))
+    assert emitido["event_type"] == publicado["event_type"] == "cobro_prima_reembolsado"
+    assert set(emitido) == set(publicado)
+    assert set(emitido["payload"]) == set(publicado["payload"])  # el consumidor (Suscripción) lee estos campos

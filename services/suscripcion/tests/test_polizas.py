@@ -8,6 +8,7 @@ from io import BytesIO
 import pytest
 from app.eventos import Evento
 from app.suscripcion import repositorio as repo
+from app.suscripcion.almacen import DocumentoNoEncontrado
 from app.suscripcion.cobros import manejar_resultado_cobro
 from app.suscripcion.config import TOPIC_CICLO_VIDA
 from app.suscripcion.documento import cargar_plantilla
@@ -44,6 +45,11 @@ class AlmacenMemoria:
             self.fallos -= 1
             raise OSError("almacén no disponible")
         self.objetos[clave] = (contenido, content_type)
+
+    def leer(self, clave):
+        if clave not in self.objetos:
+            raise DocumentoNoEncontrado(clave)
+        return self.objetos[clave][0]
 
 
 class Reloj:

@@ -9,3 +9,4 @@ reportlab>=4.2
 boto3>=1.35
 aiokafka==0.14.0
 aws-msk-iam-sasl-signer-python==1.0.2
+pypdf>=5.0

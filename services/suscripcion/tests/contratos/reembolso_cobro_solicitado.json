@@ -1,0 +1,18 @@
+{
+  "event_id": "fd808199-fd71-4080-a85e-61844559a849",
+  "event_type": "reembolso_cobro_solicitado",
+  "source": "ms-suscripcion",
+  "timestamp": "2026-10-26T13:00:05Z",
+  "correlation_id": "4f1da739-3837-4b0c-b8c3-0816661205d3",
+  "trace_id": "36001e39-ce84-4f29-80fd-161398f2786a",
+  "version": "1.0",
+  "payload": {
+    "suscripcion_id": "4f1da739-3837-4b0c-b8c3-0816661205d3",
+    "cliente_id": "cli-1",
+    "cobro_transaccion_id": "tx-1",
+    "monto": "175000.00",
+    "moneda": "COP",
+    "motivo": "FIRMA_VENCIDA",
+    "idempotency_key": "reembolso_prima:4f1da739-3837-4b0c-b8c3-0816661205d3"
+  }
+}

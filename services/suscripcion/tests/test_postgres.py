@@ -32,7 +32,7 @@ from tests.test_polizas import AlmacenMemoria, _generador
 pytestmark = pytest.mark.contenedores
 
 RAIZ = Path(__file__).parents[1]
-TABLAS = {"suscripciones", "revisiones_asistidas", "eventos_salida", "eventos_procesados", "polizas"}
+TABLAS = {"suscripciones", "revisiones_asistidas", "eventos_salida", "eventos_procesados", "polizas", "firmas"}
 REPLICAS = 8
 PEDIDO = {"token": "token-1", "cotizacion_id": "cot-1", "metodo_pago": "tok_visa_123", "acepta_terminos": True}
 
@@ -254,3 +254,114 @@ def test_la_base_rechaza_un_numero_de_poliza_con_formato_invalido(fabrica_pg):
     for invalido in ("corto", "I" * 20, "a" * 20):  # largo, letra excluida (I) y minúsculas
         with pytest.raises(IntegrityError), fabrica_pg() as s, s.begin():
             s.execute(text(f"UPDATE {SCHEMA}.polizas SET numero_poliza = :n"), {"n": invalido})
+
+
+# --- firma electrónica (HU21) ----------------------------------------------------------------------------------
+
+def _lista_para_firmar(fabrica_pg):
+    """Una saga con el cobro confirmado y el PDF generado, más el servicio de firma de una réplica."""
+    from datetime import timedelta
+
+    from app.suscripcion.firma import ServicioFirma
+    from app.suscripcion.proveedor_firma import ProveedorFirmaSimulado
+
+    from tests.test_firma import COBRO, OTP
+    from tests.test_polizas import Reloj
+
+    susc = _saga_cobrada(fabrica_pg)
+    asyncio.run(manejar_resultado_cobro_en(fabrica_pg, susc.id))
+    almacen = AlmacenMemoria()
+    asyncio.run(_generador(fabrica_pg, almacen).procesar_pendientes())
+
+    def firma():
+        return ServicioFirma(
+            fabrica=fabrica_pg, identidad=IdentidadFalsa(), almacen=almacen, proveedor=ProveedorFirmaSimulado(OTP),
+            reglas=cargar_reglas(), reloj=Reloj(COBRO + timedelta(hours=1)),
+        )
+
+    return susc, firma
+
+
+def _firmar_en(firma, susc):
+    from tests.test_firma import ORIGEN, OTP
+
+    async def firmar():
+        documento = await firma.documento_para_firmar(susc.id, "token-1")
+        return await firma.firmar(
+            susc.id, "token-1", documento_sha256=documento.documento_sha256, documento_revisado=True, codigo=OTP, origen=ORIGEN
+        )
+
+    return firmar
+
+
+def test_varias_replicas_firmando_a_la_vez_dejan_una_firma_y_una_emision(fabrica_pg):
+    susc, firma = _lista_para_firmar(fabrica_pg)
+
+    async def replica(_):
+        return await _firmar_en(firma(), susc)()
+
+    resultados = _en_paralelo(REPLICAS, replica)
+
+    assert not [r for r in resultados if isinstance(r, Exception)], resultados
+    assert sorted(creada for _, creada in resultados) == [False] * (REPLICAS - 1) + [True]
+    with fabrica_pg() as s:
+        assert s.execute(text(f"SELECT count(*) FROM {SCHEMA}.firmas")).scalar() == 1
+        assert s.execute(text(f"SELECT count(*) FROM {SCHEMA}.eventos_salida WHERE topic = 'solventa.polizas.ciclovida'")).scalar() == 1
+        assert s.execute(text(f"SELECT estado_saga FROM {SCHEMA}.suscripciones")).scalar() == "EMITIDA"
+
+
+def test_la_base_no_deja_corregir_ni_borrar_la_evidencia_de_una_firma(fabrica_pg):
+    from sqlalchemy.exc import DBAPIError
+
+    susc, firma = _lista_para_firmar(fabrica_pg)
+    asyncio.run(_firmar_en(firma(), susc)())
+
+    with pytest.raises(DBAPIError, match="inmutable"), fabrica_pg() as s, s.begin():
+        s.execute(text(f"UPDATE {SCHEMA}.firmas SET canal = 'WEB'"))
+    with pytest.raises(DBAPIError, match="inmutable"), fabrica_pg() as s, s.begin():
+        s.execute(text(f"DELETE FROM {SCHEMA}.firmas"))
+    with fabrica_pg() as s:
+        assert s.execute(text(f"SELECT canal FROM {SCHEMA}.firmas")).scalar() == "MOVIL"
+
+
+def test_la_base_rechaza_un_canal_o_un_hash_invalido(fabrica_pg):
+    susc, firma = _lista_para_firmar(fabrica_pg)
+    asyncio.run(_firmar_en(firma(), susc)())
+
+    for columna, valor in (("canal", "FAX"), ("documento_sha256", "ABC")):
+        with fabrica_pg() as s, s.begin():
+            s.execute(text(f"ALTER TABLE {SCHEMA}.firmas DISABLE TRIGGER firmas_inmutables"))
+        try:
+            with pytest.raises(IntegrityError), fabrica_pg() as s, s.begin():
+                s.execute(text(f"UPDATE {SCHEMA}.firmas SET {columna} = :v"), {"v": valor})
+        finally:
+            with fabrica_pg() as s, s.begin():
+                s.execute(text(f"ALTER TABLE {SCHEMA}.firmas ENABLE TRIGGER firmas_inmutables"))
+
+
+def test_dos_barridos_a_la_vez_piden_un_solo_reembolso_de_una_firma_vencida(fabrica_pg):
+    from datetime import timedelta
+
+    from app.suscripcion.firma import ServicioFirma
+    from app.suscripcion.proveedor_firma import ProveedorFirmaSimulado
+
+    from tests.test_firma import COBRO, OTP
+    from tests.test_polizas import Reloj
+
+    _susc, _ = _lista_para_firmar(fabrica_pg)
+
+    async def replica(_):
+        servicio = ServicioFirma(
+            fabrica=fabrica_pg, identidad=IdentidadFalsa(), almacen=AlmacenMemoria(), proveedor=ProveedorFirmaSimulado(OTP),
+            reglas=cargar_reglas(), reloj=Reloj(COBRO + timedelta(hours=25)),
+        )
+        return await servicio.compensar_vencidas()
+
+    resultados = _en_paralelo(REPLICAS, replica)
+
+    assert not [r for r in resultados if isinstance(r, Exception)], resultados
+    with fabrica_pg() as s:
+        reembolsos = s.execute(
+            text(f"SELECT count(*) FROM {SCHEMA}.eventos_salida WHERE payload->>'event_type' = 'reembolso_cobro_solicitado'")
+        ).scalar()
+    assert reembolsos == 1

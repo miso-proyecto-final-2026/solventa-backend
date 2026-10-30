@@ -200,6 +200,8 @@ class CargoSimuladoDB(BasePagos):
     monto: Mapped[Decimal] = mapped_column(Numeric(15, 2))
     moneda: Mapped[str] = mapped_column(String(3))
     aprobado: Mapped[bool] = mapped_column(Boolean)
+    # COBRO | REEMBOLSO: el libro guarda ambos; «cobros hechos» cuenta solo los primeros.
+    tipo: Mapped[str] = mapped_column(String(10), default="COBRO", server_default="COBRO")
     codigo: Mapped[str | None] = mapped_column(String(50), nullable=True)
     motivo: Mapped[str | None] = mapped_column(String(200), nullable=True)
     # Cuántas órdenes llegaron con esta clave: más de 1 prueba que la idempotencia evitó un cargo doble.

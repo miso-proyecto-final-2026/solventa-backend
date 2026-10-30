@@ -30,8 +30,10 @@ from app.suscripcion.config import (
     ConfigSuscripcion,
 )
 from app.suscripcion.documento import cargar_plantilla
+from app.suscripcion.firma import ServicioFirma
 from app.suscripcion.modelos_db import TABLA_EVENTOS_PROCESADOS
 from app.suscripcion.polizas import GeneradorDocumentos
+from app.suscripcion.proveedor_firma import ProveedorFirmaSimulado
 from app.suscripcion.reglas import cargar_reglas
 from app.suscripcion.repositorio import crear_engine, crear_tablas_locales
 from app.suscripcion.servicio import ServicioSuscripcion
@@ -87,6 +89,17 @@ def construir_generador(config: ConfigSuscripcion, engine: Engine, clientes: lis
         max_intentos=config.polizas_max_intentos,
         espera_base_s=config.polizas_reintento_base_s,
         espera_maxima_s=config.polizas_reintento_maximo_s,
+    )
+
+
+def construir_servicio_firma(config: ConfigSuscripcion, engine: Engine, clientes: list[httpx.AsyncClient]) -> ServicioFirma:
+    """Firma de la póliza (HU21). El proveedor es el simulado (T4); un proveedor real sería otro adaptador del mismo puerto."""
+    return ServicioFirma(
+        fabrica=sessionmaker(bind=engine, expire_on_commit=False),
+        identidad=ClienteIdentidad(clientes[0], config.identidad_key),
+        almacen=construir_almacen(config),
+        proveedor=ProveedorFirmaSimulado(config.firma_sim_otp),
+        reglas=cargar_reglas(),
     )
 
 
