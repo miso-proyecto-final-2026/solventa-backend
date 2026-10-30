@@ -11,6 +11,8 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.contexto import traza_id
+
 
 class ErrorSuscripcion(Exception):
     status = 400
@@ -39,6 +41,18 @@ class SuscripcionNoEncontrada(ErrorSuscripcion):
     status, code, mensaje = 404, "SUSCRIPCION_NO_ENCONTRADA", "La suscripción no existe."
 
 
+class PolizaNoEncontrada(ErrorSuscripcion):
+    status, code, mensaje = 404, "POLIZA_NO_ENCONTRADA", "La póliza no existe."
+
+
+class AccesoDenegado(ErrorSuscripcion):
+    status, code, mensaje = 403, "ACCESO_DENEGADO", "No tiene acceso a este recurso."
+
+
+class PolizaNoLista(ErrorSuscripcion):
+    status, code, mensaje = 409, "POLIZA_NO_LISTA", "El documento de la póliza aún no está generado."
+
+
 class CotizacionVencida(ErrorSuscripcion):
     status, code, mensaje = 409, "COTIZACION_VENCIDA", "La cotización venció; genere una nueva."
 
@@ -60,7 +74,14 @@ class DependenciaNoDisponible(ErrorSuscripcion):
 
 
 def cuerpo_error(code: str, message: str, detalles: list[dict[str, str]] | None = None, trace_id: str | None = None) -> dict[str, Any]:
-    return {"error": {"code": code, "message": message, "details": detalles or [], "trace_id": trace_id or str(uuid.uuid4())}}
+    return {
+        "error": {
+            "code": code,
+            "message": message,
+            "details": detalles or [],
+            "trace_id": trace_id or traza_id.get() or str(uuid.uuid4()),
+        }
+    }
 
 
 def registrar_errores(app: FastAPI) -> None:

@@ -9,7 +9,7 @@ services/
   identidad/     MS Identidad    HU01–HU08 (registro, KYC, consentimiento)
   cotizacion/    MS Cotización   HU09–HU14, HU37–HU38 (proveedores de datos, perfil, motor de rating)
   perfilamiento/ MS Perfilamiento HU23 (enriquecimiento del perfil de riesgo, linaje)
-  suscripcion/   MS Suscripción   HU15 y HU18 (saga de suscripción: decisión automática y paso de cobro; firma y emisión llegan con HU21 y HU20)
+  suscripcion/   MS Suscripción   HU15 y HU18 (saga de suscripción: decisión automática, paso de cobro y documento de la póliza con HU20; la firma y la emisión llegan con HU21)
   siniestros/    MS Siniestros   HU27 (recepción de eventos paramétricos; HU28 validará la condición)
   pagos/         MS Pagos        HU18 (cobro de la prima con pasarela simulada, idempotencia y conciliación)
 docs/adr/        decisiones de arquitectura (compartidas)
@@ -66,23 +66,29 @@ El CI corre `test` y `build` en matriz por servicio.
 | `COTIZACION_URL` | suscripcion | MS Cotización, de donde se lee la cotización (`GET /v1/cotizaciones/{id}`). Obligatoria siempre. |
 | `PERFILAMIENTO_URL`, `PERFILAMIENTO_SERVICE_KEY` | suscripcion | MS Perfilamiento y su clave de servicio (debe estar en su `PERFILAMIENTO_API_KEYS`). Si Perfilamiento no responde, el caso se deriva a revisión asistida. |
 | `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SEGURIDAD`, `AWS_REGION` | suscripcion | Brokers de MSK que la plataforma inyecta al servicio, `IAM` (por defecto) o `PLAINTEXT`, y la región para firmar. Sin brokers solo se arranca en modo desarrollo, con un publicador en memoria. Ver ADR-0010. |
+| `POLIZAS_BUCKET` | suscripcion | Bucket S3 donde se guarda el PDF de la póliza (HU20; cifrado AES256). Respeta `AWS_ENDPOINT_URL` (Moto en local). Sin él, solo en desarrollo, se usa `POLIZAS_DOCUMENTOS_DIR`. |
+| `POLIZAS_DOCUMENTOS_DIR` | suscripcion | Carpeta local de los PDF cuando no hay bucket (solo desarrollo; por defecto `./polizas-local`). |
+| `POLIZAS_VIGENCIA_MESES`, `POLIZAS_MAX_INTENTOS`, `POLIZAS_REINTENTO_BASE_S`, `POLIZAS_REINTENTO_MAXIMO_S` | suscripcion | Vigencia de la póliza desde el cobro (12 meses, provisional), intentos de generar el documento antes de `FALLIDO` (5) y espera inicial y máxima entre intentos (5 s y 300 s). |
 | `SUSCRIPCION_ESPERA_BARRIDO_S`, `SUSCRIPCION_TIMEOUT_S` | suscripcion | Segundos tras los que el barrido retoma una saga sin decidir (30) y timeout de las llamadas a servicios vecinos (2). |
 | `SINIESTROS_DATABASE_URL` | siniestros | Base de datos PostgreSQL (esquema `siniestros`, Alembic). Obligatoria fuera de desarrollo; admite `DATABASE_URL`. |
 | `SINIESTROS_API_KEYS` | siniestros | Llaves de los proveedores de eventos en `X-Service-Key`, como pares `fuente=clave` separados por coma; el evento debe traer esa misma `fuente`. Una clave sin nombre (la que entrega la plataforma en staging) es de la fuente `proveedor-simulado`. Vacía = nadie accede. Debe venir de un secreto. |
 | `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SEGURIDAD` | siniestros | Brokers de MSK (los inyecta la plataforma a los servicios con `eventos`) y `IAM` (por defecto) o `PLAINTEXT` (solo local). Obligatorias fuera de desarrollo; sin ellas, en desarrollo se publica en memoria y no hay consumidor. Ver ADR-0010 y ADR-0011. |
 | `PAGOS_DATABASE_URL` | pagos | Base de datos PostgreSQL (esquema `pagos`, Alembic). Obligatoria fuera de desarrollo; admite `DATABASE_URL`. |
-| `PAGOS_API_KEYS` | pagos | Claves de servicio en `X-Service-Key` (pares `nombre=clave` separados por coma; sin nombre, «servicio») para `POST /v1/pagos/cobros`, `POST /v1/pagos/tokenizar` y `GET /v1/pagos/transacciones/{id}`. Vacía = nadie accede. Debe venir de un secreto. |
+| `PAGOS_API_KEYS` | pagos | Claves de servicio en `X-Service-Key` (pares `nombre=clave` separados por coma; sin nombre, «servicio») para `POST /v1/pagos/cobros`, `POST /v1/pagos/tokenizar` y `GET /v1/pagos/transacciones/{id}`; no abre los cobros fallidos (HU19), que exigen el JWT del asesor u operador. Vacía = nadie accede. Debe venir de un secreto. |
 | `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SEGURIDAD`, `AWS_REGION` | pagos | Como en suscripción. Con brokers, Pagos consume `solventa.suscripcion.comandos` (grupo `solventa-pagos.cobros`) y publica en `solventa.pagos.resultados`; sin ellos solo arranca en desarrollo, sin consumidor. |
 | `PASARELA_PROVEEDOR`, `PASARELA_TIMEOUT_S` | pagos | Adaptador de pasarela (`simulador`, el único hoy; ADR-0004 y ADR-0014) y tiempo máximo de espera de su respuesta (5 s). |
 | `PASARELA_SIM_MODO`, `PASARELA_SIM_DEMORA_S` | pagos | Modo por defecto del simulador (`APROBAR`, `RECHAZAR`, `TARDAR`, `PERDER_RESPUESTA`) y demora del modo `TARDAR` (10 s). Ver `services/pagos/README.md`. |
 | `PERIODO_GRACIA_DIAS` | pagos | Días del período de gracia tras un rechazo. **Provisional** (3 por defecto) hasta que negocio lo confirme; la gestión es de HU19. |
+| `PAGOS_HORAS_POR_VENCER` | pagos | Horas de gracia restantes por debajo de las cuales un cobro fallido sale «próximo a vencer» en la bandeja (24 por defecto, HU19; supuesto a confirmar). |
+| `PAGOS_DETECTOR_GRACIA_S` | pagos | Cada cuántos segundos se buscan cobros fallidos con la gracia vencida para avisar al operador (60 por defecto, HU19). |
 | `PAGOS_REINTENTO_BASE_S`, `PAGOS_REINTENTO_MAXIMO_S` | pagos | Espera antes de reintentar o conciliar un cobro sin respuesta (5 s, se duplica en cada intento, tope 300 s). |
 | `TRAZA_COLA_MAX`, `TRAZA_REINTENTOS` | cotizacion | Cola en memoria de la trazabilidad de consultas (10.000 por defecto) y reintentos de escritura (3). Ver ADR-0007. |
-| `ASESOR_JWT_SECRETO` | identidad, cotizacion | Secreto HS256 con el que Identidad firma y Cotización valida el token del asesor (HU38, ADR-0008). **Debe ser el mismo en ambos** y venir de un secreto. Sin él solo arranca con `SOLVENTA_MODO_DESARROLLO=1` (secreto fijo de desarrollo). |
+| `ASESOR_JWT_SECRETO` | identidad, cotizacion, pagos | Secreto HS256 con el que Identidad firma y Cotización y Pagos validan el token del asesor u operador (HU38, HU19, ADR-0008). **Debe ser el mismo en los tres** y venir de un secreto. Sin él solo arranca con `SOLVENTA_MODO_DESARROLLO=1` (secreto fijo de desarrollo). |
 | `ASESOR_JWT_TTL_MIN` | identidad | Vida del token del asesor en minutos (30 por defecto). |
-| `ASESOR_JWT_EMISOR` | cotizacion | `iss` esperado en el token (`solventa-identidad` por defecto). |
+| `ASESOR_JWT_EMISOR` | cotizacion, pagos | `iss` esperado en el token (`solventa-identidad` por defecto). |
 | `SIMULADOR_PERFILES_DEMO` | cotizacion | Ruta del YAML con perfiles financieros demo por `cliente_id` (`app/proveedores/perfiles_demo.yaml`). **Solo desarrollo y demostración.** Sin ella los simuladores devuelven el perfil neutro de siempre. |
 | `ASESOR_DEMO_EMAIL`, `ASESOR_DEMO_PASSWORD` | identidad | Entrada de `scripts/sembrar_demo.py`, que crea el asesor demo y cinco clientes demo (CC `1000000001` a `1000000005`). Nunca en git. |
+| `OPERADOR_DEMO_EMAIL`, `OPERADOR_DEMO_PASSWORD` | identidad | Opcionales (las dos o ninguna): `sembrar_demo.py` crea además un usuario interno con rol `OPERADOR` (HU19). Nunca en git. |
 
 Patrones de comunicación (ADR-0002 y documento de arquitectura): la consulta de consentimiento es REST síncrono con timeout duro y circuit breaker; Kafka se reserva para los flujos de larga duración (suscripción, pagos, siniestros, notificaciones). Los contextos se relacionan por id, nunca por llave foránea ni por tabla compartida.
 

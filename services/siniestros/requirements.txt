@@ -6,3 +6,4 @@ alembic>=1.13
 aiokafka==0.14.0
 aws-msk-iam-sasl-signer-python==1.0.2
 pydantic>=2.7
+pyyaml>=6.0

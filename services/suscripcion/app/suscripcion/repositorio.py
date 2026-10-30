@@ -15,6 +15,7 @@ from app.suscripcion.modelos_db import (
     SCHEMA,
     BaseSuscripcion,
     EventoSalidaDB,
+    PolizaDB,
     RevisionAsistidaDB,
     SuscripcionDB,
 )
@@ -53,6 +54,9 @@ def _utc(valor: datetime | None) -> datetime | None:
     return valor if valor.tzinfo else valor.replace(tzinfo=UTC)
 
 
+utc = _utc
+
+
 # --- suscripciones ---------------------------------------------------------------------------------------------
 
 def nueva_suscripcion(
@@ -71,6 +75,8 @@ def nueva_suscripcion(
     correlacion_id: str | None = None,
     metodo_pago_token: str | None = None,
     periodicidad_pago: str = "ANUAL",
+    coberturas: list[dict[str, Any]] | None = None,
+    cotizacion_version_reglas: str | None = None,
 ) -> SuscripcionDB:
     """Crea la saga en `EN_PROGRESO` / `DECISION`. Puede lanzar IntegrityError (clave repetida o cotización ya usada)."""
     suscripcion = SuscripcionDB(
@@ -89,6 +95,8 @@ def nueva_suscripcion(
         motivos=[],
         correlacion_id=correlacion_id,
         metodo_pago_token=metodo_pago_token,
+        coberturas=coberturas,
+        cotizacion_version_reglas=cotizacion_version_reglas,
         created_at=ahora,
         updated_at=ahora,
     )
@@ -171,6 +179,23 @@ def revisiones_de(sesion: Session, suscripcion_id: str) -> list[RevisionAsistida
             select(RevisionAsistidaDB).where(RevisionAsistidaDB.suscripcion_id == suscripcion_id).order_by(RevisionAsistidaDB.id)
         ).scalars()
     )
+
+
+# --- pólizas (HU20) ------------------------------------------------------------------------------------------------
+
+def poliza_de_suscripcion(sesion: Session, suscripcion_id: str) -> PolizaDB | None:
+    return sesion.execute(select(PolizaDB).where(PolizaDB.suscripcion_id == suscripcion_id)).scalar_one_or_none()
+
+
+def polizas_de_cliente(sesion: Session, cliente_id: str) -> list[tuple[PolizaDB, SuscripcionDB]]:
+    """La billetera del cliente: sus pólizas con la suscripción que les da la prima, las más recientes primero."""
+    filas = sesion.execute(
+        select(PolizaDB, SuscripcionDB)
+        .join(SuscripcionDB, SuscripcionDB.id == PolizaDB.suscripcion_id)
+        .where(PolizaDB.cliente_id == cliente_id)
+        .order_by(PolizaDB.created_at.desc(), PolizaDB.id)
+    )
+    return [(p, s) for p, s in filas]
 
 
 # --- outbox ----------------------------------------------------------------------------------------------------

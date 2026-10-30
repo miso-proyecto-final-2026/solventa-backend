@@ -25,7 +25,10 @@ Cada petición lleva pruebas (`pm.test`) y guarda las variables que necesita la 
 | MS Siniestros (HU27) | `POST /v1/siniestros/eventos` (202 acuse, 200 duplicado, 400 inválido/fuente ajena, 401) y `GET …/eventos/resumen` |
 | MS Perfilamiento (HU23) | `POST /v1/perfilamiento/{id}/enriquecer`, `GET …/perfil` y `GET …/linaje` (con credencial; 401/403/404/422) |
 | MS Suscripción (HU15) | `POST /v1/suscripciones` (202, idempotencia, cotización ya usada, 401/404/422), `GET /v1/suscripciones/{id}`. Usa el cliente y la cotización de las carpetas anteriores. Quedan fuera `COTIZACION_VENCIDA` (exige una cotización vencida) y las decisiones rechazada/derivada (dependen del perfil del cliente; se prueban en pytest). |
+| MS Suscripción — póliza (HU20) | `GET /v1/suscripciones/{id}/poliza` (404 antes del cobro, inexistente y de otro cliente; 401) y `GET /v1/polizas?cliente_id=` (billetera 200; 403 de otro cliente; 422 sin `cliente_id`; 401). El camino 200 de la póliza exige un cobro confirmado, que llega por Kafka desde MS Pagos: se prueba en pytest y con el recorrido de `docs/evidencias/HU20-documento-poliza.md`. |
+| MS Identidad / Resumen de cliente para la póliza (HU20) | `GET /v1/resumenes-cliente/{id}` (interno, clave de servicio: 200 con documento enmascarado, 401 sin clave o con token de cliente, 404). |
 | MS Pagos (HU18) | `POST /v1/pagos/tokenizar` (201, PAN rechazado 422), `POST /v1/pagos/cobros` (aprobado 201, repetición 200, clave con otro monto 409, rechazado con gracia, respuesta perdida 202) y `GET /v1/pagos/transacciones/{id}` (200/401/403/404). Servicio interno: todo con `X-Service-Key`. |
+| MS Pagos / Cobros fallidos (HU19) | `GET /v1/pagos/cobros-fallidos` (página, `por_vencer`, 401 sin token, 422 tamaño), `GET …/{id}` (200/404), `POST …/{id}/notas` (201, número de tarjeta 422) y `POST …/{id}/reintentar` (primer clic y segundo clic con la misma `Idempotency-Key`). JWT del asesor; depende de «Cobrar prima - rechazado». |
 | MS Cotización / Perfiles | `GET /perfiles/{cliente_id}` (exige clave de servicio; 401/403) |
 | MS Identidad / Asesor - login y búsqueda (HU38) | `POST /v1/sesiones-internas`, `GET /v1/clientes/busqueda` (200/401/404/422) |
 | MS Cotización / Cotización asistida (HU38) | `GET /v1/productos` (200/304), `GET /v1/asesor/clientes/{id}/perfil`, `POST /v1/asesor/cotizaciones` (cliente existente, sin cuenta, 401/422) |
@@ -36,7 +39,7 @@ lo provoca. Quedan fuera, porque dependen de configuración que la colección no
 - `429` y `RECHAZADO` en KYC (requieren `KYC_SIMULADOR_MODO=rechazo` para agotar los intentos).
 - `413` en KYC (imagen de más de 5 MB; no se versiona un archivo así).
 - `400` «Se requiere HTTPS» en KYC (solo con `KYC_EXIGIR_HTTPS=true`).
-- `403` de las rutas del asesor (HU38): exige un token válido con otro rol, y Identidad solo emite el de asesor.
+- `403` de las rutas del asesor (HU38) y de cobros fallidos (HU19): exige un token válido con un rol sin permiso. Identidad ahora emite también el de operador (HU19), que sí entra a cobros fallidos, y no emite ningún otro rol interno.
 - Caídas de proveedores (`TIMEOUT`, `DEGRADADO` en consultas externas; `degradado: true`), que requieren los modos de falla de los simuladores de Cotización.
 
 ## Levantar los servicios en local
@@ -81,10 +84,10 @@ Sin `IDENTIDAD_URL`, Perfilamiento usa el consentimiento «siempre otorgado» (s
 ```bash
 # MS Pagos (puerto 8005, HU18) — en otra terminal. Pasarela simulada; sin Kafka no hay consumidor (se usa POST /v1/pagos/cobros).
 cd services/pagos
-SOLVENTA_MODO_DESARROLLO=1 PAGOS_API_KEYS=postman=dev-pagos-key uvicorn app.main:app --port 8005
+SOLVENTA_MODO_DESARROLLO=1 PAGOS_API_KEYS=postman=dev-pagos-key \n  ASESOR_JWT_SECRETO=dev-secreto-asesor-de-al-menos-32-bytes uvicorn app.main:app --port 8005
 ```
 
-En staging MS Pagos no tiene borde público: abra un túnel con `kubectl -n staging port-forward svc/solventa-pagos 8005:80`, cambie `pagos_url` a `http://localhost:8005` y ponga en `pagos_key` la clave de `solventa/staging/pagos-api-key` (Secrets Manager) como valor **actual** de la variable secreta del entorno, nunca en el archivo versionado.
+`ASESOR_JWT_SECRETO` debe ser el mismo de Identidad para que Pagos acepte el token del asesor (HU19). En staging el borde publica solo `/v1/pagos/cobros-fallidos`; para el resto de MS Pagos abra un túnel con `kubectl -n staging port-forward svc/solventa-pagos 8005:80`, cambie `pagos_url` a `http://localhost:8005` y ponga en `pagos_key` la clave de `solventa/staging/pagos-api-key` (Secrets Manager) como valor **actual** de la variable secreta del entorno, nunca en el archivo versionado.
 
 La llave de Siniestros se asocia a una fuente (`proveedor-sismos`): el evento debe traer esa misma `fuente` o recibe 400 `FUENTE_DESCONOCIDA`. Sin `KAFKA_BOOTSTRAP_SERVERS`, en desarrollo se publica en memoria y no hay consumidor, así que `procesados` queda en 0; con un Kafka local (`KAFKA_SEGURIDAD=PLAINTEXT`) el consumidor corre dentro del mismo proceso. `GET /v1/siniestros/eventos/resumen` muestra recibidos, publicados, procesados y reentregas.
 
@@ -118,6 +121,7 @@ npx newman run solventa-backend.postman_collection.json \
 | `perfiles_key` | Entorno | `X-Service-Key` del perfil crudo; debe estar en `PERFILES_API_KEYS` de Cotización. Es independiente de la del auditor. |
 | `asesor_email`, `asesor_password` | Entorno | Credenciales del asesor demo (las de `sembrar_demo.py`). La clave se escribe en el entorno de Postman, nunca en git. |
 | `asesor_token`, `cliente_demo_id`, `catalogo_etag` | Colección | Las deja la carpeta de HU38 para las peticiones siguientes. |
+| `caso_id`, `reintento_clave` | «Bandeja - asesor», «Reintentar cobro» | Caso de cobro fallido (HU19) y la `Idempotency-Key` del reintento, que repite el segundo clic. |
 | `identidad_integrada` | Entorno | `true` si Cotización corre con `IDENTIDAD_URL`; `false` con el stub de consentimiento. |
 | `cliente_id`, `access_token` | «Registrar cliente» | Cliente principal y su sesión. |
 | `otro_cliente_id`, `otro_access_token` | «Registrar segundo cliente» | Para las pruebas 403 y los casos negativos de KYC. Solo la carpeta de HU07 le otorga y le revoca el consentimiento (queda `REVOCADO`). |

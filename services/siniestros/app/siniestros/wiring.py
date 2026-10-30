@@ -20,7 +20,14 @@ from app.eventos import (
     parametros_seguridad,
 )
 from app.siniestros.config import SQLITE_LOCAL, ConfigSiniestros
+from app.siniestros.evaluacion import (
+    GRUPO_POLIZAS,
+    TOPIC_CICLO_VIDA,
+    Evaluador,
+    RegistroPolizas,
+)
 from app.siniestros.modelos_db import EVENTOS_PROCESADOS
+from app.siniestros.parametrico import cargar_reglas
 from app.siniestros.repositorio import (
     RepositorioEventos,
     crear_engine,
@@ -30,7 +37,6 @@ from app.siniestros.servicio import (
     GRUPO_RECEPCION,
     TOPIC_EVENTOS,
     Receptor,
-    procesar_evento,
 )
 
 
@@ -41,22 +47,28 @@ class Ensamblado:
     publicador: PublicadorEventos
     # None solo en desarrollo sin Kafka: el publicador es en memoria y nadie consume.
     consumidor: ConsumidorEventos | None = None
-    _tarea: asyncio.Task[None] | None = field(default=None, init=False)
+    # Copia local de las pólizas paramétricas (ciclo de vida de la póliza, HU28).
+    consumidor_polizas: ConsumidorEventos | None = None
+    _tareas: list[asyncio.Task[None]] = field(default_factory=list, init=False)
+
+    @property
+    def _consumidores(self) -> list[ConsumidorEventos]:
+        return [c for c in (self.consumidor, self.consumidor_polizas) if c is not None]
 
     async def iniciar(self) -> None:
         if isinstance(self.publicador, PublicadorKafka):
             await self.publicador.iniciar()
-        if self.consumidor is not None:
-            await self.consumidor.iniciar()
-            self._tarea = asyncio.create_task(self.consumidor.ejecutar())
+        for consumidor in self._consumidores:
+            await consumidor.iniciar()
+            self._tareas.append(asyncio.create_task(consumidor.ejecutar()))
 
     async def detener(self) -> None:
-        if self.consumidor is not None:
-            await self.consumidor.detener()
-        if self._tarea is not None:
-            self._tarea.cancel()
+        for consumidor in self._consumidores:
+            await consumidor.detener()
+        for tarea in self._tareas:
+            tarea.cancel()
             with contextlib.suppress(asyncio.CancelledError):
-                await self._tarea
+                await tarea
         if isinstance(self.publicador, PublicadorKafka):
             await self.publicador.detener()
         self.engine.dispose()
@@ -86,14 +98,28 @@ def construir_ensamblado(config: ConfigSiniestros | None = None) -> Ensamblado:
     brokers = brokers_desde_entorno()
     seguridad = parametros_seguridad()
     publicador = PublicadorKafka(brokers, seguridad, client_id="solventa-siniestros")
+    reglas = cargar_reglas()
+    registro = RegistroEventos(EVENTOS_PROCESADOS)
     consumidor = ConsumidorEventos(
         brokers=brokers,
         seguridad=seguridad,
         topic=TOPIC_EVENTOS,
         grupo=GRUPO_RECEPCION,
-        manejador=procesar_evento,
+        manejador=Evaluador(reglas, publicador).procesar,
         fabrica_sesiones=fabrica,
-        registro=RegistroEventos(EVENTOS_PROCESADOS),
+        registro=registro,
         publicador=publicador,
     )
-    return Ensamblado(Receptor(repositorio, publicador), engine, publicador, consumidor)
+    consumidor_polizas = ConsumidorEventos(
+        brokers=brokers,
+        seguridad=seguridad,
+        topic=TOPIC_CICLO_VIDA,
+        grupo=GRUPO_POLIZAS,
+        manejador=RegistroPolizas(reglas).procesar,
+        fabrica_sesiones=fabrica,
+        registro=registro,
+        publicador=publicador,
+    )
+    return Ensamblado(
+        Receptor(repositorio, publicador), engine, publicador, consumidor, consumidor_polizas
+    )

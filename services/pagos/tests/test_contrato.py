@@ -27,3 +27,12 @@ def test_los_endpoints_de_la_historia_estan_en_el_contrato():
     assert "post" in rutas["/v1/pagos/cobros"]
     assert "post" in rutas["/v1/pagos/tokenizar"]
     assert "get" in rutas["/v1/pagos/transacciones/{transaccion_id}"]
+
+
+def test_los_endpoints_de_cobros_fallidos_estan_en_el_contrato():
+    rutas = app.openapi()["paths"]
+
+    assert "get" in rutas["/v1/pagos/cobros-fallidos"]
+    assert "get" in rutas["/v1/pagos/cobros-fallidos/{caso_id}"]
+    assert "post" in rutas["/v1/pagos/cobros-fallidos/{caso_id}/notas"]
+    assert "post" in rutas["/v1/pagos/cobros-fallidos/{caso_id}/reintentar"]

@@ -1,7 +1,9 @@
-"""Siembra el asesor demo y cinco clientes demo para probar HU38 en local. Es idempotente.
+"""Siembra el asesor demo, el operador demo (opcional) y cinco clientes demo para probar HU38 y HU19 en local.
+Es idempotente.
 
 Uso (desde services/identidad):
     ASESOR_DEMO_EMAIL=asesor@solventa.test ASESOR_DEMO_PASSWORD=<clave> python scripts/sembrar_demo.py
+    # opcional, HU19: OPERADOR_DEMO_EMAIL=operador@solventa.test OPERADOR_DEMO_PASSWORD=<clave>
 
 La clave no tiene valor por defecto ni se guarda en el repositorio. Los `cliente_id` son fijos
 porque Cotización los usa para asignarles un perfil financiero simulado
@@ -16,7 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.db import SessionLocal
-from app.models import Cliente, Consentimiento, UsuarioInterno
+from app.models import ROL_ASESOR, ROL_OPERADOR, Cliente, Consentimiento, UsuarioInterno
 from app.security import hash_password
 
 TIPO_CONSENTIMIENTO = "OPEN_FINANCE_OPEN_DATA"
@@ -31,14 +33,16 @@ CLIENTES_DEMO = [
 ]
 
 
-def sembrar(db, email: str, password: str) -> None:
+def _usuario_interno(db, email: str, password: str, nombre: str, rol: str) -> None:
     email = email.strip().lower()
     if db.query(UsuarioInterno).filter_by(email=email).first() is None:
-        db.add(
-            UsuarioInterno(
-                email=email, nombre="Asesor Demo", password_hash=hash_password(password), rol="ASESOR"
-            )
-        )
+        db.add(UsuarioInterno(email=email, nombre=nombre, password_hash=hash_password(password), rol=rol))
+
+
+def sembrar(db, email: str, password: str, operador: tuple[str, str] | None = None) -> None:
+    _usuario_interno(db, email, password, "Asesor Demo", ROL_ASESOR)
+    if operador is not None:
+        _usuario_interno(db, operador[0], operador[1], "Operador Demo", ROL_OPERADOR)
     ahora = datetime.now(UTC)
     for cid, nombre, apellido, documento, consentimiento in CLIENTES_DEMO:
         if db.get(Cliente, cid) is None:
@@ -75,9 +79,15 @@ def main() -> None:
     password = os.environ.get("ASESOR_DEMO_PASSWORD", "")
     if not email or not password:
         sys.exit("Defina ASESOR_DEMO_EMAIL y ASESOR_DEMO_PASSWORD.")
+    op_email = os.environ.get("OPERADOR_DEMO_EMAIL", "")
+    op_password = os.environ.get("OPERADOR_DEMO_PASSWORD", "")
+    if bool(op_email) != bool(op_password):
+        sys.exit("Defina OPERADOR_DEMO_EMAIL y OPERADOR_DEMO_PASSWORD juntos, o ninguno.")
+    operador = (op_email, op_password) if op_email else None
     with SessionLocal() as db:
-        sembrar(db, email, password)
-    print(f"Sembrados: asesor {email} y {len(CLIENTES_DEMO)} clientes demo (CC 1000000001..1000000005).")
+        sembrar(db, email, password, operador)
+    extra = f", operador {op_email}" if operador else ""
+    print(f"Sembrados: asesor {email}{extra} y {len(CLIENTES_DEMO)} clientes demo (CC 1000000001..1000000005).")
 
 
 if __name__ == "__main__":

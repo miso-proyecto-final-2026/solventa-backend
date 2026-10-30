@@ -16,6 +16,7 @@ from app.eventos import (
     brokers_desde_entorno,
     parametros_seguridad,
 )
+from app.suscripcion.almacen import AlmacenDocumentos, AlmacenLocal, AlmacenS3
 from app.suscripcion.clientes import (
     ClienteCotizacion,
     ClienteIdentidad,
@@ -28,7 +29,9 @@ from app.suscripcion.config import (
     TOPIC_RESULTADOS_PAGOS,
     ConfigSuscripcion,
 )
+from app.suscripcion.documento import cargar_plantilla
 from app.suscripcion.modelos_db import TABLA_EVENTOS_PROCESADOS
+from app.suscripcion.polizas import GeneradorDocumentos
 from app.suscripcion.reglas import cargar_reglas
 from app.suscripcion.repositorio import crear_engine, crear_tablas_locales
 from app.suscripcion.servicio import ServicioSuscripcion
@@ -63,6 +66,28 @@ def construir_servicio(config: ConfigSuscripcion | None = None) -> tuple[Servici
         reglas=cargar_reglas(),
     )
     return servicio, engine, clientes
+
+
+def construir_almacen(config: ConfigSuscripcion) -> AlmacenDocumentos:
+    """S3 si hay bucket (con `AWS_ENDPOINT_URL`, Moto en local); si no, una carpeta local solo en desarrollo."""
+    if config.polizas_bucket:
+        return AlmacenS3(config.polizas_bucket)
+    permitir_sustituto_local("POLIZAS_BUCKET", f"la carpeta local de documentos ({config.polizas_documentos_dir})")
+    return AlmacenLocal(config.polizas_documentos_dir)
+
+
+def construir_generador(config: ConfigSuscripcion, engine: Engine, clientes: list[httpx.AsyncClient]) -> GeneradorDocumentos:
+    """Genera el PDF de las pólizas registradas. `clientes` es la lista de `construir_servicio` (Identidad, Cotización, …)."""
+    return GeneradorDocumentos(
+        fabrica=sessionmaker(bind=engine, expire_on_commit=False),
+        almacen=construir_almacen(config),
+        identidad=ClienteIdentidad(clientes[0], config.identidad_key),
+        cotizaciones=ClienteCotizacion(clientes[1]),
+        plantilla=cargar_plantilla(),
+        max_intentos=config.polizas_max_intentos,
+        espera_base_s=config.polizas_reintento_base_s,
+        espera_maxima_s=config.polizas_reintento_maximo_s,
+    )
 
 
 def construir_publicador() -> PublicadorEventos:

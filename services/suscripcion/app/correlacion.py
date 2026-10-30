@@ -11,7 +11,7 @@ import uuid
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app.contexto import correlacion_id
+from app.contexto import correlacion_id, traza_id
 
 CABECERA = "X-Correlation-Id"
 # Solo caracteres inocuos y longitud acotada: el valor llega de fuera y va a logs y a la base.
@@ -37,6 +37,7 @@ class MiddlewareCorrelacion:
                 break
         valor_final = normalizar(entrante)
         token = correlacion_id.set(valor_final)
+        token_traza = traza_id.set(str(uuid.uuid4()))
 
         async def enviar(mensaje: Message) -> None:
             if mensaje["type"] == "http.response.start":
@@ -48,4 +49,5 @@ class MiddlewareCorrelacion:
         try:
             await self.app(scope, receive, enviar)
         finally:
+            traza_id.reset(token_traza)
             correlacion_id.reset(token)

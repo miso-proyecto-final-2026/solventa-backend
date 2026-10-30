@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from app.pagos.config import ConfigPagos
-from app.pagos.dominio import PasarelaSinRespuesta, SolicitudCobro
+from app.pagos.dominio import PasarelaNoDisponible, PasarelaSinRespuesta, SolicitudCobro
 from app.pagos.simulador import ModoSimulador, PasarelaSimulada, modo_desde_texto
 from app.pagos.wiring import construir_pasarela
 
@@ -40,6 +40,7 @@ class TestContratoPasarelaFalsa(ContratoPasarela):
         ("tok_sim_perder_1", ModoSimulador.PERDER_RESPUESTA),
         ("tok_sim_tardar_1", ModoSimulador.TARDAR),
         ("tok_sim_aprobar_1", ModoSimulador.APROBAR),
+        ("tok_sim_caida_1", ModoSimulador.NO_DISPONIBLE),
         ("tok_sim_ab12cd", ModoSimulador.RECHAZAR),  # token de la app (HU17): usa el modo configurado
     ],
 )
@@ -59,6 +60,14 @@ async def test_perder_respuesta_cobra_una_vez_aunque_se_repita_la_orden(fabrica)
         with pytest.raises(PasarelaSinRespuesta):
             await pasarela.cobrar(_solicitud())
     assert pasarela.cargos() == 1
+
+
+async def test_no_disponible_no_recibe_la_orden_ni_cobra(fabrica):
+    pasarela = PasarelaSimulada(fabrica, modo=ModoSimulador.NO_DISPONIBLE)
+    with pytest.raises(PasarelaNoDisponible):
+        await pasarela.cobrar(_solicitud())
+    # Como no recibió la orden, no hay nada que conciliar: reintentar con la misma clave no duplica.
+    assert await pasarela.consultar(_solicitud().idempotency_key) is None and pasarela.cargos() == 0
 
 
 async def test_un_token_mal_formado_se_rechaza_sin_cobrar(fabrica):

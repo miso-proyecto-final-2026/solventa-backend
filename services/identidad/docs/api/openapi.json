@@ -664,6 +664,65 @@
         }
       }
     },
+    "/v1/resumenes-cliente/{cliente_id}": {
+      "get": {
+        "tags": [
+          "resumenes-cliente"
+        ],
+        "summary": "Resumen Cliente",
+        "description": "Nombre, apellido y documento enmascarado del cliente. Interno: exige la clave de servicio y no sale por el borde público.\n\nNo se reutiliza `/v1/clientes/busqueda`: esa búsqueda es por documento y enmascara el apellido por diseño (HU38).\nEl documento sale enmascarado porque el PDF de la póliza solo necesita identificar al cliente, no revelar su número.",
+        "operationId": "resumen_cliente_v1_resumenes_cliente__cliente_id__get",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cliente Id"
+            }
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumenClienteOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -1083,6 +1142,40 @@
           "password"
         ],
         "title": "LoginInternoIn"
+      },
+      "ResumenClienteOut": {
+        "properties": {
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "apellido": {
+            "type": "string",
+            "title": "Apellido"
+          },
+          "tipo_documento": {
+            "type": "string",
+            "title": "Tipo Documento"
+          },
+          "documento_enmascarado": {
+            "type": "string",
+            "title": "Documento Enmascarado"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cliente_id",
+          "nombre",
+          "apellido",
+          "tipo_documento",
+          "documento_enmascarado"
+        ],
+        "title": "ResumenClienteOut",
+        "description": "Para el documento de la póliza (HU20): nombre completo y documento enmascarado, sin correo ni celular."
       },
       "SesionActualOut": {
         "properties": {

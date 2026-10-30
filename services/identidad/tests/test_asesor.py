@@ -154,3 +154,31 @@ def test_token_vencido_o_mal_firmado_responde_401(client, emisor):
             headers={"Authorization": f"Bearer {token}"},
         )
         assert r.status_code == 401
+
+
+# --- rol OPERADOR (HU19) ---------------------------------------------------------------------------------------
+
+def test_login_del_operador_devuelve_token_con_rol_operador(client, sesion_bd, emisor):
+    _crear_usuario(sesion_bd, email="operador@solventa.test", rol="OPERADOR")
+    r = client.post("/v1/sesiones-internas", json={"email": "operador@solventa.test", "password": CLAVE})
+    assert r.status_code == 200
+    assert r.json()["usuario"]["rol"] == "OPERADOR"
+    assert emisor.verificar(r.json()["access_token"]).rol == "OPERADOR"
+
+
+def test_el_operador_no_puede_buscar_clientes_que_es_solo_del_asesor(client, sesion_bd, emisor):
+    _crear_usuario(sesion_bd, email="operador@solventa.test", rol="OPERADOR")
+    r = client.post("/v1/sesiones-internas", json={"email": "operador@solventa.test", "password": CLAVE})
+    respuesta = client.get(
+        "/v1/clientes/busqueda",
+        params={"tipo_documento": "CC", "numero_documento": PAYLOAD_CLIENTE["numero_documento"]},
+        headers={"Authorization": f"Bearer {r.json()['access_token']}"},
+    )
+    assert respuesta.status_code == 403
+
+
+def test_la_base_rechaza_un_rol_interno_desconocido(sesion_bd):
+    from sqlalchemy.exc import IntegrityError
+
+    with pytest.raises(IntegrityError):
+        _crear_usuario(sesion_bd, email="raro@solventa.test", rol="SUPERUSUARIO")
