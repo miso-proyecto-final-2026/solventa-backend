@@ -26,3 +26,8 @@ endeudamiento:
 reportes_negativos:
   aprobacion: 0                     # sin reportes se aprueba
   maximo_derivable: 2               # 1 o 2 se derivan a una persona; más de 2 se rechaza
+
+# Firma electrónica de la póliza (HU21). PROVISIONALES como el resto: ningún documento fija el vencimiento.
+firma:
+  vigencia_horas: 24                # desde el cobro confirmado; vencida, la saga compensa el cobro
+  max_intentos_autenticacion: 3     # códigos OTP erróneos antes de dar la firma por fallida

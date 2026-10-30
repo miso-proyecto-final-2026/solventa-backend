@@ -33,6 +33,9 @@ class ConfigSuscripcion:
     polizas_max_intentos: int = 5
     polizas_reintento_base_s: float = 5.0
     polizas_reintento_maximo_s: float = 300.0
+    # Firma electrónica (HU21): código de un solo uso que acepta el proveedor simulado y cada cuánto corre el barrido.
+    firma_sim_otp: str = "123456"
+    firma_barrido_s: float = 30.0
 
     @classmethod
     def desde_entorno(cls, env: dict[str, str] | None = None) -> ConfigSuscripcion:
@@ -52,4 +55,6 @@ class ConfigSuscripcion:
             polizas_max_intentos=int(e.get("POLIZAS_MAX_INTENTOS", "5")),
             polizas_reintento_base_s=float(e.get("POLIZAS_REINTENTO_BASE_S", "5")),
             polizas_reintento_maximo_s=float(e.get("POLIZAS_REINTENTO_MAXIMO_S", "300")),
+            firma_sim_otp=e.get("FIRMA_SIM_OTP") or "123456",
+            firma_barrido_s=float(e.get("FIRMA_BARRIDO_S", "30")),
         )

@@ -44,6 +44,9 @@ class PasarelaFalsa:
         self.libro: dict[str, ResultadoCobro] = {}
         self.ordenes: list[SolicitudCobro] = []
         self.consultas: list[str] = []
+        self.reembolsos: dict[str, ResultadoCobro] = {}
+        self.ordenes_reembolso: list[SolicitudCobro] = []
+        self.reembolso_caido = False
 
     @property
     def cargos(self) -> int:
@@ -66,6 +69,16 @@ class PasarelaFalsa:
         if paso == "colgar":
             await asyncio.sleep(60)
         return resultado
+
+    async def reembolsar(self, solicitud: SolicitudCobro) -> ResultadoCobro:
+        self.ordenes_reembolso.append(solicitud)
+        if self.reembolso_caido:
+            raise PasarelaNoDisponible("conexión rechazada")
+        if solicitud.idempotency_key not in self.reembolsos:
+            self.reembolsos[solicitud.idempotency_key] = ResultadoCobro(
+                aprobado=True, referencia_pasarela=f"rf-{len(self.reembolsos) + 1}"
+            )
+        return self.reembolsos[solicitud.idempotency_key]
 
     async def consultar(self, idempotency_key: str) -> ResultadoCobro | None:
         self.consultas.append(idempotency_key)
@@ -102,3 +115,23 @@ def evento(payload: dict | None = None, event_type: str = "cobro_prima_solicitad
 
 
 MONTO = Decimal("175000.00")
+
+
+def comando_reembolso(suscripcion_id: str = "susc-1", **cambios) -> dict:
+    """Payload de `reembolso_cobro_solicitado` tal como lo publica MS Suscripción (HU21)."""
+    payload = {
+        "suscripcion_id": suscripcion_id,
+        "cliente_id": "cli-1",
+        "cobro_transaccion_id": "tx-1",
+        "monto": "175000.00",
+        "moneda": "COP",
+        "motivo": "FIRMA_VENCIDA",
+        "idempotency_key": f"reembolso_prima:{suscripcion_id}",
+    }
+    payload.update(cambios)
+    return {k: v for k, v in payload.items() if v is not None}
+
+
+def evento_reembolso(payload: dict | None = None) -> Evento:
+    payload = payload or comando_reembolso()
+    return evento(payload, event_type="reembolso_cobro_solicitado")

@@ -53,6 +53,42 @@ class PolizaNoLista(ErrorSuscripcion):
     status, code, mensaje = 409, "POLIZA_NO_LISTA", "El documento de la póliza aún no está generado."
 
 
+class FirmaNoDisponible(ErrorSuscripcion):
+    status, code, mensaje = 409, "FIRMA_NO_DISPONIBLE", "La suscripción no está en el paso de firma."
+
+
+class FirmaVencida(ErrorSuscripcion):
+    status, code, mensaje = (
+        409,
+        "FIRMA_VENCIDA",
+        "El plazo para firmar terminó. Le devolveremos el cobro; puede volver a cotizar cuando quiera.",
+    )
+
+
+class FirmaFallida(ErrorSuscripcion):
+    status, code, mensaje = (
+        409,
+        "FIRMA_FALLIDA",
+        "No pudimos verificar su identidad. Le devolveremos el cobro; puede volver a cotizar cuando quiera.",
+    )
+
+
+class AutenticacionInvalida(ErrorSuscripcion):
+    status, code, mensaje = 403, "OTP_INVALIDO", "El código no es correcto."
+
+
+class DocumentoAlterado(ErrorSuscripcion):
+    status, code, mensaje = (
+        409,
+        "DOCUMENTO_ALTERADO",
+        "El documento cambió desde que lo revisó. Ábralo de nuevo antes de firmar.",
+    )
+
+
+class FirmaNoEncontrada(ErrorSuscripcion):
+    status, code, mensaje = 404, "FIRMA_NO_ENCONTRADA", "La póliza aún no está firmada."
+
+
 class CotizacionVencida(ErrorSuscripcion):
     status, code, mensaje = 409, "COTIZACION_VENCIDA", "La cotización venció; genere una nueva."
 

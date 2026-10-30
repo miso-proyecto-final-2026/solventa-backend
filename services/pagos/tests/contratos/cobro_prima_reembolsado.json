@@ -1,0 +1,24 @@
+{
+  "event_id": "69decfb1-a2a9-4b6a-97f9-27d5757d9fd4",
+  "event_type": "cobro_prima_reembolsado",
+  "source": "ms-pagos",
+  "timestamp": "2026-10-25T12:00:00Z",
+  "correlation_id": "susc-1",
+  "trace_id": "ae6119e7-4737-40dd-bd5c-2055e19bbab4",
+  "version": "1.0",
+  "payload": {
+    "transaccion_id": "1f3c03ac-9886-43e1-bea2-6f8ac9fcd60d",
+    "suscripcion_id": "susc-1",
+    "cliente_id": "cli-1",
+    "idempotency_key": "reembolso_prima:susc-1",
+    "tipo": "REEMBOLSO_PRIMA",
+    "estado": "APROBADA",
+    "monto": "175000.00",
+    "moneda": "COP",
+    "periodicidad_pago": "ANUAL",
+    "referencia_pasarela": "rf-1",
+    "ultimos4": "4242",
+    "resuelta_en": "2026-10-25T12:00:00+00:00",
+    "repeticion": false
+  }
+}

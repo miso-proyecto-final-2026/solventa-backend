@@ -22,6 +22,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
     text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -75,6 +76,13 @@ class SuscripcionDB(BaseSuscripcion):
     # el documento muestra exactamente lo que se ofreció. Nulas en las sagas anteriores a HU20.
     coberturas: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
     cotizacion_version_reglas: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # Paso FIRMA (HU21): hasta cuándo puede firmar el cliente, cuántos códigos erróneos lleva y, si la firma falla o vence,
+    # la compensación del cobro (SOLICITADA mientras MS Pagos reembolsa; la saga queda COMPENSADA al confirmarlo).
+    firma_vence_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    firma_intentos_fallidos: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    compensacion_estado: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    compensacion_motivo: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    compensacion_solicitada_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -113,6 +121,8 @@ class PolizaDB(BaseSuscripcion):
     documento_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
     documento_s3_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
     documento_generado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # SHA-256 del PDF generado: lo que el cliente presenta al firmar (HU21). Nulo en pólizas anteriores a HU21.
+    documento_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     plantilla_version: Mapped[str] = mapped_column(String(20))
     vigencia_desde: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     fecha_vencimiento: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -130,6 +140,36 @@ class PolizaDB(BaseSuscripcion):
             sqlite_where=text("documento_estado = 'PENDIENTE'"),
         ),
     )
+
+
+class FirmaDB(BaseSuscripcion):
+    """Evidencia de no repudio de la firma de una póliza (HU21). Inmutable: no se actualiza ni se borra.
+
+    Guarda quién firmó (`cliente_id`, no su nombre), qué (hash del documento), cuándo, por qué canal y desde dónde.
+    """
+
+    __tablename__ = "firmas"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    suscripcion_id: Mapped[str] = mapped_column(String(36), ForeignKey(f"{SCHEMA}.suscripciones.id"), unique=True)
+    poliza_id: Mapped[str] = mapped_column(String(36), ForeignKey(f"{SCHEMA}.polizas.id"), unique=True)
+    firmante_id: Mapped[str] = mapped_column(String(64))
+    documento_sha256: Mapped[str] = mapped_column(String(64))
+    firmada_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    canal: Mapped[str] = mapped_column(String(10))  # MOVIL | WEB
+    ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    dispositivo: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    metodo_autenticacion: Mapped[str] = mapped_column(String(20))
+    proveedor: Mapped[str] = mapped_column(String(30))
+    referencia_proveedor: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    copia_firmada_s3_key: Mapped[str] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+@event.listens_for(FirmaDB, "before_update")
+@event.listens_for(FirmaDB, "before_delete")
+def _firma_inmutable(*_args: object) -> None:
+    raise RuntimeError("La evidencia de una firma es inmutable")
 
 
 class RevisionAsistidaDB(BaseSuscripcion):

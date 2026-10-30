@@ -257,6 +257,368 @@
         }
       }
     },
+    "/v1/suscripciones/{suscripcion_id}/documento-firma": {
+      "get": {
+        "tags": [
+          "firma"
+        ],
+        "summary": "Documento por firmar (hash y vencimiento)",
+        "operationId": "documento_firma_v1_suscripciones__suscripcion_id__documento_firma_get",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentoFirmaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/{suscripcion_id}/documento-firma/pdf": {
+      "get": {
+        "tags": [
+          "firma"
+        ],
+        "summary": "PDF de la póliza por firmar",
+        "operationId": "documento_firma_pdf_v1_suscripciones__suscripcion_id__documento_firma_pdf_get",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/pdf": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/{suscripcion_id}/firma/codigo": {
+      "post": {
+        "tags": [
+          "firma"
+        ],
+        "summary": "Envía el código de un solo uso al firmante",
+        "operationId": "solicitar_codigo_v1_suscripciones__suscripcion_id__firma_codigo_post",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/{suscripcion_id}/firma": {
+      "post": {
+        "tags": [
+          "firma"
+        ],
+        "summary": "Firma la póliza; repetirla devuelve la misma firma",
+        "operationId": "firmar_v1_suscripciones__suscripcion_id__firma_post",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "user-agent",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "User-Agent"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FirmaIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirmaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "firma"
+        ],
+        "summary": "Evidencia de la firma",
+        "operationId": "consultar_firma_v1_suscripciones__suscripcion_id__firma_get",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirmaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/{suscripcion_id}/firma/documento": {
+      "get": {
+        "tags": [
+          "firma"
+        ],
+        "summary": "Descarga la póliza firmada (PDF)",
+        "operationId": "descargar_firmada_v1_suscripciones__suscripcion_id__firma_documento_get",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/pdf": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -461,6 +823,191 @@
           "duracion_decision_ms"
         ],
         "title": "DecisionOut"
+      },
+      "DocumentoFirmaOut": {
+        "properties": {
+          "suscripcion_id": {
+            "type": "string",
+            "title": "Suscripcion Id"
+          },
+          "numero_poliza": {
+            "type": "string",
+            "title": "Numero Poliza"
+          },
+          "documento_sha256": {
+            "type": "string",
+            "title": "Documento Sha256",
+            "description": "Hash del PDF; el cliente lo devuelve al firmar para probar qué firmó"
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "PENDIENTE",
+              "FIRMADA"
+            ],
+            "title": "Estado"
+          },
+          "vence_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vence En"
+          },
+          "autenticacion": {
+            "type": "string",
+            "title": "Autenticacion",
+            "description": "Cómo se autentica el firmante (OTP)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "suscripcion_id",
+          "numero_poliza",
+          "documento_sha256",
+          "estado",
+          "vence_en",
+          "autenticacion"
+        ],
+        "title": "DocumentoFirmaOut",
+        "description": "Lo que el cliente necesita para revisar y firmar. El PDF se descarga aparte, en `documento-firma/pdf`."
+      },
+      "FirmaIn": {
+        "properties": {
+          "documento_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Documento Sha256"
+          },
+          "documento_revisado": {
+            "type": "boolean",
+            "title": "Documento Revisado"
+          },
+          "codigo": {
+            "type": "string",
+            "maxLength": 12,
+            "minLength": 1,
+            "title": "Codigo",
+            "description": "Código de un solo uso (OTP)"
+          },
+          "canal": {
+            "type": "string",
+            "enum": [
+              "MOVIL",
+              "WEB"
+            ],
+            "title": "Canal"
+          },
+          "dispositivo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dispositivo"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "documento_sha256",
+          "documento_revisado",
+          "codigo",
+          "canal"
+        ],
+        "title": "FirmaIn"
+      },
+      "FirmaOut": {
+        "properties": {
+          "suscripcion_id": {
+            "type": "string",
+            "title": "Suscripcion Id"
+          },
+          "poliza_id": {
+            "type": "string",
+            "title": "Poliza Id"
+          },
+          "estado_saga": {
+            "type": "string",
+            "title": "Estado Saga"
+          },
+          "documento_sha256": {
+            "type": "string",
+            "title": "Documento Sha256"
+          },
+          "firmada_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Firmada En"
+          },
+          "canal": {
+            "type": "string",
+            "title": "Canal"
+          },
+          "metodo_autenticacion": {
+            "type": "string",
+            "title": "Metodo Autenticacion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "suscripcion_id",
+          "poliza_id",
+          "estado_saga",
+          "documento_sha256",
+          "firmada_en",
+          "canal",
+          "metodo_autenticacion"
+        ],
+        "title": "FirmaOut"
+      },
+      "FirmaResumenOut": {
+        "properties": {
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "vence_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vence En"
+          },
+          "compensacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compensacion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "estado",
+          "vence_en",
+          "compensacion"
+        ],
+        "title": "FirmaResumenOut",
+        "description": "Estado del paso FIRMA dentro de la saga (HU21). `compensacion`: el cobro se devuelve por una firma vencida o fallida."
       },
       "HTTPValidationError": {
         "properties": {
@@ -739,6 +1286,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/PolizaResumenOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "firma": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FirmaResumenOut"
               },
               {
                 "type": "null"

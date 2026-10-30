@@ -8,6 +8,8 @@ que cada uno guarda una copia: el productor prueba que sigue emitiendo esta form
 | `cobro_prima_solicitado.json` | MS Suscripción | MS Pagos (`solventa-pagos.cobros`) | `solventa.suscripcion.comandos` |
 | `cobro_prima_confirmado.json` | MS Pagos | MS Suscripción (`solventa-suscripcion.pagos`) | `solventa.pagos.resultados` |
 | `cobro_prima_rechazado.json` | MS Pagos | MS Suscripción (`solventa-suscripcion.pagos`) | `solventa.pagos.resultados` |
+| `reembolso_cobro_solicitado.json` | MS Suscripción (HU21) | MS Pagos (`solventa-pagos.cobros`) | `solventa.suscripcion.comandos` |
+| `cobro_prima_reembolsado.json` | MS Pagos (HU21) | MS Suscripción (`solventa-suscripcion.pagos`) | `solventa.pagos.resultados` |
 | `poliza_emitida.json` | MS Suscripción (HU20) | Siniestros y analítica (aún sin consumidor) | `solventa.polizas.ciclovida` |
 
 Si cambia la forma de un evento, se regenera en el productor y se copia al consumidor en el mismo PR. Las copias de
