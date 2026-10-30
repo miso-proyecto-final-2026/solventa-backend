@@ -17,8 +17,31 @@ _PARECE_PAN = re.compile(r"(?:\d[ -]?){12,18}\d")
 
 
 def parece_pan(texto: str) -> bool:
-    """Solventa solo recibe tokens de la pasarela (SAQ-A): un texto con forma de número de tarjeta se rechaza."""
+    """Solventa solo recibe tokens de la pasarela (SAQ-A): un texto con forma de número de tarjeta se rechaza.
+
+    Es la regla amplia, pensada para texto libre (notas): acepta cualquier mezcla de dígitos con espacios o guiones.
+    Un identificador con guiones, como un UUID, puede caer en ella por azar: para tokens e identificadores use
+    `identificador_parece_pan`.
+    """
     return bool(_PARECE_PAN.search(texto))
+
+
+# Cómo se escribe de verdad un número de tarjeta: corrido, en grupos de cuatro (4-4-4-4, con un último grupo más corto
+# en los de 13 a 19 dígitos) o en el formato de American Express (4-6-5). Los grupos se separan siempre con el mismo
+# carácter y empiezan y terminan en un límite (no junto a una letra, como el segmento hexadecimal de un UUID).
+_PAN_CORRIDO = re.compile(r"\d{13,19}")
+_PAN_AGRUPADO = re.compile(r"(?<![0-9A-Za-z])\d{4}([ -])\d{4}\1\d{4}\1\d{1,7}(?![0-9A-Za-z])")
+_PAN_AMEX = re.compile(r"(?<![0-9A-Za-z])\d{4}([ -])\d{6}\1\d{5}(?![0-9A-Za-z])")
+
+
+def identificador_parece_pan(texto: str) -> bool:
+    """Como `parece_pan` pero sin falsos positivos con tokens ni UUID (`tok_sim_<uuid>`).
+
+    Los guiones de un UUID separan segmentos de 8, 4, 4, 4 y 12 caracteres hexadecimales: sumando los dígitos de
+    segmentos vecinos, la regla amplia confundía con una tarjeta a cerca del 2 % de ellos. Aquí solo se rechazan las
+    formas reales de escribir un número de tarjeta.
+    """
+    return bool(_PAN_CORRIDO.search(texto) or _PAN_AGRUPADO.search(texto) or _PAN_AMEX.search(texto))
 
 
 class TipoTransaccion(StrEnum):

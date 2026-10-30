@@ -7,7 +7,9 @@ pasarela (0 en logs; en la base, solo en `tokens_tarjeta.token`, que es donde la
 
 import json
 import logging
+import random
 import re
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -50,9 +52,14 @@ def _luhn(digitos: str) -> bool:
     return total % 10 == 0
 
 
+# Los identificadores de la base y de los logs son UUID. Sus guiones separan segmentos hexadecimales, no grupos de una
+# tarjeta; sin esto, los dígitos de segmentos vecinos formaban «números» que pasan Luhn por azar (≈ 7 % de las corridas).
+_UUID = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b")
+
+
 def hallazgos_de_pan(texto: str) -> list[str]:
     encontrados = []
-    for m in _CANDIDATO.finditer(texto):
+    for m in _CANDIDATO.finditer(_UUID.sub("<uuid>", texto)):
         digitos = re.sub(r"\D", "", m.group())
         if 13 <= len(digitos) <= 19 and _luhn(digitos):
             encontrados.append(digitos)
@@ -194,3 +201,28 @@ def test_el_log_es_json_con_trace_id_y_correlation_id():
 def test_redactar_no_toca_identificadores_comunes():
     texto = "transaccion_id=6f1c2a90-3b4d-4e5f-8a7b-1c2d3e4f5a6b monto=175000.00 intento=2"
     assert redactar(texto) == texto
+
+
+# --- el buscador de PAN no confunde un UUID con una tarjeta, pero sigue encontrando una tarjeta ------------------------
+
+def _uuid_que_el_buscador_antiguo_tomaba_por_tarjeta() -> str:
+    azar = random.Random(7)
+    while True:
+        candidato = str(uuid.UUID(int=azar.getrandbits(128), version=4))
+        digitos = [re.sub(r"\D", "", m.group()) for m in _CANDIDATO.finditer(candidato)]
+        if any(13 <= len(d) <= 19 and _luhn(d) for d in digitos):
+            return candidato
+
+
+def test_un_uuid_no_se_toma_por_una_tarjeta_aunque_sus_digitos_pasen_luhn():
+    identificador = _uuid_que_el_buscador_antiguo_tomaba_por_tarjeta()
+
+    assert hallazgos_de_pan(f"transaccion_id={identificador}") == []
+
+
+@pytest.mark.parametrize("pan", PANES)
+def test_una_tarjeta_real_se_encuentra_aunque_este_junto_a_un_uuid(pan):
+    identificador = _uuid_que_el_buscador_antiguo_tomaba_por_tarjeta()
+
+    assert hallazgos_de_pan(f"id {identificador} tarjeta {pan}") == [pan]
+    assert hallazgos_de_pan(f"id {identificador} tarjeta {pan[:4]} {pan[4:8]} {pan[8:12]} {pan[12:]}") == [pan]
