@@ -931,6 +931,21 @@
               }
             ]
           },
+          "asesor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asesor Id"
+          },
+          "sin_cuenta": {
+            "type": "boolean",
+            "title": "Sin Cuenta"
+          },
           "perfil_fuente": {
             "type": "string",
             "title": "Perfil Fuente"
@@ -938,10 +953,6 @@
           "canal": {
             "type": "string",
             "title": "Canal"
-          },
-          "sin_cuenta": {
-            "type": "boolean",
-            "title": "Sin Cuenta"
           }
         },
         "type": "object",
@@ -961,9 +972,9 @@
           "aviso",
           "componentes",
           "metadata",
+          "sin_cuenta",
           "perfil_fuente",
-          "canal",
-          "sin_cuenta"
+          "canal"
         ],
         "title": "CotizacionAsistidaOut"
       },
@@ -1055,6 +1066,22 @@
                 "type": "null"
               }
             ]
+          },
+          "asesor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asesor Id"
+          },
+          "sin_cuenta": {
+            "type": "boolean",
+            "title": "Sin Cuenta",
+            "default": false
           }
         },
         "type": "object",

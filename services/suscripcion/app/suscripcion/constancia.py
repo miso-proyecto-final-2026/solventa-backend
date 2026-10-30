@@ -32,6 +32,7 @@ class EvidenciaFirma:
     proveedor: str
     referencia_proveedor: str | None
     documento_sha256: str
+    asesor_id: str | None = None  # firma asistida (HU39)
 
 
 CANALES = {"MOVIL": "App móvil", "WEB": "Web"}
@@ -53,6 +54,7 @@ def _constancia(e: EvidenciaFirma) -> bytes:
                     ["Firmante (identificador)", e.firmante_id],
                     ["Fecha y hora de la firma", f"{fmt.fecha(e.firmada_en)}, {e.firmada_en.astimezone(fmt.BOGOTA):%H:%M:%S} (hora de Colombia)"],
                     ["Canal", CANALES.get(e.canal, e.canal)],
+                    *([["Asistida por (identificador del asesor)", e.asesor_id]] if e.asesor_id else []),
                     ["Dirección IP", e.ip or "No disponible"],
                     ["Dispositivo", e.dispositivo or "No disponible"],
                     ["Autenticación", e.metodo_autenticacion],

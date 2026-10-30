@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -27,6 +28,7 @@ from app.suscripcion.errores import (
     AccesoDenegado,
     ClaveReutilizada,
     CotizacionNoEncontrada,
+    CotizacionSinCuenta,
     CotizacionVencida,
     CotizacionYaUsada,
     NoAutenticado,
@@ -65,6 +67,11 @@ def redactar(sobre: dict[str, Any]) -> dict[str, Any]:
     return copia
 
 
+def parece_numero_de_tarjeta(valor: str) -> bool:
+    """13 a 19 dígitos, con o sin separadores: el token de la pasarela nunca tiene esa forma (SAQ-A, ADR-0014)."""
+    return re.fullmatch(r"[\d \-]+", valor) is not None and 13 <= sum(c.isdigit() for c in valor) <= 19
+
+
 class ServicioSuscripcion:
     def __init__(
         self,
@@ -101,6 +108,55 @@ class ServicioSuscripcion:
         cliente_id = await self._identidad.cliente_de_token(token)
         if cliente_id is None:
             raise NoAutenticado
+        return await self.iniciar_como(
+            cliente_id,
+            clave=clave,
+            cotizacion_id=cotizacion_id,
+            metodo_pago=metodo_pago,
+            acepta_terminos=acepta_terminos,
+            periodicidad_pago=periodicidad_pago,
+        )
+
+    async def iniciar_asistida(
+        self,
+        asesor_id: str,
+        *,
+        clave: str | None,
+        cotizacion_id: str,
+        metodo_pago: str,
+        acepta_terminos: bool,
+        periodicidad_pago: str = "ANUAL",
+    ) -> tuple[SuscripcionDB, bool]:
+        """HU39: el asesor inicia la saga de su propia cotización, con el cliente presente. El titular es el de la cotización."""
+        cotizacion = await self._cotizaciones.obtener(cotizacion_id)
+        if cotizacion is None:
+            raise CotizacionNoEncontrada
+        if cotizacion.asesor_id != asesor_id:
+            raise AccesoDenegado
+        if cotizacion.sin_cuenta:
+            raise CotizacionSinCuenta
+        if parece_numero_de_tarjeta(metodo_pago):
+            raise SolicitudInvalida(detalles=[{"campo": "metodo_pago", "motivo": "debe ser el token de la pasarela, nunca el número de tarjeta"}])
+        return await self.iniciar_como(
+            cotizacion.cliente_id,
+            clave=clave,
+            cotizacion_id=cotizacion_id,
+            metodo_pago=metodo_pago,
+            acepta_terminos=acepta_terminos,
+            periodicidad_pago=periodicidad_pago,
+        )
+
+    async def iniciar_como(
+        self,
+        cliente_id: str,
+        *,
+        clave: str | None,
+        cotizacion_id: str,
+        metodo_pago: str,
+        acepta_terminos: bool,
+        periodicidad_pago: str = "ANUAL",
+    ) -> tuple[SuscripcionDB, bool]:
+        """Inicia la saga para un cliente ya identificado."""
         if not clave or not 1 <= len(clave) <= 100:
             raise SolicitudInvalida(detalles=[{"campo": "Idempotency-Key", "motivo": "es obligatoria (1 a 100 caracteres)"}])
         if not acepta_terminos:
@@ -167,6 +223,7 @@ class ServicioSuscripcion:
                 periodicidad_pago=periodicidad_pago,
                 coberturas=[{"tipo": x.tipo, "monto": x.monto, "deducible": x.deducible} for x in c.coberturas] or None,
                 cotizacion_version_reglas=c.version_reglas,
+                asesor_id=c.asesor_id,
             )
 
     # --- consultar ----------------------------------------------------------------------------------------------

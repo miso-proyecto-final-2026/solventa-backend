@@ -97,6 +97,14 @@ class CotizacionYaUsada(ErrorSuscripcion):
     status, code, mensaje = 409, "COTIZACION_YA_USADA", "La cotización ya tiene una suscripción en curso."
 
 
+class CotizacionSinCuenta(ErrorSuscripcion):
+    status, code, mensaje = (
+        409,
+        "COTIZACION_SIN_CUENTA",
+        "La cotización es de una persona sin cuenta: debe registrarse para poder suscribirse y firmar.",
+    )
+
+
 class ClaveReutilizada(ErrorSuscripcion):
     status, code, mensaje = (
         409,

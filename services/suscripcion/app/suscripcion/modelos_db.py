@@ -83,6 +83,8 @@ class SuscripcionDB(BaseSuscripcion):
     compensacion_estado: Mapped[str | None] = mapped_column(String(20), nullable=True)
     compensacion_motivo: Mapped[str | None] = mapped_column(String(50), nullable=True)
     compensacion_solicitada_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Asesor que hizo la cotización (HU39): decide quién puede gestionar esta saga. Nulo si no es asistida.
+    asesor_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -98,6 +100,7 @@ class SuscripcionDB(BaseSuscripcion):
             sqlite_where=text("estado_saga NOT IN ('RECHAZADA', 'COMPENSADA')"),
         ),
         Index("ix_susc_pendientes", "decision", "created_at"),
+        Index("ix_susc_asesor", "asesor_id", "created_at"),
     )
 
 
@@ -163,6 +166,9 @@ class FirmaDB(BaseSuscripcion):
     proveedor: Mapped[str] = mapped_column(String(30))
     referencia_proveedor: Mapped[str | None] = mapped_column(String(100), nullable=True)
     copia_firmada_s3_key: Mapped[str] = mapped_column(String(200))
+    # Firma asistida (HU39): el firmante sigue siendo el cliente; aquí queda quién lo asistió.
+    modalidad: Mapped[str] = mapped_column(String(20), default="CLIENTE", server_default="CLIENTE")
+    asesor_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
@@ -170,6 +176,34 @@ class FirmaDB(BaseSuscripcion):
 @event.listens_for(FirmaDB, "before_delete")
 def _firma_inmutable(*_args: object) -> None:
     raise RuntimeError("La evidencia de una firma es inmutable")
+
+
+class AuditoriaAsesorDB(BaseSuscripcion):
+    """Acciones del asesor, también las rechazadas (HU39). Sin código OTP, token de pago ni datos personales. Solo se agrega.
+
+    `suscripcion_id` es nulo si la acción no llegó a tener suscripción (un inicio rechazado): queda `cotizacion_id`.
+    """
+
+    __tablename__ = "auditoria_asesor"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    asesor_id: Mapped[str] = mapped_column(String(36))
+    suscripcion_id: Mapped[str | None] = mapped_column(String(36), ForeignKey(f"{SCHEMA}.suscripciones.id"), nullable=True)
+    cotizacion_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    accion: Mapped[str] = mapped_column(String(30))
+    resultado: Mapped[str] = mapped_column(String(40))  # EXITO o el código del error
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("ix_auditoria_suscripcion", "suscripcion_id"),
+        Index("ix_auditoria_asesor", "asesor_id", "created_at"),
+    )
+
+
+@event.listens_for(AuditoriaAsesorDB, "before_update")
+@event.listens_for(AuditoriaAsesorDB, "before_delete")
+def _auditoria_inmutable(*_args: object) -> None:
+    raise RuntimeError("La auditoría del asesor es inmutable")
 
 
 class RevisionAsistidaDB(BaseSuscripcion):

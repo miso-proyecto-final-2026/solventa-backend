@@ -9,7 +9,7 @@ services/
   identidad/     MS Identidad    HU01–HU08 (registro, KYC, consentimiento)
   cotizacion/    MS Cotización   HU09–HU14, HU37–HU38 (proveedores de datos, perfil, motor de rating)
   perfilamiento/ MS Perfilamiento HU23 (enriquecimiento del perfil de riesgo, linaje)
-  suscripcion/   MS Suscripción   HU15 y HU18 (saga de suscripción: decisión automática, paso de cobro y documento de la póliza con HU20; la firma y la emisión llegan con HU21)
+  suscripcion/   MS Suscripción   HU15 y HU18 (saga de suscripción: decisión automática, paso de cobro y documento de la póliza con HU20; la firma y la emisión llegan con HU21; la venta asistida del asesor, con HU39)
   siniestros/    MS Siniestros   HU27 (recepción de eventos paramétricos; HU28 validará la condición)
   pagos/         MS Pagos        HU18 (cobro de la prima con pasarela simulada, idempotencia y conciliación)
 docs/adr/        decisiones de arquitectura (compartidas)
@@ -83,9 +83,9 @@ El CI corre `test` y `build` en matriz por servicio.
 | `PAGOS_DETECTOR_GRACIA_S` | pagos | Cada cuántos segundos se buscan cobros fallidos con la gracia vencida para avisar al operador (60 por defecto, HU19). |
 | `PAGOS_REINTENTO_BASE_S`, `PAGOS_REINTENTO_MAXIMO_S` | pagos | Espera antes de reintentar o conciliar un cobro sin respuesta (5 s, se duplica en cada intento, tope 300 s). |
 | `TRAZA_COLA_MAX`, `TRAZA_REINTENTOS` | cotizacion | Cola en memoria de la trazabilidad de consultas (10.000 por defecto) y reintentos de escritura (3). Ver ADR-0007. |
-| `ASESOR_JWT_SECRETO` | identidad, cotizacion, pagos | Secreto HS256 con el que Identidad firma y Cotización y Pagos validan el token del asesor u operador (HU38, HU19, ADR-0008). **Debe ser el mismo en los tres** y venir de un secreto. Sin él solo arranca con `SOLVENTA_MODO_DESARROLLO=1` (secreto fijo de desarrollo). |
+| `ASESOR_JWT_SECRETO` | identidad, cotizacion, pagos, suscripcion | Secreto HS256 con el que Identidad firma y Cotización, Pagos y Suscripción validan el token del asesor u operador (HU38, HU19, HU39, ADR-0008). **Debe ser el mismo en los cuatro** y venir de un secreto. Sin él solo arranca con `SOLVENTA_MODO_DESARROLLO=1` (secreto fijo de desarrollo). |
 | `ASESOR_JWT_TTL_MIN` | identidad | Vida del token del asesor en minutos (30 por defecto). |
-| `ASESOR_JWT_EMISOR` | cotizacion, pagos | `iss` esperado en el token (`solventa-identidad` por defecto). |
+| `ASESOR_JWT_EMISOR` | cotizacion, pagos, suscripcion | `iss` esperado en el token (`solventa-identidad` por defecto). |
 | `SIMULADOR_PERFILES_DEMO` | cotizacion | Ruta del YAML con perfiles financieros demo por `cliente_id` (`app/proveedores/perfiles_demo.yaml`). **Solo desarrollo y demostración.** Sin ella los simuladores devuelven el perfil neutro de siempre. |
 | `ASESOR_DEMO_EMAIL`, `ASESOR_DEMO_PASSWORD` | identidad | Entrada de `scripts/sembrar_demo.py`, que crea el asesor demo y cinco clientes demo (CC `1000000001` a `1000000005`). Nunca en git. |
 | `OPERADOR_DEMO_EMAIL`, `OPERADOR_DEMO_PASSWORD` | identidad | Opcionales (las dos o ninguna): `sembrar_demo.py` crea además un usuario interno con rol `OPERADOR` (HU19). Nunca en git. |

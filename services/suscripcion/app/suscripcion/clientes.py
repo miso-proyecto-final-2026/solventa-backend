@@ -42,6 +42,8 @@ class CotizacionDatos:
     vigente_hasta: datetime
     coberturas: tuple[Cobertura, ...] = ()
     version_reglas: str | None = None
+    asesor_id: str | None = None  # quién atendió al cliente (HU39); nulo si la cotización no es asistida
+    sin_cuenta: bool = False
 
 
 class Identidad(Protocol):
@@ -129,6 +131,8 @@ class ClienteCotizacion:
                 for x in c.get("coberturas", [])
             ),
             version_reglas=c.get("version_reglas"),
+            asesor_id=c.get("asesor_id"),
+            sin_cuenta=bool(c.get("sin_cuenta", False)),
         )
 
 

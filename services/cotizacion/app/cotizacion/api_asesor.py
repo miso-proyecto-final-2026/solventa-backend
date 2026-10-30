@@ -152,8 +152,7 @@ async def crear_cotizacion_asistida(
         )
     )
     return CotizacionAsistidaOut(
-        **a_salida(emitida).model_dump(),
+        **(a_salida(emitida).model_dump() | {"asesor_id": origen.asesor_id, "sin_cuenta": origen.sin_cuenta}),
         perfil_fuente=emitida.perfil_fuente,
         canal=origen.canal,
-        sin_cuenta=origen.sin_cuenta,
     )

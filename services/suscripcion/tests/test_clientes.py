@@ -56,6 +56,16 @@ async def test_cotizacion_toma_la_cobertura_principal_como_monto_asegurado_y_ent
     assert datos.vigente_hasta.tzinfo is not None
 
 
+async def test_cotizacion_entiende_el_origen_y_tolera_que_no_venga():
+    asistida = {**COTIZACION, "asesor_id": "ase-1", "sin_cuenta": True}
+
+    con_origen = await ClienteCotizacion(_http(lambda r: httpx.Response(200, json=asistida))).obtener("cot-1")
+    sin_origen = await ClienteCotizacion(_http(lambda r: httpx.Response(200, json=COTIZACION))).obtener("cot-1")
+
+    assert (con_origen.asesor_id, con_origen.sin_cuenta) == ("ase-1", True)
+    assert (sin_origen.asesor_id, sin_origen.sin_cuenta) == (None, False)
+
+
 async def test_cotizacion_inexistente_devuelve_none_y_un_fallo_se_propaga():
     assert await ClienteCotizacion(_http(lambda r: httpx.Response(404))).obtener("x") is None
     with pytest.raises(DependenciaNoDisponible):

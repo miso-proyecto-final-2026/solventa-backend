@@ -36,6 +36,9 @@ class ConfigSuscripcion:
     # Firma electrónica (HU21): código de un solo uso que acepta el proveedor simulado y cada cuánto corre el barrido.
     firma_sim_otp: str = "123456"
     firma_barrido_s: float = 30.0
+    # Token del asesor (HU39, ADR-0008): lo firma Identidad y aquí se valida. Sin secreto, solo arranca en desarrollo.
+    asesor_jwt_secreto: str | None = None
+    asesor_jwt_emisor: str = "solventa-identidad"
 
     @classmethod
     def desde_entorno(cls, env: dict[str, str] | None = None) -> ConfigSuscripcion:
@@ -48,6 +51,8 @@ class ConfigSuscripcion:
             perfilamiento_url=e.get("PERFILAMIENTO_URL") or None,
             perfilamiento_key=e.get("PERFILAMIENTO_SERVICE_KEY", ""),
             timeout_s=float(e.get("SUSCRIPCION_TIMEOUT_S", "2")),
+            asesor_jwt_secreto=e.get("ASESOR_JWT_SECRETO") or None,
+            asesor_jwt_emisor=e.get("ASESOR_JWT_EMISOR", cls.asesor_jwt_emisor),
             espera_barrido_s=float(e.get("SUSCRIPCION_ESPERA_BARRIDO_S", "30")),
             polizas_bucket=e.get("POLIZAS_BUCKET") or None,
             polizas_documentos_dir=e.get("POLIZAS_DOCUMENTOS_DIR") or "./polizas-local",

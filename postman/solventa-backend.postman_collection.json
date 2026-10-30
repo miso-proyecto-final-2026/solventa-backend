@@ -6729,6 +6729,261 @@
       ]
     },
     {
+      "name": "MS Suscripción — venta asistida (HU39)",
+      "description": "Consola web: el asesor inicia y sigue la saga de sus cotizaciones. JWT del asesor (ADR-0008, ADR-0020); requiere el asesor demo de la carpeta del asesor y que Suscripción tenga el mismo ASESOR_JWT_SECRETO que Identidad.",
+      "item": [
+        {
+          "name": "Lista del asesor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const p = pm.response.json();",
+                  "pm.test('página con total', () => { pm.expect(p.items).to.be.an('array'); pm.expect(p).to.include.keys('total','pagina','tamano'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{asesor_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/asistidas",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "asistidas"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lista sin sesión",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/asistidas",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "asistidas"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lista con el token del cliente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/asistidas",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "asistidas"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Detalle de una suscripción inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('código estándar', () => pm.expect(pm.response.json().error.code).to.eql('SUSCRIPCION_NO_ENCONTRADA'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{asesor_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/asistidas/00000000-0000-4000-8000-000000000000",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "asistidas",
+                "00000000-0000-4000-8000-000000000000"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Iniciar con una cotización inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{asesor_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/asistidas",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "asistidas"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"cotizacion_id\": \"00000000-0000-4000-8000-000000000000\", \"metodo_pago\": \"tok_sim_postman\", \"acepta_terminos\": true}"
+            }
+          }
+        },
+        {
+          "name": "Iniciar sin sesión",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/asistidas",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "asistidas"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"cotizacion_id\": \"00000000-0000-4000-8000-000000000000\", \"metodo_pago\": \"tok_sim_postman\", \"acepta_terminos\": true}"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "MS Siniestros (HU27)",
       "item": [
         {

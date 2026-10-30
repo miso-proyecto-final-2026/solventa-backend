@@ -5,6 +5,531 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/v1/suscripciones/asistidas": {
+      "post": {
+        "tags": [
+          "venta-asistida"
+        ],
+        "summary": "Inicia la saga de una cotización del asesor",
+        "operationId": "iniciar_v1_suscripciones_asistidas_post",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuscripcionAsistidaIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuscripcionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "venta-asistida"
+        ],
+        "summary": "Suscripciones de las cotizaciones del asesor",
+        "operationId": "listar_v1_suscripciones_asistidas_get",
+        "parameters": [
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/EstadoSaga"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            }
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Pagina"
+            }
+          },
+          {
+            "name": "tamano",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Tamano"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaAsistidasOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/asistidas/{suscripcion_id}": {
+      "get": {
+        "tags": [
+          "venta-asistida"
+        ],
+        "summary": "Detalle de la saga para el asesor",
+        "operationId": "detalle_v1_suscripciones_asistidas__suscripcion_id__get",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuscripcionAsistidaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/asistidas/{suscripcion_id}/documento-firma": {
+      "get": {
+        "tags": [
+          "venta-asistida"
+        ],
+        "summary": "Documento por firmar (hash y vencimiento)",
+        "operationId": "documento_firma_v1_suscripciones_asistidas__suscripcion_id__documento_firma_get",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentoFirmaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/asistidas/{suscripcion_id}/documento-firma/pdf": {
+      "get": {
+        "tags": [
+          "venta-asistida"
+        ],
+        "summary": "PDF de la póliza por firmar",
+        "operationId": "documento_firma_pdf_v1_suscripciones_asistidas__suscripcion_id__documento_firma_pdf_get",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/pdf": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/asistidas/{suscripcion_id}/firma/codigo": {
+      "post": {
+        "tags": [
+          "venta-asistida"
+        ],
+        "summary": "Envía el código de un solo uso al cliente",
+        "operationId": "solicitar_codigo_v1_suscripciones_asistidas__suscripcion_id__firma_codigo_post",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/asistidas/{suscripcion_id}/firma": {
+      "post": {
+        "tags": [
+          "venta-asistida"
+        ],
+        "summary": "Firma en pantalla con el cliente presente; repetirla devuelve la misma firma",
+        "operationId": "firmar_v1_suscripciones_asistidas__suscripcion_id__firma_post",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "user-agent",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "User-Agent"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FirmaAsistidaIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirmaAsistidaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/asistidas/{suscripcion_id}/firma/documento": {
+      "get": {
+        "tags": [
+          "venta-asistida"
+        ],
+        "summary": "Descarga la póliza firmada (PDF)",
+        "operationId": "descargar_firmada_v1_suscripciones_asistidas__suscripcion_id__firma_documento_get",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/pdf": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/suscripciones": {
       "post": {
         "tags": [
@@ -665,6 +1190,35 @@
         ],
         "title": "BilleteraOut"
       },
+      "ClienteResumenOut": {
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "inicial_apellido": {
+            "type": "string",
+            "title": "Inicial Apellido"
+          },
+          "tipo_documento": {
+            "type": "string",
+            "title": "Tipo Documento"
+          },
+          "documento_enmascarado": {
+            "type": "string",
+            "title": "Documento Enmascarado"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre",
+          "inicial_apellido",
+          "tipo_documento",
+          "documento_enmascarado"
+        ],
+        "title": "ClienteResumenOut",
+        "description": "Lo mínimo para identificar al cliente (ADR-0008): sin apellido completo, documento completo ni datos de contacto."
+      },
       "CobroOut": {
         "properties": {
           "estado": {
@@ -752,6 +1306,44 @@
         ],
         "title": "CobroOut",
         "description": "Resultado del paso COBRO según MS Pagos. Nunca incluye el token ni datos de la tarjeta."
+      },
+      "CompensacionOut": {
+        "properties": {
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          },
+          "solicitada_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solicitada En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "estado",
+          "motivo",
+          "solicitada_en"
+        ],
+        "title": "CompensacionOut"
       },
       "DecisionOut": {
         "properties": {
@@ -876,6 +1468,109 @@
         ],
         "title": "DocumentoFirmaOut",
         "description": "Lo que el cliente necesita para revisar y firmar. El PDF se descarga aparte, en `documento-firma/pdf`."
+      },
+      "EstadoSaga": {
+        "type": "string",
+        "enum": [
+          "EN_PROGRESO",
+          "APROBADA",
+          "COBRO_REALIZADO",
+          "FIRMADA",
+          "EMITIDA",
+          "RECHAZADA",
+          "COMPENSADA"
+        ],
+        "title": "EstadoSaga",
+        "description": "Estados que expone `GET /v1/suscripciones/{id}` (documentación técnica §1.5)."
+      },
+      "FirmaAsistidaIn": {
+        "properties": {
+          "documento_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Documento Sha256"
+          },
+          "documento_revisado": {
+            "type": "boolean",
+            "title": "Documento Revisado"
+          },
+          "codigo": {
+            "type": "string",
+            "maxLength": 12,
+            "minLength": 1,
+            "title": "Codigo",
+            "description": "Código de un solo uso del cliente (OTP)"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "documento_sha256",
+          "documento_revisado",
+          "codigo"
+        ],
+        "title": "FirmaAsistidaIn"
+      },
+      "FirmaAsistidaOut": {
+        "properties": {
+          "suscripcion_id": {
+            "type": "string",
+            "title": "Suscripcion Id"
+          },
+          "poliza_id": {
+            "type": "string",
+            "title": "Poliza Id"
+          },
+          "estado_saga": {
+            "type": "string",
+            "title": "Estado Saga"
+          },
+          "documento_sha256": {
+            "type": "string",
+            "title": "Documento Sha256"
+          },
+          "firmada_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Firmada En"
+          },
+          "canal": {
+            "type": "string",
+            "title": "Canal"
+          },
+          "metodo_autenticacion": {
+            "type": "string",
+            "title": "Metodo Autenticacion"
+          },
+          "modalidad": {
+            "type": "string",
+            "title": "Modalidad"
+          },
+          "asesor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asesor Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "suscripcion_id",
+          "poliza_id",
+          "estado_saga",
+          "documento_sha256",
+          "firmada_en",
+          "canal",
+          "metodo_autenticacion",
+          "modalidad",
+          "asesor_id"
+        ],
+        "title": "FirmaAsistidaOut"
       },
       "FirmaIn": {
         "properties": {
@@ -1021,6 +1716,37 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "PaginaAsistidasOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SuscripcionAsistidaOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "pagina": {
+            "type": "integer",
+            "title": "Pagina"
+          },
+          "tamano": {
+            "type": "integer",
+            "title": "Tamano"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "pagina",
+          "tamano"
+        ],
+        "title": "PaginaAsistidasOut"
       },
       "PolizaOut": {
         "properties": {
@@ -1181,6 +1907,202 @@
         ],
         "title": "PolizaResumenOut",
         "description": "La póliza dentro de la saga: lo que el operador necesita ver si el documento no se genera."
+      },
+      "SuscripcionAsistidaIn": {
+        "properties": {
+          "cotizacion_id": {
+            "type": "string",
+            "maxLength": 36,
+            "minLength": 1,
+            "title": "Cotizacion Id"
+          },
+          "metodo_pago": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Metodo Pago",
+            "description": "Token de la pasarela; nunca el número de tarjeta"
+          },
+          "acepta_terminos": {
+            "type": "boolean",
+            "title": "Acepta Terminos",
+            "description": "El asesor declara que el cliente está al tanto de la transacción y aceptó los términos"
+          },
+          "periodicidad_pago": {
+            "type": "string",
+            "enum": [
+              "ANUAL",
+              "MENSUAL"
+            ],
+            "title": "Periodicidad Pago",
+            "default": "ANUAL"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "cotizacion_id",
+          "metodo_pago",
+          "acepta_terminos"
+        ],
+        "title": "SuscripcionAsistidaIn"
+      },
+      "SuscripcionAsistidaOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "cotizacion_id": {
+            "type": "string",
+            "title": "Cotizacion Id"
+          },
+          "cliente": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClienteResumenOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Nulo si MS Identidad no responde"
+          },
+          "producto": {
+            "type": "string",
+            "title": "Producto"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "monto_asegurado": {
+            "type": "integer",
+            "title": "Monto Asegurado"
+          },
+          "periodicidad_pago": {
+            "type": "string",
+            "title": "Periodicidad Pago"
+          },
+          "estado_saga": {
+            "type": "string",
+            "title": "Estado Saga"
+          },
+          "paso_actual": {
+            "type": "string",
+            "title": "Paso Actual"
+          },
+          "pasos": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pasos"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
+          "motivos": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Motivos"
+          },
+          "cobro_estado": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cobro Estado"
+          },
+          "cobro_motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cobro Motivo"
+          },
+          "firma": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FirmaResumenOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "compensacion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompensacionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "poliza": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PolizaResumenOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "puede_gestionar_firma": {
+            "type": "boolean",
+            "title": "Puede Gestionar Firma",
+            "description": "Lo calcula el backend; la firma se revalida al ejecutarla"
+          },
+          "creada_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creada En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "cotizacion_id",
+          "cliente",
+          "producto",
+          "moneda",
+          "monto_asegurado",
+          "periodicidad_pago",
+          "estado_saga",
+          "paso_actual",
+          "pasos",
+          "decision",
+          "motivos",
+          "cobro_estado",
+          "cobro_motivo",
+          "firma",
+          "compensacion",
+          "poliza",
+          "puede_gestionar_firma",
+          "creada_en"
+        ],
+        "title": "SuscripcionAsistidaOut"
       },
       "SuscripcionIn": {
         "properties": {

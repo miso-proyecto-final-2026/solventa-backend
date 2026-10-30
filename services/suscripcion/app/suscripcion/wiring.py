@@ -31,6 +31,7 @@ from app.suscripcion.config import (
 )
 from app.suscripcion.documento import cargar_plantilla
 from app.suscripcion.firma import ServicioFirma
+from app.suscripcion.firma_asistida import ServicioFirmaAsistida
 from app.suscripcion.modelos_db import TABLA_EVENTOS_PROCESADOS
 from app.suscripcion.polizas import GeneradorDocumentos
 from app.suscripcion.proveedor_firma import ProveedorFirmaSimulado
@@ -100,6 +101,18 @@ def construir_servicio_firma(config: ConfigSuscripcion, engine: Engine, clientes
         almacen=construir_almacen(config),
         proveedor=ProveedorFirmaSimulado(config.firma_sim_otp),
         reglas=cargar_reglas(),
+    )
+
+
+def construir_servicio_asistida(
+    servicio: ServicioSuscripcion, firma: ServicioFirma, engine: Engine, clientes: list[httpx.AsyncClient], config: ConfigSuscripcion
+) -> ServicioFirmaAsistida:
+    """Venta asistida (HU39): lo que hace el asesor sobre la saga, con los mismos servicios de HU15 y HU21."""
+    return ServicioFirmaAsistida(
+        fabrica=sessionmaker(bind=engine, expire_on_commit=False),
+        suscripciones=servicio,
+        firma=firma,
+        identidad=ClienteIdentidad(clientes[0], config.identidad_key),
     )
 
 
