@@ -63,6 +63,29 @@ async def test_la_ip_de_la_evidencia_es_la_primera_de_x_forwarded_for(escenario,
     assert _firmas(fabrica)[0].ip == "190.9.8.7"
 
 
+@pytest.mark.parametrize(
+    ("cabeceras", "esperada"),
+    [
+        ({"CloudFront-Viewer-Address": "190.9.8.7:51234", "X-Forwarded-For": "6.6.6.6"}, "190.9.8.7"),  # el borde manda
+        ({"CloudFront-Viewer-Address": "[2800:484:1::7]:51234"}, "2800:484:1::7"),
+        ({"CloudFront-Viewer-Address": "2800:484:1::7:51234"}, "2800:484:1::7"),
+        ({"X-Forwarded-For": "190.9.8.7, 10.0.0.2"}, "190.9.8.7"),
+        ({"CloudFront-Viewer-Address": "no-es-una-ip", "X-Forwarded-For": "tampoco"}, "127.0.0.1"),  # cae al socket
+        ({}, "127.0.0.1"),
+    ],
+)
+async def test_la_ip_de_la_evidencia_sale_del_borde_y_no_se_puede_falsificar(escenario, fabrica, cabeceras, esperada):
+    api, susc, *_ = escenario
+    huella = (await api.get(f"/v1/suscripciones/{susc.id}/documento-firma", headers=TOKEN_1)).json()["documento_sha256"]
+
+    r = await api.post(f"/v1/suscripciones/{susc.id}/firma", json=_cuerpo(huella), headers={**TOKEN_1, **cabeceras})
+
+    from tests.test_firma import _firmas
+
+    assert r.status_code == 200
+    assert _firmas(fabrica)[0].ip == esperada
+
+
 async def test_firmar_otra_vez_responde_la_misma_firma_con_la_marca_de_repeticion(escenario):
     api, susc, *_ = escenario
     huella = (await api.get(f"/v1/suscripciones/{susc.id}/documento-firma", headers=TOKEN_1)).json()["documento_sha256"]
