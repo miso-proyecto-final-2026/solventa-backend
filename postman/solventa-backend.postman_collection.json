@@ -8839,6 +8839,405 @@
           ]
         }
       ]
+    },
+    {
+      "name": "MS Notificaciones (HU22)",
+      "item": [
+        {
+          "name": "Registrar el dispositivo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('devuelve el dispositivo y su idioma', () => { const r = pm.response.json(); pm.expect(r.dispositivo_id).to.eql('postman-dispositivo-001'); pm.expect(r.idioma).to.eql('en-US'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{notificaciones_url}}/v1/dispositivos",
+              "host": [
+                "{{notificaciones_url}}"
+              ],
+              "path": [
+                "v1",
+                "dispositivos"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dispositivo_id\": \"postman-dispositivo-001\",\n  \"idioma\": \"en-US\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Registrar el mismo dispositivo con otro idioma (idempotente)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('solo cambia el idioma', () => pm.expect(pm.response.json().idioma).to.eql('es-CO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{notificaciones_url}}/v1/dispositivos",
+              "host": [
+                "{{notificaciones_url}}"
+              ],
+              "path": [
+                "v1",
+                "dispositivos"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dispositivo_id\": \"postman-dispositivo-001\",\n  \"idioma\": \"es-CO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Registrar un dispositivo con idioma desconocido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('error estándar VALIDATION_ERROR', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('VALIDATION_ERROR'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{notificaciones_url}}/v1/dispositivos",
+              "host": [
+                "{{notificaciones_url}}"
+              ],
+              "path": [
+                "v1",
+                "dispositivos"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dispositivo_id\": \"postman-dispositivo-001\",\n  \"idioma\": \"fr-FR\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Registrar un dispositivo sin sesión",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error estándar NO_AUTENTICADO', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('NO_AUTENTICADO'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{notificaciones_url}}/v1/dispositivos",
+              "host": [
+                "{{notificaciones_url}}"
+              ],
+              "path": [
+                "v1",
+                "dispositivos"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dispositivo_id\": \"postman-dispositivo-001\",\n  \"idioma\": \"en-US\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Bandeja del cliente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('es una lista (vacía hasta que se emita una póliza)', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{notificaciones_url}}/v1/notificaciones",
+              "host": [
+                "{{notificaciones_url}}"
+              ],
+              "path": [
+                "v1",
+                "notificaciones"
+              ]
+            },
+            "description": "La notificación aparece cuando se emite una póliza (cobro por Kafka y firma): se prueba en pytest y en staging."
+          }
+        },
+        {
+          "name": "Bandeja sin sesión",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error estándar NO_AUTENTICADO', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('NO_AUTENTICADO'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{notificaciones_url}}/v1/notificaciones",
+              "host": [
+                "{{notificaciones_url}}"
+              ],
+              "path": [
+                "v1",
+                "notificaciones"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Confirmar una notificación inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error estándar NOTIFICACION_NO_ENCONTRADA', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('NOTIFICACION_NO_ENCONTRADA'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{notificaciones_url}}/v1/notificaciones/no-existe/recibida",
+              "host": [
+                "{{notificaciones_url}}"
+              ],
+              "path": [
+                "v1",
+                "notificaciones",
+                "no-existe",
+                "recibida"
+              ]
+            },
+            "description": "Una notificación de otro cliente responde igual: no revela que existe."
+          }
+        },
+        {
+          "name": "Envíos fallidos sin sesión",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error estándar NO_AUTENTICADO', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('NO_AUTENTICADO'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{notificaciones_url}}/v1/notificaciones/envios-fallidos",
+              "host": [
+                "{{notificaciones_url}}"
+              ],
+              "path": [
+                "v1",
+                "notificaciones",
+                "envios-fallidos"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Envíos fallidos con la sesión de un cliente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error estándar NO_AUTENTICADO', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('NO_AUTENTICADO'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{notificaciones_url}}/v1/notificaciones/envios-fallidos",
+              "host": [
+                "{{notificaciones_url}}"
+              ],
+              "path": [
+                "v1",
+                "notificaciones",
+                "envios-fallidos"
+              ]
+            },
+            "description": "Solo vale el JWT de un operador, emitido por Identidad; un token de cliente no."
+          }
+        }
+      ]
     }
   ],
   "variable": [
@@ -9019,6 +9418,10 @@
     {
       "key": "reintento_clave",
       "value": ""
+    },
+    {
+      "key": "notificaciones_url",
+      "value": "http://localhost:8006"
     }
   ]
 }
