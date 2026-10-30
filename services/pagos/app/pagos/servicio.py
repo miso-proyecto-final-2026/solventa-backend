@@ -46,7 +46,7 @@ from app.pagos.dominio import (
     SolicitudCobro,
     TipoTransaccion,
     TokenDesconocido,
-    parece_pan,
+    identificador_parece_pan,
 )
 from app.pagos.errores import (
     ClaveReutilizada,
@@ -119,7 +119,7 @@ class ComandoCobro:
             defectos.append({"campo": "moneda", "motivo": f"solo se cobra en {MONEDA}"})
         if periodicidad_pago is not None and periodicidad_pago not in PERIODICIDADES:
             defectos.append({"campo": "periodicidad_pago", "motivo": "debe ser ANUAL o MENSUAL"})
-        if parece_pan(resto["token"]):
+        if identificador_parece_pan(resto["token"]):
             # El valor no se copia al detalle ni al log: se informa solo el campo.
             defectos.append({"campo": "metodo_pago", "motivo": "debe ser el token de la pasarela, nunca el número de tarjeta"})
         if not 1 <= len(resto["idempotency_key"]) <= 100:
