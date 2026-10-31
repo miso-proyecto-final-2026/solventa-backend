@@ -37,7 +37,8 @@ def test_los_valores_por_defecto_son_los_documentados():
 
 def test_el_correo_se_elige_por_configuracion():
     assert isinstance(construir_correo(ConfigNotificaciones.desde_entorno({})), CorreoSimulado)
-    ses = construir_correo(ConfigNotificaciones.desde_entorno({"CORREO_PROVEEDOR": "ses", "CORREO_REMITENTE": "a@solventa.example"}))
+    entorno = {"CORREO_PROVEEDOR": "ses", "CORREO_REMITENTE": "a@solventa.example", "AWS_REGION": "us-east-1"}
+    ses = construir_correo(ConfigNotificaciones.desde_entorno(entorno))
     assert isinstance(ses, CorreoSes)
 
 
