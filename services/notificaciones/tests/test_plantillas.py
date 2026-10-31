@@ -89,6 +89,22 @@ def test_el_html_escapa_lo_que_viene_de_fuera():
     assert '<html lang="es-CO">' in c.html
 
 
+def test_el_html_ofrece_un_boton_y_no_muestra_la_url_como_texto():
+    c = _correo()
+
+    assert 'href="https://borde.example/v1/certificados/abc"' in c.html
+    assert ">Descargar certificado</a>" in c.html
+    assert ">https://borde.example/v1/certificados/abc<" not in c.html  # la URL no se ve como texto
+    assert "https://borde.example/v1/certificados/abc" in c.texto  # la versión de texto plano sí la lleva
+    assert "El enlace vence el 31 de octubre de 2026" in c.html
+
+
+def test_el_boton_en_ingles_se_titula_en_ingles():
+    c = _correo("en-US")
+
+    assert ">Download certificate</a>" in c.html and "Descargar" not in c.html
+
+
 def test_sin_enlace_el_correo_manda_a_la_aplicacion():
     c = _correo(enlace=None, enlace_vence=None)
 

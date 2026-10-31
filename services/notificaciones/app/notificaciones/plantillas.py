@@ -49,6 +49,7 @@ TEXTOS: dict[str, dict[str, Any]] = {
         "vigencia": "Vigencia",
         "vigencia_valor": "Desde el {desde} hasta el {hasta}",
         "descarga": "Descarga tu certificado de cobertura:",
+        "boton": "Descargar certificado",
         "descarga_vence": "El enlace vence el {vence}. Después puedes descargarlo desde la aplicación.",
         "sin_enlace": "Puedes descargar tu certificado de cobertura desde la aplicación.",
         "cierre": "Gracias por confiar en Solventa.",
@@ -71,6 +72,7 @@ TEXTOS: dict[str, dict[str, Any]] = {
         "vigencia": "Term",
         "vigencia_valor": "From {desde} to {hasta}",
         "descarga": "Download your certificate of coverage:",
+        "boton": "Download certificate",
         "descarga_vence": "The link expires on {vence}. After that you can download it from the app.",
         "sin_enlace": "You can download your certificate of coverage from the app.",
         "cierre": "Thank you for trusting Solventa.",
@@ -106,6 +108,25 @@ def construir_push(*, envio_id: str, cliente_id: str, suscripcion_id: str, idiom
         tipo=TipoNotificacion.POLIZA_EMITIDA,
         suscripcion_id=suscripcion_id,
         idioma=idioma,
+    )
+
+
+_PEQUENO = "font-size:13px;color:#555b6b"
+
+
+def _boton(texto: str, enlace: str) -> str:
+    """Botón «a prueba de clientes de correo»: una tabla con el color de fondo y el enlace con estilos en línea.
+
+    Los clientes de correo ignoran casi todo el CSS, así que el botón no depende de clases ni de hojas de estilo. Blanco
+    sobre #0a4fd6 tiene un contraste de ~7:1.
+    """
+    return (
+        '<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:16px 0"><tr>'
+        '<td align="center" bgcolor="#0a4fd6" style="border-radius:8px">'
+        f'<a href="{escape(enlace, quote=True)}" target="_blank" rel="noopener" '
+        'style="display:inline-block;padding:14px 28px;font-family:Arial,Helvetica,sans-serif;font-size:16px;'
+        f'font-weight:bold;color:#ffffff;text-decoration:none;border-radius:8px">{escape(texto)}</a>'
+        "</td></tr></table>"
     )
 
 
@@ -147,18 +168,19 @@ def construir_correo(
         ]
     )
     if enlace:
-        bloque_descarga = f'<p>{escape(t["descarga"])}<br><a href="{escape(enlace, quote=True)}">{escape(enlace)}</a>'
+        bloque_descarga = f"<p>{escape(t['descarga'])}</p>{_boton(t['boton'], enlace)}"
         if enlace_vence:
-            bloque_descarga += f'<br><small>{escape(t["descarga_vence"].format(vence=fecha(enlace_vence, idioma)))}</small>'
-        bloque_descarga += "</p>"
+            bloque_descarga += f'<p style="{_PEQUENO}">{escape(t["descarga_vence"].format(vence=fecha(enlace_vence, idioma)))}</p>'
     else:
-        bloque_descarga = f'<p>{escape(t["sin_enlace"])}</p>'
+        bloque_descarga = f"<p>{escape(t['sin_enlace'])}</p>"
     html = (
-        f'<html lang="{idioma}"><body>'
+        f'<html lang="{idioma}"><body style="margin:0;padding:24px;background:#f4f6fa;font-family:Arial,Helvetica,sans-serif;'
+        f'color:#1b1f2a;font-size:16px;line-height:1.5"><div style="max-width:560px;margin:0 auto;background:#ffffff;'
+        f'border-radius:12px;padding:24px">'
         f"<p>{escape(saludo)}</p><p>{escape(t['intro'])}</p>"
         f"<ul><li><b>{escape(t['numero'])}:</b> {escape(numero_poliza)}</li>"
         f"<li><b>{escape(t['producto'])}:</b> {escape(nombre_producto)}</li>"
         f"<li><b>{escape(t['vigencia'])}:</b> {escape(vigencia)}</li></ul>"
-        f"{bloque_descarga}<p>{escape(t['cierre'])}</p></body></html>"
+        f"{bloque_descarga}<p>{escape(t['cierre'])}</p></div></body></html>"
     )
     return Correo(destinatario=destinatario, asunto=t["asunto"], texto=texto, html=html)
