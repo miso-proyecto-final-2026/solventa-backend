@@ -140,6 +140,9 @@ async def test_repetir_con_la_misma_clave_devuelve_la_misma_saga(inicio):
         (_inicio(acepta_terminos=False), 422, "VALIDATION_ERROR"),
         (_inicio(metodo_pago="4242 4242 4242 4242"), 422, "VALIDATION_ERROR"),
         (_inicio(metodo_pago="4242424242424242"), 422, "VALIDATION_ERROR"),
+        (_inicio(metodo_pago="tok_4242424242424242"), 422, "VALIDATION_ERROR"),
+        (_inicio(metodo_pago="tarjeta 4242-4242-4242-4242"), 422, "VALIDATION_ERROR"),
+        (_inicio(metodo_pago="3782 822463 10005"), 422, "VALIDATION_ERROR"),
     ],
 )
 async def test_iniciar_rechazado_queda_auditado_sin_suscripcion(inicio, fabrica, cuerpo, status, codigo):
@@ -149,6 +152,19 @@ async def test_iniciar_rechazado_queda_auditado_sin_suscripcion(inicio, fabrica,
     ultima = _auditoria(fabrica)[-1]
     assert (ultima.accion, ultima.resultado, ultima.suscripcion_id) == ("INICIAR_SUSCRIPCION", codigo, None)
     assert ultima.cotizacion_id == cuerpo["cotizacion_id"]
+
+
+@pytest.mark.parametrize(
+    "token",
+    # El primero tiene un segmento de 12 dígitos que, sumado a sus vecinos, engañaba a la regla amplia de Pagos (backend#55).
+    ["tok_sim_12345678-1234-4123-8123-123456789012", "tok_sim_rechazar_0f8fad5b-d9cb-469f-a165-70867728950e"],
+)
+async def test_un_token_con_uuid_no_se_confunde_con_una_tarjeta(inicio, token):
+    r = await inicio.post(
+        "/v1/suscripciones/asistidas", json=_inicio(metodo_pago=token), headers={**ASESOR, "Idempotency-Key": "k1"}
+    )
+
+    assert r.status_code == 202
 
 
 async def test_el_token_de_pago_no_queda_en_logs_ni_en_auditoria(inicio, fabrica, caplog):
@@ -319,6 +335,19 @@ async def test_la_firma_asistida_guarda_la_evidencia_del_cliente_y_la_del_asesor
     assert (firma.firmante_id, firma.asesor_id, firma.modalidad) == ("cli-1", ASESOR_ID, "ASISTIDA_PANTALLA")
     assert (firma.ip, firma.dispositivo, firma.documento_sha256) == ("190.9.8.7", "Chrome de la consola", huella)
     assert _poliza(fabrica, susc.id).estado == "VIGENTE"
+
+
+async def test_la_ip_de_la_firma_asistida_es_la_que_pone_cloudfront_y_no_se_puede_falsificar(escenario, fabrica):
+    api, susc, _ = escenario
+
+    r = await api.post(
+        _ruta(susc, "/firma"),
+        json=_cuerpo(await _huella(api, susc)),
+        headers={**ASESOR, "CloudFront-Viewer-Address": "190.9.8.7:443", "X-Forwarded-For": "6.6.6.6"},
+    )
+
+    assert r.status_code == 200
+    assert _firmas(fabrica)[0].ip == "190.9.8.7"
 
 
 async def test_la_copia_firmada_dice_quien_asistio(escenario):

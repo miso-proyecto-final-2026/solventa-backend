@@ -25,7 +25,7 @@ no se puede construir todavía.
 4. **El asesor inicia la saga de su cotización, con el cliente presente.** El titular es el de la cotización. Una cotización «sin
    cuenta» responde 409 `COTIZACION_SIN_CUENTA`: no hay cliente que pueda firmar.
 5. **Pago: solo llega el token.** La consola genera en el navegador un token simulado, como móvil (`Pago.kt`). Como defensa adicional, la
-   ruta rechaza un `metodo_pago` con forma de número de tarjeta. Con un proveedor real, ese componente se reemplaza por su formulario
+   ruta rechaza un `metodo_pago` con forma de número de tarjeta, con la misma regla que MS Pagos. Con un proveedor real, ese componente se reemplaza por su formulario
    alojado; una tarjeta real digitada en la consola no cumpliría la regla de HU19 de que el asesor nunca la vea.
 6. **`acepta_terminos` es una declaración del asesor (provisional).** Declara que el cliente está al tanto de la transacción y aceptó
    los términos, y queda auditada. No prueba la aceptación del cliente: esa prueba es su firma con OTP y, sin firma, el cobro se

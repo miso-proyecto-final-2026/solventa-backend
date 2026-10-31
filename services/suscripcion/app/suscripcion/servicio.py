@@ -43,6 +43,9 @@ log = logging.getLogger("suscripcion")
 FUENTE = "ms-suscripcion"
 REDACTADO = "[redactado]"
 PERIODICIDADES = ("ANUAL", "MENSUAL")
+_PAN_CORRIDO = re.compile(r"\d{13,19}")
+_PAN_AGRUPADO = re.compile(r"(?<![0-9A-Za-z])\d{4}([ -])\d{4}\1\d{4}\1\d{1,7}(?![0-9A-Za-z])")
+_PAN_AMEX = re.compile(r"(?<![0-9A-Za-z])\d{4}([ -])\d{6}\1\d{5}(?![0-9A-Za-z])")
 
 
 def _ahora() -> datetime:
@@ -68,8 +71,12 @@ def redactar(sobre: dict[str, Any]) -> dict[str, Any]:
 
 
 def parece_numero_de_tarjeta(valor: str) -> bool:
-    """13 a 19 dígitos, con o sin separadores: el token de la pasarela nunca tiene esa forma (SAQ-A, ADR-0014)."""
-    return re.fullmatch(r"[\d \-]+", valor) is not None and 13 <= sum(c.isdigit() for c in valor) <= 19
+    """Las formas reales de escribir una tarjeta, también dentro de un texto (SAQ-A, ADR-0014); un `tok_sim_<uuid>` no cae aquí.
+
+    Es la misma regla de `identificador_parece_pan` en MS Pagos, copiada a propósito (ADR-0001): lo que Pagos rechazaría al
+    cobrar se rechaza aquí, cuando todavía se le puede responder al asesor.
+    """
+    return bool(_PAN_CORRIDO.search(valor) or _PAN_AGRUPADO.search(valor) or _PAN_AMEX.search(valor))
 
 
 class ServicioSuscripcion:
