@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Engine, create_engine, select
+from sqlalchemy import Engine, create_engine, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -77,6 +77,7 @@ def nueva_suscripcion(
     periodicidad_pago: str = "ANUAL",
     coberturas: list[dict[str, Any]] | None = None,
     cotizacion_version_reglas: str | None = None,
+    asesor_id: str | None = None,
 ) -> SuscripcionDB:
     """Crea la saga en `EN_PROGRESO` / `DECISION`. Puede lanzar IntegrityError (clave repetida o cotización ya usada)."""
     suscripcion = SuscripcionDB(
@@ -97,6 +98,7 @@ def nueva_suscripcion(
         metodo_pago_token=metodo_pago_token,
         coberturas=coberturas,
         cotizacion_version_reglas=cotizacion_version_reglas,
+        asesor_id=asesor_id,
         created_at=ahora,
         updated_at=ahora,
     )
@@ -196,6 +198,25 @@ def polizas_de_cliente(sesion: Session, cliente_id: str) -> list[tuple[PolizaDB,
         .order_by(PolizaDB.created_at.desc(), PolizaDB.id)
     )
     return [(p, s) for p, s in filas]
+
+
+def suscripciones_de_asesor(
+    sesion: Session, asesor_id: str, *, estado: str | None, pagina: int, tamano: int
+) -> tuple[list[tuple[SuscripcionDB, PolizaDB | None]], int]:
+    """Las sagas de las cotizaciones del asesor (HU39), las más recientes primero, con el total para paginar."""
+    condiciones = [SuscripcionDB.asesor_id == asesor_id]
+    if estado:
+        condiciones.append(SuscripcionDB.estado_saga == estado)
+    total = sesion.execute(select(func.count()).select_from(SuscripcionDB).where(*condiciones)).scalar_one()
+    filas = sesion.execute(
+        select(SuscripcionDB, PolizaDB)
+        .outerjoin(PolizaDB, PolizaDB.suscripcion_id == SuscripcionDB.id)
+        .where(*condiciones)
+        .order_by(SuscripcionDB.created_at.desc(), SuscripcionDB.id)
+        .limit(tamano)
+        .offset((pagina - 1) * tamano)
+    )
+    return [(s, p) for s, p in filas], total
 
 
 # --- outbox ----------------------------------------------------------------------------------------------------

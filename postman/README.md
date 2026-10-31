@@ -32,6 +32,7 @@ Cada petición lleva pruebas (`pm.test`) y guarda las variables que necesita la 
 | MS Pagos / Cobros fallidos (HU19) | `GET /v1/pagos/cobros-fallidos` (página, `por_vencer`, 401 sin token, 422 tamaño), `GET …/{id}` (200/404), `POST …/{id}/notas` (201, número de tarjeta 422) y `POST …/{id}/reintentar` (primer clic y segundo clic con la misma `Idempotency-Key`). JWT del asesor; depende de «Cobrar prima - rechazado». |
 | MS Cotización / Perfiles | `GET /perfiles/{cliente_id}` (exige clave de servicio; 401/403) |
 | MS Identidad / Asesor - login y búsqueda (HU38) | `POST /v1/sesiones-internas`, `GET /v1/clientes/busqueda` (200/401/404/422) |
+| MS Suscripción / venta asistida (HU39) | `GET /v1/suscripciones/asistidas` (200/401, token del cliente 401), `GET …/asistidas/{id}` (404), `POST …/asistidas` (cotización inexistente 404, 401) |
 | MS Cotización / Cotización asistida (HU38) | `GET /v1/productos` (200/304), `GET /v1/asesor/clientes/{id}/perfil`, `POST /v1/asesor/cotizaciones` (cliente existente, sin cuenta, 401/422) |
 
 Cada ruta de ambas apps tiene al menos una petición, y cada código de respuesta que alcanza un cliente tiene un caso que

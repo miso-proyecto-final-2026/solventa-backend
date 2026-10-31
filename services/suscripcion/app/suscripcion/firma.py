@@ -54,6 +54,8 @@ from app.suscripcion.servicio import FUENTE, monto_a_cobrar
 log = logging.getLogger("suscripcion.firma")
 
 CANALES = ("MOVIL", "WEB")
+MODALIDAD_CLIENTE = "CLIENTE"
+MODALIDAD_ASISTIDA_PANTALLA = "ASISTIDA_PANTALLA"
 MOTIVO_VENCIDA = "FIRMA_VENCIDA"
 MOTIVO_FALLIDA = "FIRMA_FALLIDA"
 COMPENSACION_SOLICITADA = "SOLICITADA"
@@ -97,6 +99,19 @@ class OrigenFirma:
     canal: str
     ip: str | None
     dispositivo: str | None
+    modalidad: str = MODALIDAD_CLIENTE
+    asesor_id: str | None = None
+
+
+def firma_gestionable(susc: SuscripcionDB, poliza: PolizaDB | None, vence_en: datetime | None, ahora: datetime) -> bool:
+    """Si se puede gestionar la firma ahora (HU39). Con un reembolso pedido la saga sigue en `COBRO_REALIZADO`: no basta el estado."""
+    return (
+        (susc.estado_saga, susc.paso_actual) == (EstadoSaga.COBRO_REALIZADO.value, PasoSaga.FIRMA.value)
+        and susc.compensacion_estado is None
+        and poliza is not None
+        and poliza.documento_estado == DOC_GENERADO
+        and (vence_en is None or ahora < vence_en)
+    )
 
 
 def encolar_reembolso(sesion: Session, susc: SuscripcionDB, ahora: datetime) -> None:
@@ -217,7 +232,9 @@ class ServicioFirma:
     # --- revisar --------------------------------------------------------------------------------------------------
 
     async def documento_para_firmar(self, suscripcion_id: str, token: str | None) -> DocumentoParaFirmar:
-        cliente_id = await self._cliente_del_token(token)
+        return await self.documento_para_firmar_como(suscripcion_id, await self._cliente_del_token(token))
+
+    async def documento_para_firmar_como(self, suscripcion_id: str, cliente_id: str) -> DocumentoParaFirmar:
         susc, poliza = await asyncio.to_thread(self._cargar, suscripcion_id, cliente_id)
         if self._esta_firmada(susc):
             estado = "FIRMADA"
@@ -248,7 +265,9 @@ class ServicioFirma:
 
     async def contenido_documento(self, suscripcion_id: str, token: str | None) -> bytes:
         """El PDF que se va a firmar."""
-        cliente_id = await self._cliente_del_token(token)
+        return await self.contenido_documento_como(suscripcion_id, await self._cliente_del_token(token))
+
+    async def contenido_documento_como(self, suscripcion_id: str, cliente_id: str) -> bytes:
         _, poliza = await asyncio.to_thread(self._cargar, suscripcion_id, cliente_id)
         poliza = await asyncio.to_thread(self._con_hash, poliza)
         return await asyncio.to_thread(self._almacen.leer, poliza.documento_s3_key)
@@ -256,7 +275,9 @@ class ServicioFirma:
     # --- firmar ---------------------------------------------------------------------------------------------------
 
     async def solicitar_codigo(self, suscripcion_id: str, token: str | None) -> None:
-        cliente_id = await self._cliente_del_token(token)
+        await self.solicitar_codigo_como(suscripcion_id, await self._cliente_del_token(token))
+
+    async def solicitar_codigo_como(self, suscripcion_id: str, cliente_id: str) -> None:
         susc, _ = await asyncio.to_thread(self._cargar, suscripcion_id, cliente_id)
         await asyncio.to_thread(self._verificar_abierta, susc)
         await self._proveedor.solicitar_desafio(cliente_id)
@@ -272,7 +293,26 @@ class ServicioFirma:
         origen: OrigenFirma,
     ) -> tuple[FirmaDB, bool]:
         """Devuelve (firma, creada). `creada=False`: ya estaba firmada y se devuelve la misma firma, sin tocar nada."""
-        cliente_id = await self._cliente_del_token(token)
+        return await self.firmar_como(
+            suscripcion_id,
+            await self._cliente_del_token(token),
+            documento_sha256=documento_sha256,
+            documento_revisado=documento_revisado,
+            codigo=codigo,
+            origen=origen,
+        )
+
+    async def firmar_como(
+        self,
+        suscripcion_id: str,
+        cliente_id: str,
+        *,
+        documento_sha256: str,
+        documento_revisado: bool,
+        codigo: str,
+        origen: OrigenFirma,
+    ) -> tuple[FirmaDB, bool]:
+        """Firma por un cliente ya identificado: el firmante siempre es el cliente, aunque un asesor lo asista (HU39)."""
         if origen.canal not in CANALES:
             raise SolicitudInvalida(detalles=[{"campo": "canal", "motivo": "debe ser MOVIL o WEB"}])
         susc, poliza = await asyncio.to_thread(self._cargar, suscripcion_id, cliente_id)
@@ -318,6 +358,7 @@ class ServicioFirma:
                 proveedor=self._proveedor.nombre,
                 referencia_proveedor=referencia,
                 documento_sha256=documento_sha256,
+                asesor_id=origen.asesor_id,
             ),
         )
         await asyncio.to_thread(self._almacen.guardar, clave, copia, "application/pdf")
@@ -377,6 +418,8 @@ class ServicioFirma:
                 proveedor=self._proveedor.nombre,
                 referencia_proveedor=referencia,
                 copia_firmada_s3_key=clave_copia,
+                modalidad=origen.modalidad,
+                asesor_id=origen.asesor_id,
                 created_at=ahora,
             )
             try:
@@ -440,7 +483,9 @@ class ServicioFirma:
 
     async def copia_firmada(self, suscripcion_id: str, token: str | None) -> tuple[bytes, str]:
         """(PDF firmado, número de póliza)."""
-        cliente_id = await self._cliente_del_token(token)
+        return await self.copia_firmada_como(suscripcion_id, await self._cliente_del_token(token))
+
+    async def copia_firmada_como(self, suscripcion_id: str, cliente_id: str) -> tuple[bytes, str]:
         susc, poliza = await asyncio.to_thread(self._cargar, suscripcion_id, cliente_id)
         firma = await asyncio.to_thread(self._firma_de, susc.id)
         if firma is None:

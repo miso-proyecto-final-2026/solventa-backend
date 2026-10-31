@@ -98,6 +98,9 @@ class CotizacionOut(BaseModel):
     aviso: str | None
     componentes: list[ComponenteOut] | None
     metadata: MetadataOut | None
+    # Origen (HU39): Suscripción lo copia para saber qué asesor atendió al cliente.
+    asesor_id: str | None = None
+    sin_cuenta: bool = False
 
 
 class FactorOut(BaseModel):
@@ -270,6 +273,8 @@ def a_salida(c: CotizacionEmitida) -> CotizacionOut:
         metadata=MetadataOut(
             hit_cache=c.hit_cache, latencia_interna_ms=c.latencia_interna_ms
         ),
+        asesor_id=c.origen.asesor_id if c.origen else None,
+        sin_cuenta=c.origen.sin_cuenta if c.origen else False,
     )
 
 

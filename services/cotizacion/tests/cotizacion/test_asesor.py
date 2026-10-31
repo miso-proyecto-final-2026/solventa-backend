@@ -116,6 +116,16 @@ def test_cotizar_a_un_cliente_registra_canal_y_asesor(asesor_env):
     assert e.perfiles.llamadas == 1
 
 
+def test_la_cotizacion_expone_su_asesor_para_que_suscripcion_lo_herede(asesor_env):
+    e = asesor_env()
+
+    c = e.client.post("/v1/asesor/cotizaciones", json=ASISTIDA_CLIENTE, headers=_auth()).json()
+    leida = e.client.get(f"/v1/cotizaciones/{c['id']}").json()
+
+    assert (c["asesor_id"], c["sin_cuenta"]) == (ASESOR_ID, False)
+    assert (leida["asesor_id"], leida["sin_cuenta"]) == (ASESOR_ID, False)
+
+
 def test_sin_cuenta_se_cotiza_con_perfil_por_defecto_y_sin_consultar_el_perfil(asesor_env):
     e = asesor_env()
 

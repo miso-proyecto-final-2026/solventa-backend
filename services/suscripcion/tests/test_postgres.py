@@ -32,7 +32,7 @@ from tests.test_polizas import AlmacenMemoria, _generador
 pytestmark = pytest.mark.contenedores
 
 RAIZ = Path(__file__).parents[1]
-TABLAS = {"suscripciones", "revisiones_asistidas", "eventos_salida", "eventos_procesados", "polizas", "firmas"}
+TABLAS = {"suscripciones", "revisiones_asistidas", "eventos_salida", "eventos_procesados", "polizas", "firmas", "auditoria_asesor"}
 REPLICAS = 8
 PEDIDO = {"token": "token-1", "cotizacion_id": "cot-1", "metodo_pago": "tok_visa_123", "acepta_terminos": True}
 
@@ -322,6 +322,38 @@ def test_la_base_no_deja_corregir_ni_borrar_la_evidencia_de_una_firma(fabrica_pg
         s.execute(text(f"DELETE FROM {SCHEMA}.firmas"))
     with fabrica_pg() as s:
         assert s.execute(text(f"SELECT canal FROM {SCHEMA}.firmas")).scalar() == "MOVIL"
+
+
+def test_la_base_no_deja_corregir_ni_borrar_la_auditoria_del_asesor(fabrica_pg):
+    from sqlalchemy.exc import DBAPIError
+
+    with fabrica_pg() as s, s.begin():
+        s.execute(
+            text(
+                f"INSERT INTO {SCHEMA}.auditoria_asesor (asesor_id, accion, resultado, created_at) "
+                "VALUES ('ase-1', 'FIRMAR', 'EXITO', now())"
+            )
+        )
+
+    with pytest.raises(DBAPIError, match="inmutable"), fabrica_pg() as s, s.begin():
+        s.execute(text(f"UPDATE {SCHEMA}.auditoria_asesor SET resultado = 'OTRO'"))
+    with pytest.raises(DBAPIError, match="inmutable"), fabrica_pg() as s, s.begin():
+        s.execute(text(f"DELETE FROM {SCHEMA}.auditoria_asesor"))
+
+
+def test_la_base_rechaza_una_modalidad_de_firma_invalida(fabrica_pg):
+    from sqlalchemy.exc import DBAPIError
+
+    susc, firma = _lista_para_firmar(fabrica_pg)
+    asyncio.run(_firmar_en(firma(), susc)())
+    with fabrica_pg() as s, s.begin():
+        s.execute(text(f"ALTER TABLE {SCHEMA}.firmas DISABLE TRIGGER firmas_inmutables"))
+    try:
+        with pytest.raises(DBAPIError), fabrica_pg() as s, s.begin():
+            s.execute(text(f"UPDATE {SCHEMA}.firmas SET modalidad = 'OTRA'"))
+    finally:
+        with fabrica_pg() as s, s.begin():
+            s.execute(text(f"ALTER TABLE {SCHEMA}.firmas ENABLE TRIGGER firmas_inmutables"))
 
 
 def test_la_base_rechaza_un_canal_o_un_hash_invalido(fabrica_pg):

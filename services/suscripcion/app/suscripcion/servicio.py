@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -27,6 +28,7 @@ from app.suscripcion.errores import (
     AccesoDenegado,
     ClaveReutilizada,
     CotizacionNoEncontrada,
+    CotizacionSinCuenta,
     CotizacionVencida,
     CotizacionYaUsada,
     NoAutenticado,
@@ -41,6 +43,9 @@ log = logging.getLogger("suscripcion")
 FUENTE = "ms-suscripcion"
 REDACTADO = "[redactado]"
 PERIODICIDADES = ("ANUAL", "MENSUAL")
+_PAN_CORRIDO = re.compile(r"\d{13,19}")
+_PAN_AGRUPADO = re.compile(r"(?<![0-9A-Za-z])\d{4}([ -])\d{4}\1\d{4}\1\d{1,7}(?![0-9A-Za-z])")
+_PAN_AMEX = re.compile(r"(?<![0-9A-Za-z])\d{4}([ -])\d{6}\1\d{5}(?![0-9A-Za-z])")
 
 
 def _ahora() -> datetime:
@@ -63,6 +68,15 @@ def redactar(sobre: dict[str, Any]) -> dict[str, Any]:
     if "metodo_pago" in copia["payload"]:
         copia["payload"]["metodo_pago"] = REDACTADO
     return copia
+
+
+def parece_numero_de_tarjeta(valor: str) -> bool:
+    """Las formas reales de escribir una tarjeta, también dentro de un texto (SAQ-A, ADR-0014); un `tok_sim_<uuid>` no cae aquí.
+
+    Es la misma regla de `identificador_parece_pan` en MS Pagos, copiada a propósito (ADR-0001): lo que Pagos rechazaría al
+    cobrar se rechaza aquí, cuando todavía se le puede responder al asesor.
+    """
+    return bool(_PAN_CORRIDO.search(valor) or _PAN_AGRUPADO.search(valor) or _PAN_AMEX.search(valor))
 
 
 class ServicioSuscripcion:
@@ -101,6 +115,55 @@ class ServicioSuscripcion:
         cliente_id = await self._identidad.cliente_de_token(token)
         if cliente_id is None:
             raise NoAutenticado
+        return await self.iniciar_como(
+            cliente_id,
+            clave=clave,
+            cotizacion_id=cotizacion_id,
+            metodo_pago=metodo_pago,
+            acepta_terminos=acepta_terminos,
+            periodicidad_pago=periodicidad_pago,
+        )
+
+    async def iniciar_asistida(
+        self,
+        asesor_id: str,
+        *,
+        clave: str | None,
+        cotizacion_id: str,
+        metodo_pago: str,
+        acepta_terminos: bool,
+        periodicidad_pago: str = "ANUAL",
+    ) -> tuple[SuscripcionDB, bool]:
+        """HU39: el asesor inicia la saga de su propia cotización, con el cliente presente. El titular es el de la cotización."""
+        cotizacion = await self._cotizaciones.obtener(cotizacion_id)
+        if cotizacion is None:
+            raise CotizacionNoEncontrada
+        if cotizacion.asesor_id != asesor_id:
+            raise AccesoDenegado
+        if cotizacion.sin_cuenta:
+            raise CotizacionSinCuenta
+        if parece_numero_de_tarjeta(metodo_pago):
+            raise SolicitudInvalida(detalles=[{"campo": "metodo_pago", "motivo": "debe ser el token de la pasarela, nunca el número de tarjeta"}])
+        return await self.iniciar_como(
+            cotizacion.cliente_id,
+            clave=clave,
+            cotizacion_id=cotizacion_id,
+            metodo_pago=metodo_pago,
+            acepta_terminos=acepta_terminos,
+            periodicidad_pago=periodicidad_pago,
+        )
+
+    async def iniciar_como(
+        self,
+        cliente_id: str,
+        *,
+        clave: str | None,
+        cotizacion_id: str,
+        metodo_pago: str,
+        acepta_terminos: bool,
+        periodicidad_pago: str = "ANUAL",
+    ) -> tuple[SuscripcionDB, bool]:
+        """Inicia la saga para un cliente ya identificado."""
         if not clave or not 1 <= len(clave) <= 100:
             raise SolicitudInvalida(detalles=[{"campo": "Idempotency-Key", "motivo": "es obligatoria (1 a 100 caracteres)"}])
         if not acepta_terminos:
@@ -167,6 +230,7 @@ class ServicioSuscripcion:
                 periodicidad_pago=periodicidad_pago,
                 coberturas=[{"tipo": x.tipo, "monto": x.monto, "deducible": x.deducible} for x in c.coberturas] or None,
                 cotizacion_version_reglas=c.version_reglas,
+                asesor_id=c.asesor_id,
             )
 
     # --- consultar ----------------------------------------------------------------------------------------------
