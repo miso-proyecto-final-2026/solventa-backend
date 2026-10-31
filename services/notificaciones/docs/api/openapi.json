@@ -1,0 +1,508 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Solventa — MS Notificaciones",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/v1/dispositivos": {
+      "post": {
+        "tags": [
+          "notificaciones"
+        ],
+        "summary": "Registra el dispositivo del cliente y su idioma",
+        "description": "Idempotente: registrar otra vez el mismo dispositivo solo actualiza el idioma.",
+        "operationId": "registrar_dispositivo_v1_dispositivos_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DispositivoIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DispositivoOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/notificaciones": {
+      "get": {
+        "tags": [
+          "notificaciones"
+        ],
+        "summary": "Notificaciones push del cliente (bandeja)",
+        "operationId": "listar_notificaciones_v1_notificaciones_get",
+        "parameters": [
+          {
+            "name": "solo_nuevas",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Solo las que la app aún no confirmó",
+              "default": true,
+              "title": "Solo Nuevas"
+            },
+            "description": "Solo las que la app aún no confirmó"
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limite"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NotificacionOut"
+                  },
+                  "title": "Response Listar Notificaciones V1 Notificaciones Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/notificaciones/{notificacion_id}/recibida": {
+      "post": {
+        "tags": [
+          "notificaciones"
+        ],
+        "summary": "La app confirma que ya mostró la notificación",
+        "description": "Confirmarla otra vez no cambia nada. Una notificación ajena responde como inexistente.",
+        "operationId": "marcar_recibida_v1_notificaciones__notificacion_id__recibida_post",
+        "parameters": [
+          {
+            "name": "notificacion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Notificacion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/notificaciones/envios-fallidos": {
+      "get": {
+        "tags": [
+          "notificaciones"
+        ],
+        "summary": "Envíos que agotaron sus reintentos (operador)",
+        "operationId": "envios_fallidos_v1_notificaciones_envios_fallidos_get",
+        "parameters": [
+          {
+            "name": "limite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limite"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EnvioFallidoOut"
+                  },
+                  "title": "Response Envios Fallidos V1 Notificaciones Envios Fallidos Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "DispositivoIn": {
+        "properties": {
+          "dispositivo_id": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "title": "Dispositivo Id",
+            "description": "Lo genera la app; en un push real sería el token de FCM"
+          },
+          "idioma": {
+            "type": "string",
+            "enum": [
+              "es-CO",
+              "en-US"
+            ],
+            "title": "Idioma",
+            "description": "El idioma del teléfono: el de los textos que recibirá el cliente"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dispositivo_id",
+          "idioma"
+        ],
+        "title": "DispositivoIn"
+      },
+      "DispositivoOut": {
+        "properties": {
+          "dispositivo_id": {
+            "type": "string",
+            "title": "Dispositivo Id"
+          },
+          "idioma": {
+            "type": "string",
+            "title": "Idioma"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dispositivo_id",
+          "idioma"
+        ],
+        "title": "DispositivoOut"
+      },
+      "EnvioFallidoOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "canal": {
+            "type": "string",
+            "title": "Canal"
+          },
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "intentos": {
+            "type": "integer",
+            "title": "Intentos"
+          },
+          "ultimo_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultimo Error"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "canal",
+          "tipo",
+          "cliente_id",
+          "intentos",
+          "ultimo_error",
+          "creado_en"
+        ],
+        "title": "EnvioFallidoOut"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "NotificacionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "titulo": {
+            "type": "string",
+            "title": "Titulo"
+          },
+          "texto": {
+            "type": "string",
+            "title": "Texto"
+          },
+          "titulo_publico": {
+            "type": "string",
+            "title": "Titulo Publico",
+            "description": "Lo que se ve con la pantalla de bloqueo: sin datos de la póliza"
+          },
+          "texto_publico": {
+            "type": "string",
+            "title": "Texto Publico"
+          },
+          "prioridad": {
+            "type": "string",
+            "enum": [
+              "ALTA",
+              "NORMAL"
+            ],
+            "title": "Prioridad"
+          },
+          "idioma": {
+            "type": "string",
+            "title": "Idioma"
+          },
+          "suscripcion_id": {
+            "type": "string",
+            "title": "Suscripcion Id"
+          },
+          "creada_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creada En"
+          },
+          "recibida": {
+            "type": "boolean",
+            "title": "Recibida"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tipo",
+          "titulo",
+          "texto",
+          "titulo_publico",
+          "texto_publico",
+          "prioridad",
+          "idioma",
+          "suscripcion_id",
+          "creada_en",
+          "recibida"
+        ],
+        "title": "NotificacionOut"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

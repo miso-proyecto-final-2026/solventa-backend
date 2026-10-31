@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [identidad, cotizacion, perfilamiento, suscripcion, siniestros, pagos]
+        service: [identidad, cotizacion, perfilamiento, suscripcion, siniestros, pagos, notificaciones]
     defaults:
       run:
         working-directory: services/${{ matrix.service }}
@@ -49,6 +49,9 @@ jobs:
       - name: Cobertura mínima del 80 % en los módulos de negocio de pagos
         if: matrix.service == 'pagos'
         run: coverage report --include="app/pagos/*" --fail-under=80
+      - name: Cobertura mínima del 80 % en los módulos de negocio de notificaciones
+        if: matrix.service == 'notificaciones'
+        run: coverage report --include="app/notificaciones/*" --fail-under=80
       - name: Publicar reportes de pruebas
         if: always()
         uses: actions/upload-artifact@v4
@@ -112,7 +115,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [identidad, cotizacion, perfilamiento, suscripcion, siniestros, pagos]
+        service: [identidad, cotizacion, perfilamiento, suscripcion, siniestros, pagos, notificaciones]
     steps:
       - uses: actions/checkout@v4
       - name: Construir imagen Docker
