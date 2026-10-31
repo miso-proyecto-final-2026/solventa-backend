@@ -26,18 +26,22 @@ def _jwt(rol="OPERADOR", **cambios):
 
 
 @pytest.fixture
-async def api(fabrica):
+async def api(fabrica, reloj):
     app = FastAPI()
     app.include_router(router)
     registrar_errores(app)
     app.state.identidad = IdentidadFalsa()
     app.state.fabrica = fabrica
+    app.state.reloj = reloj
     app.state.verificador_operador = VerificadorJwtHs256(SECRETO, EMISOR)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
         yield c
 
 
-async def _con_notificacion(armar, fabrica, **opciones):
+async def _con_notificacion(armar, fabrica, api=None, **opciones):
+    """Emite una póliza. Con `api`, el cliente 1 registra antes su dispositivo: la bandeja solo entrega lo posterior."""
+    if api is not None:
+        await api.post("/v1/dispositivos", json={**DISPOSITIVO, "idioma": "es-CO"}, headers=TOKEN_1)
     servicio = armar(**opciones)
     await _recibir(servicio, fabrica, poliza_emitida())
     await servicio.procesar_pendientes()
@@ -78,7 +82,7 @@ async def test_el_dispositivo_exige_una_sesion_de_cliente_valida(api):
 # --- bandeja del push (criterio 2) -----------------------------------------------------------------------------------
 
 async def test_el_cliente_ve_su_notificacion_con_prioridad_alta_y_su_version_publica(api, armar, fabrica):
-    await _con_notificacion(armar, fabrica)
+    await _con_notificacion(armar, fabrica, api)
 
     r = await api.get("/v1/notificaciones", headers=TOKEN_1)
 
@@ -91,13 +95,13 @@ async def test_el_cliente_ve_su_notificacion_con_prioridad_alta_y_su_version_pub
 
 
 async def test_cada_cliente_ve_solo_las_suyas(api, armar, fabrica):
-    await _con_notificacion(armar, fabrica)
+    await _con_notificacion(armar, fabrica, api)
 
     assert (await api.get("/v1/notificaciones", headers=TOKEN_2)).json() == []
 
 
 async def test_confirmar_la_recepcion_la_saca_de_las_nuevas_pero_la_deja_en_el_historial(api, armar, fabrica):
-    await _con_notificacion(armar, fabrica)
+    await _con_notificacion(armar, fabrica, api)
     (n,) = (await api.get("/v1/notificaciones", headers=TOKEN_1)).json()
 
     r = await api.post(f"/v1/notificaciones/{n['id']}/recibida", headers=TOKEN_1)
@@ -110,7 +114,7 @@ async def test_confirmar_la_recepcion_la_saca_de_las_nuevas_pero_la_deja_en_el_h
 
 
 async def test_confirmar_una_notificacion_ajena_o_inexistente_responde_igual(api, armar, fabrica):
-    await _con_notificacion(armar, fabrica)
+    await _con_notificacion(armar, fabrica, api)
     (n,) = (await api.get("/v1/notificaciones", headers=TOKEN_1)).json()
 
     ajena = await api.post(f"/v1/notificaciones/{n['id']}/recibida", headers=TOKEN_2)
@@ -174,3 +178,18 @@ async def test_solo_un_operador_con_un_jwt_valido_ve_los_envios_fallidos(api, ca
     r = await api.get("/v1/notificaciones/envios-fallidos", headers=cabeceras)
 
     assert r.status_code == estado and r.json()["error"]["trace_id"]
+
+
+async def test_lo_anterior_al_dispositivo_no_se_entrega_como_nuevo_pero_queda_en_el_historial(api, armar, fabrica, reloj):
+    await _con_notificacion(armar, fabrica)  # la póliza se emitió antes de que el cliente registrara su teléfono
+    reloj.avanzar(60)
+    await api.post("/v1/dispositivos", json=DISPOSITIVO, headers=TOKEN_1)
+
+    assert (await api.get("/v1/notificaciones", headers=TOKEN_1)).json() == []
+    assert len((await api.get("/v1/notificaciones", params={"solo_nuevas": "false"}, headers=TOKEN_1)).json()) == 1
+
+
+async def test_sin_dispositivo_registrado_no_hay_nada_nuevo_que_entregar(api, armar, fabrica):
+    await _con_notificacion(armar, fabrica)
+
+    assert (await api.get("/v1/notificaciones", headers=TOKEN_1)).json() == []

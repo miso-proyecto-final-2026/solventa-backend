@@ -29,7 +29,7 @@ Publicados en el borde: `/v1/dispositivos` y `/v1/notificaciones`.
 | Método y ruta | Quién | Qué hace |
 |---|---|---|
 | `POST /v1/dispositivos` | cliente | Registra el dispositivo (lo genera la app) y su idioma. Idempotente. |
-| `GET /v1/notificaciones` | cliente | La bandeja del push: por defecto solo las nuevas (`solo_nuevas=true`). |
+| `GET /v1/notificaciones` | cliente | La bandeja del push: por defecto solo las nuevas (`solo_nuevas=true`), es decir, las no confirmadas y creadas desde que el cliente registró su primer dispositivo. |
 | `POST /v1/notificaciones/{id}/recibida` | cliente | La app confirma que ya la mostró. Una ajena responde 404. |
 | `GET /v1/notificaciones/envios-fallidos` | operador (JWT) | Envíos que agotaron sus reintentos: canal, intentos y nombre del error, sin correo. |
 
