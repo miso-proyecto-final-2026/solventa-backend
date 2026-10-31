@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 from datetime import datetime
 from typing import Annotated, Literal
 
@@ -77,10 +78,46 @@ def _salida_documento(d: DocumentoParaFirmar) -> DocumentoFirmaOut:
     )
 
 
+def _ip_valida(texto: str) -> str | None:
+    try:
+        return str(ipaddress.ip_address(texto.strip()))
+    except ValueError:
+        return None
+
+
+def _sin_puerto(direccion: str) -> str:
+    """`ip:puerto` (IPv4), `[ip]:puerto` o IPv6 con el puerto al final, como lo escribe CloudFront."""
+    direccion = direccion.strip()
+    if direccion.startswith("["):
+        return direccion[1:].split("]", 1)[0]
+    if direccion.count(":") == 1:
+        return direccion.split(":", 1)[0]
+    if direccion.count(":") > 1 and _ip_valida(direccion) is None:
+        return direccion.rsplit(":", 1)[0]
+    return direccion
+
+
 def _ip(request: Request) -> str | None:
-    """La IP del cliente: la primera de `X-Forwarded-For` (detrás de CloudFront y el API Gateway) o la del socket."""
-    reenviada = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-    return reenviada or (request.client.host if request.client else None)
+    """IP del firmante para la evidencia de no repudio. Es el mismo criterio que usa MS Identidad en la auditoría.
+
+    1. `CloudFront-Viewer-Address`: la pone CloudFront y sobrescribe lo que envíe el visitante, así que no se puede
+       falsificar por el borde público. El API Gateway no reenvía `X-Forwarded-For` (lo convierte en `Forwarded`), por eso
+       la IP del socket sería la del balanceador.
+    2. La primera de `X-Forwarded-For` (balanceadores que sí lo envían).
+    3. La del socket.
+    Un valor que no sea una IP se descarta.
+    """
+    cabeceras = request.headers
+    candidatos = [
+        _sin_puerto(cabeceras.get("cloudfront-viewer-address", "")),
+        cabeceras.get("x-forwarded-for", "").split(",")[0],
+        request.client.host if request.client else "",
+    ]
+    for candidato in candidatos:
+        ip = _ip_valida(candidato) if candidato else None
+        if ip:
+            return ip[:45]
+    return None
 
 
 @router.get("/{suscripcion_id}/documento-firma", response_model=DocumentoFirmaOut, summary="Documento por firmar (hash y vencimiento)")

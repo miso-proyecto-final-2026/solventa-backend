@@ -13,7 +13,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, Header, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.pagos.dominio import parece_pan
+from app.pagos.dominio import identificador_parece_pan
 from app.pagos.errores import (
     DatoDeTarjetaNoPermitido,
     NoAutenticado,
@@ -48,7 +48,7 @@ Servicio = Annotated[ServicioCobros, Depends(obtener_servicio)]
 
 
 def _sin_pan(valor: str) -> str:
-    if parece_pan(valor):
+    if identificador_parece_pan(valor):
         raise DatoDeTarjetaNoPermitido
     return valor
 
