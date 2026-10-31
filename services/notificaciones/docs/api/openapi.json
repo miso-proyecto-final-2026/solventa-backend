@@ -79,11 +79,11 @@
             "required": false,
             "schema": {
               "type": "boolean",
-              "description": "Solo las que la app aún no confirmó",
+              "description": "Solo las que la app aún no confirmó y se crearon desde que el cliente registró su dispositivo",
               "default": true,
               "title": "Solo Nuevas"
             },
-            "description": "Solo las que la app aún no confirmó"
+            "description": "Solo las que la app aún no confirmó y se crearon desde que el cliente registró su dispositivo"
           },
           {
             "name": "limite",

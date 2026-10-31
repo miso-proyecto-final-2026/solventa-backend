@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import Engine, create_engine, event, select
+from sqlalchemy import Engine, create_engine, event, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -130,9 +130,16 @@ def envios_de_evento(sesion: Session, evento_origen_id: str) -> list[EnvioDB]:
 # --- bandeja del push simulado ---------------------------------------------------------------------------------------
 
 def bandeja_de(sesion: Session, cliente_id: str, *, solo_nuevas: bool, limite: int) -> list[BandejaPushDB]:
+    """Las «nuevas» son lo que la app aún no mostró y se creó desde que el cliente registró su primer dispositivo.
+
+    Como en un push real, un dispositivo no recibe lo anterior a su existencia: sin esto, abrir la app la primera vez
+    lanzaría de golpe los avisos de pólizas viejas. Sin dispositivo registrado no hay nada que entregar. El historial
+    (`solo_nuevas=False`) devuelve todo.
+    """
     consulta = select(BandejaPushDB).where(BandejaPushDB.cliente_id == cliente_id)
     if solo_nuevas:
-        consulta = consulta.where(BandejaPushDB.recibida_en.is_(None))
+        primer_dispositivo = select(func.min(DispositivoDB.creado_en)).where(DispositivoDB.cliente_id == cliente_id).scalar_subquery()
+        consulta = consulta.where(BandejaPushDB.recibida_en.is_(None), BandejaPushDB.creado_en >= primer_dispositivo)
     return list(sesion.execute(consulta.order_by(BandejaPushDB.creado_en.desc()).limit(limite)).scalars())
 
 

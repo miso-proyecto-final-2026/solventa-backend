@@ -57,6 +57,12 @@ class EnvioFallidoOut(BaseModel):
     creado_en: datetime
 
 
+def _ahora(request: Request) -> datetime:
+    """La hora de la API; las pruebas la sustituyen por el reloj del servicio para ordenar dispositivo y notificación."""
+    reloj = getattr(request.app.state, "reloj", None)
+    return reloj() if reloj is not None else datetime.now(UTC)
+
+
 def _utc(valor: datetime) -> datetime:
     return valor if valor.tzinfo else valor.replace(tzinfo=UTC)
 
@@ -83,7 +89,7 @@ async def registrar_dispositivo(cuerpo: DispositivoIn, request: Request, cliente
 
     def guardar() -> None:
         with _fabrica(request)() as s, s.begin():
-            repo.registrar_dispositivo(s, cliente_id, cuerpo.dispositivo_id, cuerpo.idioma, datetime.now(UTC))
+            repo.registrar_dispositivo(s, cliente_id, cuerpo.dispositivo_id, cuerpo.idioma, _ahora(request))
 
     await asyncio.to_thread(guardar)
     return DispositivoOut(dispositivo_id=cuerpo.dispositivo_id, idioma=cuerpo.idioma)
@@ -93,7 +99,7 @@ async def registrar_dispositivo(cuerpo: DispositivoIn, request: Request, cliente
 async def listar_notificaciones(
     request: Request,
     cliente_id: ClienteActual,
-    solo_nuevas: Annotated[bool, Query(description="Solo las que la app aún no confirmó")] = True,
+    solo_nuevas: Annotated[bool, Query(description="Solo las que la app aún no confirmó y se crearon desde que el cliente registró su dispositivo")] = True,
     limite: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> list[NotificacionOut]:
     def leer() -> list[NotificacionOut]:
@@ -109,7 +115,7 @@ async def marcar_recibida(notificacion_id: str, request: Request, cliente_id: Cl
 
     def marcar() -> bool:
         with _fabrica(request)() as s, s.begin():
-            return repo.marcar_recibida(s, cliente_id, notificacion_id, datetime.now(UTC))
+            return repo.marcar_recibida(s, cliente_id, notificacion_id, _ahora(request))
 
     if not await asyncio.to_thread(marcar):
         raise NotificacionNoEncontrada
