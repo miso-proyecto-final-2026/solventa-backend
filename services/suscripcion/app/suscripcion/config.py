@@ -39,6 +39,11 @@ class ConfigSuscripcion:
     # Token del asesor (HU39, ADR-0008): lo firma Identidad y aquí se valida. Sin secreto, solo arranca en desarrollo.
     asesor_jwt_secreto: str | None = None
     asesor_jwt_emisor: str = "solventa-identidad"
+    # Certificado de cobertura (HU22). Sin clave de enlaces, la descarga por enlace responde 503 y el resto sigue.
+    certificados_clave_enlaces: str | None = None
+    certificados_vigencia_enlace_h: int = 24  # provisional: ningún documento define el plazo
+    # Claves de los servicios que llaman a las rutas internas (Notificaciones), separadas por coma.
+    claves_de_servicio: tuple[str, ...] = ()
 
     @classmethod
     def desde_entorno(cls, env: dict[str, str] | None = None) -> ConfigSuscripcion:
@@ -62,4 +67,7 @@ class ConfigSuscripcion:
             polizas_reintento_maximo_s=float(e.get("POLIZAS_REINTENTO_MAXIMO_S", "300")),
             firma_sim_otp=e.get("FIRMA_SIM_OTP") or "123456",
             firma_barrido_s=float(e.get("FIRMA_BARRIDO_S", "30")),
+            certificados_clave_enlaces=e.get("CERTIFICADOS_CLAVE_ENLACES") or None,
+            certificados_vigencia_enlace_h=int(e.get("CERTIFICADOS_VIGENCIA_ENLACE_H", "24")),
+            claves_de_servicio=tuple(c.strip() for c in e.get("SUSCRIPCION_SERVICE_KEYS", "").split(",") if c.strip()),
         )

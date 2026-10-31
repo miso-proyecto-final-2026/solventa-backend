@@ -1,0 +1,66 @@
+# Textos del certificado de cobertura (HU22), por idioma. Es la plantilla propia del servicio. El certificado solo repite
+# lo que ya dice la póliza emitida (HU20, HU21): no calcula nada ni agrega condiciones.
+# Un producto o un amparo que no esté aquí no hace fallar la generación: se muestra con su clave.
+version: "v1"
+
+idiomas:
+  es-CO:
+    titulo: Certificado de cobertura
+    estado_activa: Cobertura activa
+    numero_poliza: Número de póliza
+    asegurado: Asegurado
+    documento: Documento
+    producto: Producto
+    vigencia: Vigencia
+    vigencia_valor: "Desde el {desde} hasta el {hasta}"
+    emision: Fecha de emisión
+    prima: Prima
+    prima_anual: "{valor} al año"
+    prima_mensual: "{valor} al mes"
+    coberturas: Coberturas
+    amparo: Amparo
+    monto: Monto
+    deducible: Deducible
+    sin_deducible: No aplica
+    nota: >-
+      Este certificado acredita que la póliza indicada fue emitida y está vigente en los términos de la póliza firmada
+      por el asegurado. Si hay diferencias, rige la póliza.
+    generado: Certificado generado de forma automática por Solventa.
+    productos:
+      microseguro_vida: Microseguro de vida
+      proteccion_dispositivos: Protección de dispositivos
+    amparos:
+      muerte: Muerte
+      incapacidad_total: Incapacidad total
+      dano_accidental: Daño accidental
+      robo: Robo
+  en-US:
+    titulo: Certificate of coverage
+    estado_activa: Active coverage
+    numero_poliza: Policy number
+    asegurado: Insured
+    documento: Document
+    producto: Product
+    vigencia: Term
+    vigencia_valor: "From {desde} to {hasta}"
+    emision: Issue date
+    prima: Premium
+    prima_anual: "{valor} per year"
+    prima_mensual: "{valor} per month"
+    coberturas: Coverages
+    amparo: Coverage
+    monto: Amount
+    deducible: Deductible
+    sin_deducible: Not applicable
+    nota: >-
+      This certificate states that the policy above was issued and is in force under the terms of the policy signed by
+      the insured. If they differ, the policy prevails.
+    generado: Certificate generated automatically by Solventa.
+    productos:
+      microseguro_vida: Micro life insurance
+      proteccion_dispositivos: Device protection
+    amparos:
+      muerte: Death
+      incapacidad_total: Total disability
+      dano_accidental: Accidental damage
+      robo: Theft

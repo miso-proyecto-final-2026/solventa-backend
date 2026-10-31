@@ -214,6 +214,12 @@ async def consultar(
     return a_salida(susc, revision=bool(revisiones), poliza=poliza)
 
 
+class CoberturaOut(BaseModel):
+    tipo: str
+    monto: int
+    deducible: int
+
+
 class PolizaOut(BaseModel):
     """Metadatos de la póliza. No trae URL de descarga: la entrega del documento es de HU22."""
 
@@ -234,6 +240,8 @@ class PolizaOut(BaseModel):
     prima_anual: int
     prima_mensual: int
     periodicidad_pago: str
+    # Las del momento de la cotización aceptada; vacía en las sagas anteriores a HU20, que no las guardaron.
+    coberturas: list[CoberturaOut] = []
 
 
 def poliza_a_salida(p: PolizaDB, s: SuscripcionDB) -> PolizaOut:
@@ -255,6 +263,9 @@ def poliza_a_salida(p: PolizaDB, s: SuscripcionDB) -> PolizaOut:
         prima_anual=int(s.prima_anual),
         prima_mensual=int(s.prima_mensual),
         periodicidad_pago=s.periodicidad_pago,
+        coberturas=[
+            CoberturaOut(tipo=c["tipo"], monto=int(c["monto"]), deducible=int(c.get("deducible", 0))) for c in (s.coberturas or [])
+        ],
     )
 
 

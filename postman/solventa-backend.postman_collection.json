@@ -2999,6 +2999,164 @@
               }
             }
           ]
+        },
+        {
+          "name": "Contacto del cliente para notificaciones (HU22)",
+          "item": [
+            {
+              "name": "Contacto del cliente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const r = pm.response.json();",
+                      "pm.test('trae el nombre y el correo del cliente', () => { pm.expect(r.cliente_id).to.eql(pm.collectionVariables.get('cliente_id')); pm.expect(r.nombre).to.be.a('string').and.not.empty; pm.expect(r.email).to.include('@'); });",
+                      "pm.test('no expone el documento, el celular ni el apellido', () => { pm.expect(r).to.have.all.keys('cliente_id', 'nombre', 'email'); });"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{service_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/contactos-cliente/{{cliente_id}}",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "contactos-cliente",
+                    "{{cliente_id}}"
+                  ]
+                },
+                "description": "Interno (HU22): solo con clave de servicio y fuera del prefijo de borde /v1/clientes. Lo usa el servicio de Notificaciones para el correo."
+              }
+            },
+            {
+              "name": "Contacto sin clave de servicio",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/contactos-cliente/{{cliente_id}}",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "contactos-cliente",
+                    "{{cliente_id}}"
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Contacto con el token del cliente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401: el token de un cliente no reemplaza la clave de servicio', () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{access_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/contactos-cliente/{{cliente_id}}",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "contactos-cliente",
+                    "{{cliente_id}}"
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Contacto de un cliente inexistente",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 404', () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Service-Key",
+                    "value": "{{service_key}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{identidad_url}}/v1/contactos-cliente/no-existe",
+                  "host": [
+                    "{{identidad_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "contactos-cliente",
+                    "no-existe"
+                  ]
+                },
+                "description": ""
+              }
+            }
+          ]
         }
       ],
       "description": "Registro, consentimiento y KYC. Cada carpeta depende de las variables que deja la anterior: ejecútalas en orden (Runner / Newman)."
@@ -6724,6 +6882,232 @@
               ]
             },
             "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "MS Suscripción — certificado (HU22)",
+      "item": [
+        {
+          "name": "Certificado antes de emitir la póliza",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error estándar SUSCRIPCION_NO_ENCONTRADA', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('SUSCRIPCION_NO_ENCONTRADA'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/{{suscripcion_id}}/certificado",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "{{suscripcion_id}}",
+                "certificado"
+              ]
+            },
+            "description": "La saga de HU15 sigue en el paso COBRO (MS Pagos no está en la cadena de esta colección): aún no hay póliza ni certificado. El camino 200 se prueba en pytest y en staging."
+          }
+        },
+        {
+          "name": "Certificado de otro cliente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error estándar SUSCRIPCION_NO_ENCONTRADA', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('SUSCRIPCION_NO_ENCONTRADA'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{otro_access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/{{suscripcion_id}}/certificado",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "{{suscripcion_id}}",
+                "certificado"
+              ]
+            },
+            "description": "Responde igual que una inexistente: no revela que existe."
+          }
+        },
+        {
+          "name": "Certificado sin sesión",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/{{suscripcion_id}}/certificado",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "{{suscripcion_id}}",
+                "certificado"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Pedir un enlace sin clave de servicio",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error estándar CLAVE_DE_SERVICIO_INVALIDA', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('CLAVE_DE_SERVICIO_INVALIDA'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/interno/certificados/enlaces",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "interno",
+                "certificados",
+                "enlaces"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"poliza_id\": \"p-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Pedir un enlace con el token de un cliente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error estándar CLAVE_DE_SERVICIO_INVALIDA', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('CLAVE_DE_SERVICIO_INVALIDA'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/interno/certificados/enlaces",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "interno",
+                "certificados",
+                "enlaces"
+              ]
+            },
+            "description": "Un token de cliente no reemplaza la clave de servicio.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"poliza_id\": \"p-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         }
       ]

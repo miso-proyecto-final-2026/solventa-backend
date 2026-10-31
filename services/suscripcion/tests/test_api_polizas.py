@@ -84,6 +84,30 @@ async def test_la_billetera_lista_las_polizas_del_cliente_con_estado_vigencia_y_
     assert item["vigencia_desde"] and item["fecha_vencimiento"]
 
 
+async def test_la_billetera_trae_las_coberturas_de_la_cotizacion_aceptada(api, armar, fabrica):
+    """HU22, criterio 4: «Mis pólizas» muestra las coberturas con su monto y deducible."""
+    await _cobrada(armar, fabrica)
+
+    (item,) = (await api.get("/v1/polizas", params={"cliente_id": "cli-1"}, headers=TOKEN_1)).json()["polizas"]
+
+    assert item["coberturas"] == [
+        {"tipo": "muerte", "monto": 40_000_000, "deducible": 0},
+        {"tipo": "incapacidad_total", "monto": 20_000_000, "deducible": 0},
+    ]
+
+
+async def test_una_saga_anterior_a_hu20_sin_coberturas_guardadas_las_devuelve_vacias(api, armar, fabrica):
+    _, susc = await _cobrada(armar, fabrica)
+    from app.suscripcion.modelos_db import SuscripcionDB
+
+    with fabrica() as s, s.begin():
+        s.get(SuscripcionDB, susc.id).coberturas = None
+
+    (item,) = (await api.get("/v1/polizas", params={"cliente_id": "cli-1"}, headers=TOKEN_1)).json()["polizas"]
+
+    assert item["coberturas"] == []
+
+
 async def test_la_billetera_de_un_cliente_sin_polizas_esta_vacia(api):
     r = await api.get("/v1/polizas", params={"cliente_id": "cli-1"}, headers=TOKEN_1)
     assert (r.status_code, r.json()) == (200, {"cliente_id": "cli-1", "polizas": []})
