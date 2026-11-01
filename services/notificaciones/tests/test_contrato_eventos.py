@@ -39,3 +39,31 @@ async def test_el_ejemplo_publicado_produce_los_dos_envios_y_un_correo_con_sus_d
     assert sorted(e.canal for e in envios) == ["CORREO", "PUSH"] and {e.estado for e in envios} == {"ENVIADO"}
     assert {e.evento_origen_id for e in envios} == {_evento().event_id}
     assert publicado["numero_poliza"] in correo.enviados[0].texto
+
+
+async def test_el_ejemplo_de_reenvio_produce_solo_un_correo(armar, fabrica):
+    correo = CorreoFalso()
+    servicio = armar(correo=correo)
+    evento = Evento.model_validate_json((EJEMPLO.parent / "confirmacion_reenvio_solicitada.json").read_text(encoding="utf-8"))
+
+    await _recibir(servicio, fabrica, evento)
+    await servicio.procesar_pendientes()
+
+    with fabrica() as s:
+        (envio,) = s.execute(select(EnvioDB)).scalars()
+    assert (envio.canal, envio.estado) == ("CORREO", "ENVIADO")
+    assert evento.payload["numero_poliza"] in correo.enviados[0].texto
+
+
+async def test_el_ejemplo_de_enlace_de_firma_produce_solo_un_correo(armar, fabrica):
+    correo = CorreoFalso()
+    servicio = armar(correo=correo)
+    evento = Evento.model_validate_json((EJEMPLO.parent / "firma_enlace_solicitada.json").read_text(encoding="utf-8"))
+
+    await _recibir(servicio, fabrica, evento)
+    await servicio.procesar_pendientes()
+
+    with fabrica() as s:
+        (envio,) = s.execute(select(EnvioDB)).scalars()
+    assert (envio.canal, envio.tipo, envio.estado) == ("CORREO", "FIRMA_SOLICITADA", "ENVIADO")
+    assert evento.payload["numero_poliza"] in correo.enviados[0].texto

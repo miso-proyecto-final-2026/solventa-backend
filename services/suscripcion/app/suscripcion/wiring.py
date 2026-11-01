@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 from datetime import timedelta
 
 import httpx
@@ -33,6 +35,7 @@ from app.suscripcion.config import (
     ConfigSuscripcion,
 )
 from app.suscripcion.documento import cargar_plantilla
+from app.suscripcion.enlace_firma import ServicioEnlaceFirma
 from app.suscripcion.firma import ServicioFirma
 from app.suscripcion.firma_asistida import ServicioFirmaAsistida
 from app.suscripcion.modelos_db import TABLA_EVENTOS_PROCESADOS
@@ -108,7 +111,13 @@ def construir_servicio_firma(config: ConfigSuscripcion, engine: Engine, clientes
 
 
 def construir_servicio_asistida(
-    servicio: ServicioSuscripcion, firma: ServicioFirma, engine: Engine, clientes: list[httpx.AsyncClient], config: ConfigSuscripcion
+    servicio: ServicioSuscripcion,
+    firma: ServicioFirma,
+    certificados: ServicioCertificado,
+    enlaces: ServicioEnlaceFirma,
+    engine: Engine,
+    clientes: list[httpx.AsyncClient],
+    config: ConfigSuscripcion,
 ) -> ServicioFirmaAsistida:
     """Venta asistida (HU39): lo que hace el asesor sobre la saga, con los mismos servicios de HU15 y HU21."""
     return ServicioFirmaAsistida(
@@ -116,6 +125,25 @@ def construir_servicio_asistida(
         suscripciones=servicio,
         firma=firma,
         identidad=ClienteIdentidad(clientes[0], config.identidad_key),
+        certificados=certificados,
+        enlaces=enlaces,
+        espera_correo=timedelta(seconds=cargar_reglas().correo_espera_segundos),
+    )
+
+
+def construir_servicio_enlace_firma(config: ConfigSuscripcion, firma: ServicioFirma, engine: Engine) -> ServicioEnlaceFirma:
+    """Firma por enlace (HU39). La clave se deriva de la de los certificados: un token de un tipo no sirve para el otro."""
+    reglas = cargar_reglas()
+    firmador = None
+    if config.certificados_clave_enlaces:
+        clave = hmac.new(config.certificados_clave_enlaces.encode(), b"enlace-firma", hashlib.sha256).hexdigest()
+        firmador = FirmadorEnlaces(clave, timedelta(hours=reglas.firma_enlace_vigencia_horas))
+    return ServicioEnlaceFirma(
+        fabrica=sessionmaker(bind=engine, expire_on_commit=False),
+        firma=firma,
+        firmador=firmador,
+        vigencia=timedelta(hours=reglas.firma_enlace_vigencia_horas),
+        espera_correo=timedelta(seconds=reglas.correo_espera_segundos),
     )
 
 

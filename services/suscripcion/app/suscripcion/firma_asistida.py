@@ -11,15 +11,19 @@ import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.suscripcion import repositorio as repo
 from app.suscripcion.acceso import Asesor
+from app.suscripcion.certificado import Certificado, ServicioCertificado
 from app.suscripcion.clientes import Identidad, ResumenCliente
+from app.suscripcion.enlace_firma import ENVIAR_ENLACE_FIRMA, ServicioEnlaceFirma
 from app.suscripcion.errores import (
     AccesoDenegado,
+    CertificadoNoDisponible,
+    CorreoMuySeguido,
     DependenciaNoDisponible,
     SuscripcionNoEncontrada,
 )
@@ -32,10 +36,12 @@ from app.suscripcion.firma import (
 )
 from app.suscripcion.modelos_db import (
     AuditoriaAsesorDB,
+    EnlaceFirmaDB,
     FirmaDB,
     PolizaDB,
     SuscripcionDB,
 )
+from app.suscripcion.polizas import VIGENTE, encolar_reenvio_confirmacion
 from app.suscripcion.servicio import ServicioSuscripcion
 
 log = logging.getLogger("suscripcion.asistida")
@@ -47,6 +53,8 @@ SOLICITAR_CODIGO = "SOLICITAR_CODIGO"
 FIRMAR = "FIRMAR"
 DESCARGAR_DOCUMENTO = "DESCARGAR_DOCUMENTO"
 DESCARGAR_FIRMADA = "DESCARGAR_FIRMADA"
+DESCARGAR_CERTIFICADO = "DESCARGAR_CERTIFICADO"
+REENVIAR_CONFIRMACION = "REENVIAR_CONFIRMACION"
 
 
 def _ahora() -> datetime:
@@ -59,6 +67,7 @@ class SuscripcionAsistida:
     poliza: PolizaDB | None
     cliente: ResumenCliente | None
     gestionable: bool
+    enlace: EnlaceFirmaDB | None = None
 
 
 class ServicioFirmaAsistida:
@@ -69,12 +78,18 @@ class ServicioFirmaAsistida:
         suscripciones: ServicioSuscripcion,
         firma: ServicioFirma,
         identidad: Identidad,
+        certificados: ServicioCertificado,
+        enlaces: ServicioEnlaceFirma,
+        espera_correo: timedelta = timedelta(seconds=60),
         reloj: Callable[[], datetime] = _ahora,
     ) -> None:
         self._fabrica = fabrica
         self._suscripciones = suscripciones
         self._firma = firma
         self._identidad = identidad
+        self._certificados = certificados
+        self._enlaces = enlaces
+        self._espera_correo = espera_correo
         self._reloj = reloj
 
     # --- acceso y auditoría -----------------------------------------------------------------------------------------
@@ -155,31 +170,40 @@ class ServicioFirmaAsistida:
             log.warning("no se pudo leer el resumen del cliente")
             return None
 
-    def _armar(self, susc: SuscripcionDB, poliza: PolizaDB | None, cliente: ResumenCliente | None) -> SuscripcionAsistida:
+    def _armar(
+        self, susc: SuscripcionDB, poliza: PolizaDB | None, cliente: ResumenCliente | None, enlace: EnlaceFirmaDB | None
+    ) -> SuscripcionAsistida:
         return SuscripcionAsistida(
             suscripcion=susc,
             poliza=poliza,
             cliente=cliente,
             gestionable=firma_gestionable(susc, poliza, self._firma.vence_en(susc), self._reloj()),
+            enlace=enlace,
         )
 
     async def listar(
         self, asesor: Asesor, *, estado: str | None, pagina: int, tamano: int
     ) -> tuple[list[SuscripcionAsistida], int]:
-        def leer() -> tuple[list[tuple[SuscripcionDB, PolizaDB | None]], int]:
+        def leer() -> tuple[list[tuple[SuscripcionDB, PolizaDB | None]], int, dict[str, EnlaceFirmaDB]]:
             with self._fabrica() as s:
-                return repo.suscripciones_de_asesor(s, asesor.id, estado=estado, pagina=pagina, tamano=tamano)
+                filas, total = repo.suscripciones_de_asesor(s, asesor.id, estado=estado, pagina=pagina, tamano=tamano)
+                return filas, total, repo.ultimos_enlaces(s, [susc.id for susc, _ in filas])
 
-        filas, total = await asyncio.to_thread(leer)
+        filas, total, enlaces = await asyncio.to_thread(leer)
         # Una consulta por cliente distinto de la página, acotada por `tamano`.
         ids = list({s.cliente_id for s, _ in filas})
         resumenes = dict(zip(ids, await asyncio.gather(*(self._resumen(i) for i in ids)), strict=True))
-        return [self._armar(s, p, resumenes[s.cliente_id]) for s, p in filas], total
+        return [self._armar(s, p, resumenes[s.cliente_id], enlaces.get(s.id)) for s, p in filas], total
 
     async def detalle(self, suscripcion_id: str, asesor: Asesor) -> SuscripcionAsistida:
         susc = await asyncio.to_thread(self._autorizar, suscripcion_id, asesor)
         poliza = await asyncio.to_thread(self._suscripciones.poliza_de_suscripcion, suscripcion_id)
-        return self._armar(susc, poliza, await self._resumen(susc.cliente_id))
+
+        def enlace() -> EnlaceFirmaDB | None:
+            with self._fabrica() as s:
+                return repo.ultimos_enlaces(s, [suscripcion_id]).get(suscripcion_id)
+
+        return self._armar(susc, poliza, await self._resumen(susc.cliente_id), await asyncio.to_thread(enlace))
 
     # --- firmar -----------------------------------------------------------------------------------------------------
 
@@ -226,3 +250,36 @@ class ServicioFirmaAsistida:
         async with self._auditando(asesor, DESCARGAR_FIRMADA, suscripcion_id):
             susc = await asyncio.to_thread(self._autorizar, suscripcion_id, asesor)
             return await self._firma.copia_firmada_como(suscripcion_id, susc.cliente_id)
+
+    # --- firma por enlace ---------------------------------------------------------------------------------------------
+
+    async def enviar_enlace_firma(self, suscripcion_id: str, asesor: Asesor) -> EnlaceFirmaDB:
+        """Envía o reenvía el enlace por correo. Reenviar invalida el anterior (criterio 7)."""
+        async with self._auditando(asesor, ENVIAR_ENLACE_FIRMA, suscripcion_id):
+            await asyncio.to_thread(self._autorizar, suscripcion_id, asesor)
+            return await asyncio.to_thread(self._enlaces.crear, suscripcion_id, asesor.id)
+
+    # --- certificado y confirmación -----------------------------------------------------------------------------------
+
+    async def certificado(self, suscripcion_id: str, asesor: Asesor, idioma: str) -> Certificado:
+        """El mismo certificado del titular (HU22), para los clientes que este asesor atendió (ADR-0021)."""
+        async with self._auditando(asesor, DESCARGAR_CERTIFICADO, suscripcion_id):
+            susc = await asyncio.to_thread(self._autorizar, suscripcion_id, asesor)
+            return await self._certificados.descargar_como(suscripcion_id, susc.cliente_id, idioma)
+
+    async def reenviar_confirmacion(self, suscripcion_id: str, asesor: Asesor) -> None:
+        """Pide a Notificaciones otro correo de confirmación. La entrega es asíncrona: aquí solo se registra la solicitud."""
+        async with self._auditando(asesor, REENVIAR_CONFIRMACION, suscripcion_id):
+            await asyncio.to_thread(self._autorizar, suscripcion_id, asesor)
+            await asyncio.to_thread(self._encolar_reenvio, suscripcion_id)
+
+    def _encolar_reenvio(self, suscripcion_id: str) -> None:
+        ahora = self._reloj()
+        with self._fabrica() as s, s.begin():
+            susc = repo.obtener(s, suscripcion_id)
+            poliza = repo.poliza_de_suscripcion(s, suscripcion_id)
+            if poliza is None or poliza.estado != VIGENTE:
+                raise CertificadoNoDisponible
+            if repo.accion_reciente(s, suscripcion_id, REENVIAR_CONFIRMACION, ahora, self._espera_correo):
+                raise CorreoMuySeguido
+            encolar_reenvio_confirmacion(s, poliza, susc, ahora)

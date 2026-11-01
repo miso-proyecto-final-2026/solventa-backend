@@ -31,3 +31,8 @@ reportes_negativos:
 firma:
   vigencia_horas: 24                # desde el cobro confirmado; vencida, la saga compensa el cobro
   max_intentos_autenticacion: 3     # códigos OTP erróneos antes de dar la firma por fallida
+  enlace_vigencia_horas: 24         # enlace de firma por correo (HU39), confirmado; nunca pasa del vencimiento de la firma
+
+# Correos que el asesor pide desde la consola (HU39). PROVISIONAL: protege del doble clic, no es un límite estricto.
+correo:
+  espera_entre_envios_segundos: 60

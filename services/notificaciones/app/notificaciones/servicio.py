@@ -27,7 +27,7 @@ from app.contexto import correlacion_id
 from app.eventos import Evento
 from app.notificaciones import plantillas
 from app.notificaciones import repositorio as repo
-from app.notificaciones.clientes import Certificados, Identidad
+from app.notificaciones.clientes import Certificados, Contacto, Identidad
 from app.notificaciones.dominio import (
     Canal,
     CanalCorreo,
@@ -41,7 +41,17 @@ from app.notificaciones.modelos_db import EnvioDB
 log = logging.getLogger("notificaciones")
 
 POLIZA_EMITIDA = "poliza_emitida"
+# El asesor pide otro correo desde la consola (HU39). Solo el correo: el push ya avisó de la emisión.
+REENVIO_CONFIRMACION = "confirmacion_reenvio_solicitada"
+# El asesor envía al cliente el enlace para firmar (HU39). Solo por correo, sin póliza emitida todavía.
+FIRMA_ENLACE = "firma_enlace_solicitada"
+CANALES_POR_EVENTO = {
+    POLIZA_EMITIDA: (Canal.PUSH, Canal.CORREO),
+    REENVIO_CONFIRMACION: (Canal.CORREO,),
+    FIRMA_ENLACE: (Canal.CORREO,),
+}
 CAMPOS_REQUERIDOS = ("poliza_id", "suscripcion_id", "cliente_id", "numero_poliza", "producto", "vigencia_desde", "fecha_vencimiento")
+CAMPOS_ENLACE_FIRMA = ("enlace_id", "suscripcion_id", "cliente_id", "numero_poliza", "producto", "vence_en")
 
 
 def _ahora() -> datetime:
@@ -58,6 +68,7 @@ class _Pendiente:
     """Lo que el envío necesita, leído antes de salir a la red (la sesión ya está cerrada)."""
 
     id: str
+    tipo: str
     canal: str
     cliente_id: str
     idioma: str
@@ -94,24 +105,28 @@ class ServicioNotificaciones:
 
     async def manejar_evento(self, evento: Evento, sesion: Session) -> None:
         """Manejador del consumidor de `solventa.polizas.ciclovida` (corre en la transacción de la plantilla)."""
-        if evento.event_type != POLIZA_EMITIDA:
+        canales = CANALES_POR_EVENTO.get(evento.event_type)
+        if canales is None:
             log.info("evento ignorado event_type=%s event_id=%s", evento.event_type, evento.event_id)
             return
-        faltan = [c for c in CAMPOS_REQUERIDOS if not evento.payload.get(c)]
+        es_firma = evento.event_type == FIRMA_ENLACE
+        campos = CAMPOS_ENLACE_FIRMA if es_firma else CAMPOS_REQUERIDOS
+        faltan = [c for c in campos if not evento.payload.get(c)]
         if faltan:
             # Un evento mal formado no mejora al reintentarlo: el consumidor lo manda a la cola de fallidos.
-            raise ValueError(f"poliza_emitida sin: {', '.join(faltan)}")
-        datos = {c: str(evento.payload[c]) for c in CAMPOS_REQUERIDOS}
+            raise ValueError(f"{evento.event_type} sin: {', '.join(faltan)}")
+        datos = {c: str(evento.payload[c]) for c in campos}
+        tipo = TipoNotificacion.FIRMA_SOLICITADA if es_firma else TipoNotificacion.POLIZA_EMITIDA
         cliente_id = datos["cliente_id"]
         idioma = repo.idioma_de(sesion, cliente_id)
         ahora = self._reloj()
-        for canal in (Canal.PUSH, Canal.CORREO):
+        for canal in canales:
             creado = repo.crear_envio(
                 sesion,
                 EnvioDB(
                     id=str(uuid4()),
                     evento_origen_id=evento.event_id,
-                    tipo=TipoNotificacion.POLIZA_EMITIDA.value,
+                    tipo=tipo.value,
                     canal=canal.value,
                     cliente_id=cliente_id,
                     idioma=idioma,
@@ -124,8 +139,8 @@ class ServicioNotificaciones:
                 ),
             )
             log.info(
-                "envio %s canal=%s poliza_id=%s event_id=%s",
-                "registrado" if creado else "repetido (omitido)", canal.value, datos["poliza_id"], evento.event_id,
+                "envio %s canal=%s tipo=%s suscripcion_id=%s event_id=%s",
+                "registrado" if creado else "repetido (omitido)", canal.value, tipo.value, datos["suscripcion_id"], evento.event_id,
             )
 
     # --- 2. entregar ----------------------------------------------------------------------------------------------
@@ -180,7 +195,7 @@ class ServicioNotificaciones:
                     continue
                 e.intentos += 1
                 e.proximo_intento_en = ahora + timedelta(seconds=self.espera(e.intentos))
-                tomados.append(_Pendiente(e.id, e.canal, e.cliente_id, e.idioma, dict(e.datos)))
+                tomados.append(_Pendiente(e.id, e.tipo, e.canal, e.cliente_id, e.idioma, dict(e.datos)))
         return tomados
 
     def _agotar(self, e: EnvioDB, error: str) -> None:
@@ -200,6 +215,8 @@ class ServicioNotificaciones:
         contacto = await self._identidad.contacto(p.cliente_id)
         if contacto is None:
             raise ErrorEnvio("ClienteSinContacto")
+        if p.tipo == TipoNotificacion.FIRMA_SOLICITADA.value:
+            return await self._entregar_enlace_firma(p, contacto)
         enlace = enlace_vence = None
         if self._url_publica:
             emitido = await self._certificados.emitir_enlace(p.datos["poliza_id"], p.idioma)
@@ -217,6 +234,25 @@ class ServicioNotificaciones:
             enlace_vence=enlace_vence,
         )
         return await self._correo.enviar(correo)
+
+    async def _entregar_enlace_firma(self, p: _Pendiente, contacto: Contacto) -> str:
+        """El token se pide al entregar: no viaja por Kafka ni se guarda. Sin enlace este correo no sirve, así que no sale."""
+        if not self._url_publica:
+            raise ErrorEnvio("SinUrlPublica")
+        emitido = await self._certificados.token_enlace_firma(p.datos["enlace_id"], p.idioma)
+        if emitido is None:
+            raise ErrorEnvio("EnlaceNoVigente")  # lo reemplazaron o venció mientras se reintentaba
+        return await self._correo.enviar(
+            plantillas.construir_correo_firma(
+                destinatario=contacto.email,
+                nombre=contacto.nombre or None,
+                idioma=p.idioma,
+                numero_poliza=p.datos["numero_poliza"],
+                producto=p.datos["producto"],
+                enlace=f"{self._url_publica}{emitido.ruta}",
+                vence=emitido.vence_en,
+            )
+        )
 
     def _marcar_enviado(self, envio_id: str, referencia: str) -> None:
         ahora = self._reloj()

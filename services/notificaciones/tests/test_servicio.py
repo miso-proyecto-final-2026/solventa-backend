@@ -4,6 +4,7 @@ import logging
 from datetime import UTC, datetime
 
 import pytest
+from app.eventos import Evento
 from app.notificaciones import repositorio as repo
 from app.notificaciones.modelos_db import BandejaPushDB, EnvioDB
 from sqlalchemy import select
@@ -15,6 +16,7 @@ from tests.dobles import (
     CorreoFalso,
     IdentidadFalsa,
     PushFalso,
+    payload,
     poliza_emitida,
 )
 
@@ -326,3 +328,128 @@ async def test_el_vencimiento_del_enlace_se_muestra_en_la_fecha_de_colombia_y_no
     await servicio.procesar_pendientes()
 
     assert "vence el 31 de octubre de 2026" in correo.enviados[0].texto
+
+
+# --- reenvío de la confirmación (HU39) -----------------------------------------------------------------------------------
+
+def _reenvio(**cambios) -> Evento:
+    return Evento(
+        event_type="confirmacion_reenvio_solicitada", source="ms-suscripcion", correlation_id="susc-1", payload=payload(**cambios)
+    )
+
+
+async def test_el_reenvio_entrega_otro_correo_con_enlace_y_sin_otro_push(armar, fabrica):
+    correo = CorreoFalso()
+    servicio = armar(correo=correo)
+    await _recibir(servicio, fabrica, poliza_emitida())
+    await servicio.procesar_pendientes()
+
+    await _recibir(servicio, fabrica, _reenvio())
+    await servicio.procesar_pendientes()
+
+    assert sorted(e.canal for e in _envios(fabrica)) == ["CORREO", "CORREO", "PUSH"]
+    assert {e.estado for e in _envios(fabrica)} == {"ENVIADO"}
+    assert len(correo.enviados) == 2 and "36GBQKV2CWMM3EBB8Q6Q" in correo.enviados[1].texto
+    assert len(_bandeja(fabrica)) == 1
+
+
+async def test_reentregar_un_reenvio_no_duplica_el_correo(armar, fabrica):
+    correo = CorreoFalso()
+    servicio = armar(correo=correo)
+    evento = _reenvio()
+
+    await _recibir(servicio, fabrica, evento)
+    await _recibir(servicio, fabrica, evento)
+    await servicio.procesar_pendientes()
+
+    assert len(_envios(fabrica)) == 1 and len(correo.enviados) == 1
+
+
+async def test_un_reenvio_mal_formado_se_rechaza_para_que_vaya_a_la_cola_de_fallidos(armar, fabrica):
+    with pytest.raises(ValueError, match="confirmacion_reenvio_solicitada sin: cliente_id"):
+        await _recibir(armar(), fabrica, _reenvio(cliente_id=None))
+
+
+# --- enlace de firma (HU39) -----------------------------------------------------------------------------------------------
+
+def _enlace_firma(**cambios) -> Evento:
+    cuerpo = {
+        "enlace_id": "enl-1",
+        "suscripcion_id": "susc-1",
+        "cliente_id": "cli-1",
+        "numero_poliza": "36GBQKV2CWMM3EBB8Q6Q",
+        "producto": "microseguro_vida",
+        "vence_en": "2026-11-02T20:00:00+00:00",
+        **cambios,
+    }
+    return Evento(
+        event_type="firma_enlace_solicitada",
+        source="ms-suscripcion",
+        correlation_id="susc-1",
+        payload={k: v for k, v in cuerpo.items() if v is not None},
+    )
+
+
+async def test_el_enlace_de_firma_sale_solo_por_correo_con_su_boton(armar, fabrica):
+    correo = CorreoFalso()
+    servicio = armar(correo=correo)
+
+    await _recibir(servicio, fabrica, _enlace_firma())
+    await servicio.procesar_pendientes()
+
+    (envio,) = _envios(fabrica)
+    assert (envio.canal, envio.tipo, envio.estado) == ("CORREO", "FIRMA_SOLICITADA", "ENVIADO")
+    assert _bandeja(fabrica) == []
+    (enviado,) = correo.enviados
+    assert enviado.asunto == "Revisa y firma tu póliza"
+    assert "/es-CO/sign#t=token-de-firma" in enviado.texto and "/es-CO/sign#t=token-de-firma" in enviado.html
+    assert "Revisar y firmar" in enviado.html
+
+
+async def test_el_token_no_queda_en_los_envios_ni_en_los_logs(armar, fabrica, caplog):
+    caplog.set_level(logging.INFO)
+    servicio = armar(correo=CorreoFalso())
+
+    await _recibir(servicio, fabrica, _enlace_firma())
+    await servicio.procesar_pendientes()
+
+    assert "token-de-firma" not in str(_envios(fabrica)[0].datos)
+    assert "token-de-firma" not in caplog.text
+
+
+async def test_el_correo_del_enlace_sale_en_el_idioma_del_cliente(armar, fabrica):
+    _registrar_dispositivo(fabrica, "en-US")
+    correo = CorreoFalso()
+    servicio = armar(correo=correo)
+
+    await _recibir(servicio, fabrica, _enlace_firma())
+    await servicio.procesar_pendientes()
+
+    assert correo.enviados[0].asunto == "Review and sign your policy"
+    assert "/en-US/sign#t=" in correo.enviados[0].texto
+
+
+async def test_un_enlace_que_ya_no_esta_activo_no_se_envia(armar, fabrica, reloj):
+    correo = CorreoFalso()
+    servicio = armar(correo=correo, certificados=CertificadosFalsos(modo="sin_enlaces"))
+
+    await _recibir(servicio, fabrica, _enlace_firma())
+    await servicio.procesar_pendientes()
+
+    assert correo.enviados == []
+    assert _envios(fabrica)[0].ultimo_error == "EnlaceNoVigente"
+
+
+async def test_sin_url_publica_el_correo_del_enlace_no_sale(armar, fabrica):
+    correo = CorreoFalso()
+    servicio = armar(correo=correo, url_publica=None)
+
+    await _recibir(servicio, fabrica, _enlace_firma())
+    await servicio.procesar_pendientes()
+
+    assert correo.enviados == [] and _envios(fabrica)[0].ultimo_error == "SinUrlPublica"
+
+
+async def test_un_enlace_mal_formado_se_rechaza_para_que_vaya_a_la_cola_de_fallidos(armar, fabrica):
+    with pytest.raises(ValueError, match="firma_enlace_solicitada sin: enlace_id"):
+        await _recibir(armar(), fabrica, _enlace_firma(enlace_id=None))

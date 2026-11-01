@@ -205,8 +205,12 @@ class FirmadorEnlaces:
 
     def emitir(self, poliza_id: str, idioma: str, ahora: datetime) -> tuple[str, datetime]:
         vence = ahora + self.vigencia
-        payload = json.dumps({"p": poliza_id, "i": idioma, "e": int(vence.timestamp())}, separators=(",", ":")).encode()
-        return f"{_b64(payload)}.{self._firma(payload)}", vence
+        return self.firmar(poliza_id, idioma, vence), vence
+
+    def firmar(self, referencia: str, idioma: str, vence: datetime) -> str:
+        """Con un vencimiento dado: el mismo enlace produce el mismo token, así que un reintento del correo no cambia nada."""
+        payload = json.dumps({"p": referencia, "i": idioma, "e": int(vence.timestamp())}, separators=(",", ":")).encode()
+        return f"{_b64(payload)}.{self._firma(payload)}"
 
     def verificar(self, token: str, ahora: datetime) -> tuple[str, str]:
         """(póliza, idioma) del token, o `EnlaceInvalido` / `EnlaceVencido`."""
@@ -271,6 +275,10 @@ class ServicioCertificado:
         cliente_id = await self._identidad.cliente_de_token(token)
         if cliente_id is None:
             raise NoAutenticado
+        return await self.descargar_como(suscripcion_id, cliente_id, idioma)
+
+    async def descargar_como(self, suscripcion_id: str, cliente_id: str, idioma: str) -> Certificado:
+        """Por un cliente ya identificado: su sesión (móvil) o el asesor que lo atendió (HU39)."""
 
         def leer() -> tuple[PolizaDB, SuscripcionDB] | None:
             with self._fabrica() as s:
