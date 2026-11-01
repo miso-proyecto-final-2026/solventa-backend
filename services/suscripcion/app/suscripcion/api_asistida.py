@@ -68,6 +68,14 @@ class CompensacionOut(BaseModel):
     solicitada_en: datetime | None
 
 
+class EnlaceFirmaOut(BaseModel):
+    """El enlace de firma más reciente, sin el token: el asesor no puede firmar por el cliente con él."""
+
+    estado: str  # ACTIVO | REEMPLAZADO | USADO
+    vence_en: datetime
+    creado_en: datetime
+
+
 class SuscripcionAsistidaOut(BaseModel):
     id: str
     cotizacion_id: str
@@ -86,6 +94,7 @@ class SuscripcionAsistidaOut(BaseModel):
     firma: FirmaResumenOut | None
     compensacion: CompensacionOut | None
     poliza: PolizaResumenOut | None
+    enlace_firma: EnlaceFirmaOut | None = None
     puede_gestionar_firma: bool = Field(description="Lo calcula el backend; la firma se revalida al ejecutarla")
     creada_en: datetime
 
@@ -149,6 +158,9 @@ def _salida_asistida(a: SuscripcionAsistida) -> SuscripcionAsistidaOut:
             documento_intentos=p.documento_intentos,
             documento_error=p.documento_error,
         ),
+        enlace_firma=None
+        if a.enlace is None
+        else EnlaceFirmaOut(estado=a.enlace.estado, vence_en=a.enlace.vence_en, creado_en=a.enlace.creado_en),
         puede_gestionar_firma=a.gestionable,
         creada_en=s.created_at,
     )
@@ -286,3 +298,14 @@ async def certificado(
 async def reenviar_confirmacion(suscripcion_id: str, servicio: Asistida, asesor: AsesorActual) -> Response:
     await servicio.reenviar_confirmacion(suscripcion_id, asesor)
     return Response(status_code=202)
+
+
+@router.post(
+    "/{suscripcion_id}/firma/enlace",
+    status_code=202,
+    response_model=EnlaceFirmaOut,
+    summary="Envía al cliente el enlace de firma por correo; reenviarlo invalida el anterior",
+)
+async def enviar_enlace_firma(suscripcion_id: str, servicio: Asistida, asesor: AsesorActual) -> EnlaceFirmaOut:
+    e = await servicio.enviar_enlace_firma(suscripcion_id, asesor)
+    return EnlaceFirmaOut(estado=e.estado, vence_en=e.vence_en, creado_en=e.creado_en)

@@ -656,6 +656,356 @@
         }
       }
     },
+    "/v1/suscripciones/asistidas/{suscripcion_id}/firma/enlace": {
+      "post": {
+        "tags": [
+          "venta-asistida"
+        ],
+        "summary": "Envía al cliente el enlace de firma por correo; reenviarlo invalida el anterior",
+        "operationId": "enviar_enlace_firma_v1_suscripciones_asistidas__suscripcion_id__firma_enlace_post",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnlaceFirmaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/enlace-firma/documento": {
+      "get": {
+        "tags": [
+          "firma-por-enlace"
+        ],
+        "summary": "Documento por firmar con el enlace (hash y estado)",
+        "operationId": "documento_v1_suscripciones_enlace_firma_documento_get",
+        "parameters": [
+          {
+            "name": "X-Enlace-Firma",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Token del enlace recibido por correo",
+              "title": "X-Enlace-Firma"
+            },
+            "description": "Token del enlace recibido por correo"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentoFirmaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/enlace-firma/documento/pdf": {
+      "get": {
+        "tags": [
+          "firma-por-enlace"
+        ],
+        "summary": "PDF por firmar con el enlace",
+        "operationId": "documento_pdf_v1_suscripciones_enlace_firma_documento_pdf_get",
+        "parameters": [
+          {
+            "name": "X-Enlace-Firma",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Token del enlace recibido por correo",
+              "title": "X-Enlace-Firma"
+            },
+            "description": "Token del enlace recibido por correo"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/pdf": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/enlace-firma/codigo": {
+      "post": {
+        "tags": [
+          "firma-por-enlace"
+        ],
+        "summary": "Envía el código de un solo uso al cliente",
+        "operationId": "solicitar_codigo_v1_suscripciones_enlace_firma_codigo_post",
+        "parameters": [
+          {
+            "name": "X-Enlace-Firma",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Token del enlace recibido por correo",
+              "title": "X-Enlace-Firma"
+            },
+            "description": "Token del enlace recibido por correo"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/enlace-firma/firma": {
+      "post": {
+        "tags": [
+          "firma-por-enlace"
+        ],
+        "summary": "Firma con el enlace y el código; repetirla devuelve la misma firma",
+        "operationId": "firmar_v1_suscripciones_enlace_firma_firma_post",
+        "parameters": [
+          {
+            "name": "X-Enlace-Firma",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Token del enlace recibido por correo",
+              "title": "X-Enlace-Firma"
+            },
+            "description": "Token del enlace recibido por correo"
+          },
+          {
+            "name": "user-agent",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "User-Agent"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FirmaEnlaceIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirmaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/interno/firma/enlaces/{enlace_id}/token": {
+      "post": {
+        "tags": [
+          "firma-por-enlace"
+        ],
+        "summary": "Token de un enlace activo, para el correo (interno: clave de servicio)",
+        "operationId": "token_enlace_v1_interno_firma_enlaces__enlace_id__token_post",
+        "parameters": [
+          {
+            "name": "enlace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Enlace Id"
+            }
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenEnlaceIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenEnlaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/suscripciones": {
       "post": {
         "tags": [
@@ -1792,6 +2142,32 @@
         "title": "DocumentoFirmaOut",
         "description": "Lo que el cliente necesita para revisar y firmar. El PDF se descarga aparte, en `documento-firma/pdf`."
       },
+      "EnlaceFirmaOut": {
+        "properties": {
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "vence_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Vence En"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "estado",
+          "vence_en",
+          "creado_en"
+        ],
+        "title": "EnlaceFirmaOut",
+        "description": "El enlace de firma más reciente, sin el token: el asesor no puede firmar por el cliente con él."
+      },
       "EnlaceIn": {
         "properties": {
           "poliza_id": {
@@ -1939,6 +2315,34 @@
           "asesor_id"
         ],
         "title": "FirmaAsistidaOut"
+      },
+      "FirmaEnlaceIn": {
+        "properties": {
+          "documento_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Documento Sha256"
+          },
+          "documento_revisado": {
+            "type": "boolean",
+            "title": "Documento Revisado"
+          },
+          "codigo": {
+            "type": "string",
+            "maxLength": 12,
+            "minLength": 1,
+            "title": "Codigo",
+            "description": "Código de un solo uso del cliente (OTP)"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "documento_sha256",
+          "documento_revisado",
+          "codigo"
+        ],
+        "title": "FirmaEnlaceIn"
       },
       "FirmaIn": {
         "properties": {
@@ -2445,6 +2849,16 @@
               }
             ]
           },
+          "enlace_firma": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnlaceFirmaOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "puede_gestionar_firma": {
             "type": "boolean",
             "title": "Puede Gestionar Firma",
@@ -2627,6 +3041,42 @@
           "creada_en"
         ],
         "title": "SuscripcionOut"
+      },
+      "TokenEnlaceIn": {
+        "properties": {
+          "idioma": {
+            "type": "string",
+            "enum": [
+              "es-CO",
+              "en-US"
+            ],
+            "title": "Idioma",
+            "default": "es-CO"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "TokenEnlaceIn"
+      },
+      "TokenEnlaceOut": {
+        "properties": {
+          "ruta": {
+            "type": "string",
+            "title": "Ruta",
+            "description": "Ruta de la página de firma; el servicio que la envía le antepone la URL base del borde"
+          },
+          "vence_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Vence En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ruta",
+          "vence_en"
+        ],
+        "title": "TokenEnlaceOut"
       },
       "ValidationError": {
         "properties": {

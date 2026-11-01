@@ -19,6 +19,7 @@ from app.suscripcion import repositorio as repo
 from app.suscripcion.acceso import Asesor
 from app.suscripcion.certificado import Certificado, ServicioCertificado
 from app.suscripcion.clientes import Identidad, ResumenCliente
+from app.suscripcion.enlace_firma import ENVIAR_ENLACE_FIRMA, ServicioEnlaceFirma
 from app.suscripcion.errores import (
     AccesoDenegado,
     CertificadoNoDisponible,
@@ -35,6 +36,7 @@ from app.suscripcion.firma import (
 )
 from app.suscripcion.modelos_db import (
     AuditoriaAsesorDB,
+    EnlaceFirmaDB,
     FirmaDB,
     PolizaDB,
     SuscripcionDB,
@@ -65,6 +67,7 @@ class SuscripcionAsistida:
     poliza: PolizaDB | None
     cliente: ResumenCliente | None
     gestionable: bool
+    enlace: EnlaceFirmaDB | None = None
 
 
 class ServicioFirmaAsistida:
@@ -76,6 +79,7 @@ class ServicioFirmaAsistida:
         firma: ServicioFirma,
         identidad: Identidad,
         certificados: ServicioCertificado,
+        enlaces: ServicioEnlaceFirma,
         espera_correo: timedelta = timedelta(seconds=60),
         reloj: Callable[[], datetime] = _ahora,
     ) -> None:
@@ -84,6 +88,7 @@ class ServicioFirmaAsistida:
         self._firma = firma
         self._identidad = identidad
         self._certificados = certificados
+        self._enlaces = enlaces
         self._espera_correo = espera_correo
         self._reloj = reloj
 
@@ -165,31 +170,40 @@ class ServicioFirmaAsistida:
             log.warning("no se pudo leer el resumen del cliente")
             return None
 
-    def _armar(self, susc: SuscripcionDB, poliza: PolizaDB | None, cliente: ResumenCliente | None) -> SuscripcionAsistida:
+    def _armar(
+        self, susc: SuscripcionDB, poliza: PolizaDB | None, cliente: ResumenCliente | None, enlace: EnlaceFirmaDB | None
+    ) -> SuscripcionAsistida:
         return SuscripcionAsistida(
             suscripcion=susc,
             poliza=poliza,
             cliente=cliente,
             gestionable=firma_gestionable(susc, poliza, self._firma.vence_en(susc), self._reloj()),
+            enlace=enlace,
         )
 
     async def listar(
         self, asesor: Asesor, *, estado: str | None, pagina: int, tamano: int
     ) -> tuple[list[SuscripcionAsistida], int]:
-        def leer() -> tuple[list[tuple[SuscripcionDB, PolizaDB | None]], int]:
+        def leer() -> tuple[list[tuple[SuscripcionDB, PolizaDB | None]], int, dict[str, EnlaceFirmaDB]]:
             with self._fabrica() as s:
-                return repo.suscripciones_de_asesor(s, asesor.id, estado=estado, pagina=pagina, tamano=tamano)
+                filas, total = repo.suscripciones_de_asesor(s, asesor.id, estado=estado, pagina=pagina, tamano=tamano)
+                return filas, total, repo.ultimos_enlaces(s, [susc.id for susc, _ in filas])
 
-        filas, total = await asyncio.to_thread(leer)
+        filas, total, enlaces = await asyncio.to_thread(leer)
         # Una consulta por cliente distinto de la página, acotada por `tamano`.
         ids = list({s.cliente_id for s, _ in filas})
         resumenes = dict(zip(ids, await asyncio.gather(*(self._resumen(i) for i in ids)), strict=True))
-        return [self._armar(s, p, resumenes[s.cliente_id]) for s, p in filas], total
+        return [self._armar(s, p, resumenes[s.cliente_id], enlaces.get(s.id)) for s, p in filas], total
 
     async def detalle(self, suscripcion_id: str, asesor: Asesor) -> SuscripcionAsistida:
         susc = await asyncio.to_thread(self._autorizar, suscripcion_id, asesor)
         poliza = await asyncio.to_thread(self._suscripciones.poliza_de_suscripcion, suscripcion_id)
-        return self._armar(susc, poliza, await self._resumen(susc.cliente_id))
+
+        def enlace() -> EnlaceFirmaDB | None:
+            with self._fabrica() as s:
+                return repo.ultimos_enlaces(s, [suscripcion_id]).get(suscripcion_id)
+
+        return self._armar(susc, poliza, await self._resumen(susc.cliente_id), await asyncio.to_thread(enlace))
 
     # --- firmar -----------------------------------------------------------------------------------------------------
 
@@ -236,6 +250,14 @@ class ServicioFirmaAsistida:
         async with self._auditando(asesor, DESCARGAR_FIRMADA, suscripcion_id):
             susc = await asyncio.to_thread(self._autorizar, suscripcion_id, asesor)
             return await self._firma.copia_firmada_como(suscripcion_id, susc.cliente_id)
+
+    # --- firma por enlace ---------------------------------------------------------------------------------------------
+
+    async def enviar_enlace_firma(self, suscripcion_id: str, asesor: Asesor) -> EnlaceFirmaDB:
+        """Envía o reenvía el enlace por correo. Reenviar invalida el anterior (criterio 7)."""
+        async with self._auditando(asesor, ENVIAR_ENLACE_FIRMA, suscripcion_id):
+            await asyncio.to_thread(self._autorizar, suscripcion_id, asesor)
+            return await asyncio.to_thread(self._enlaces.crear, suscripcion_id, asesor.id)
 
     # --- certificado y confirmación -----------------------------------------------------------------------------------
 

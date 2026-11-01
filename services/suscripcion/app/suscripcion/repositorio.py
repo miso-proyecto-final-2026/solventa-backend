@@ -15,6 +15,7 @@ from app.suscripcion.modelos_db import (
     SCHEMA,
     AuditoriaAsesorDB,
     BaseSuscripcion,
+    EnlaceFirmaDB,
     EventoSalidaDB,
     PolizaDB,
     RevisionAsistidaDB,
@@ -218,6 +219,16 @@ def suscripciones_de_asesor(
         .offset((pagina - 1) * tamano)
     )
     return [(s, p) for s, p in filas], total
+
+
+def ultimos_enlaces(sesion: Session, suscripcion_ids: list[str]) -> dict[str, EnlaceFirmaDB]:
+    """El enlace de firma más reciente de cada suscripción."""
+    if not suscripcion_ids:
+        return {}
+    filas = sesion.execute(
+        select(EnlaceFirmaDB).where(EnlaceFirmaDB.suscripcion_id.in_(suscripcion_ids)).order_by(EnlaceFirmaDB.creado_en)
+    ).scalars()
+    return {e.suscripcion_id: e for e in filas}
 
 
 def accion_reciente(sesion: Session, suscripcion_id: str, accion: str, ahora: datetime, espera: timedelta) -> bool:

@@ -57,6 +57,14 @@ class CertificadosFalsos:
             return None
         return EnlaceCertificado("/v1/certificados/token-de-prueba", self.vence)
 
+    async def token_enlace_firma(self, enlace_id, idioma):
+        self.llamadas.append((enlace_id, idioma))
+        if self.modo == "caido":
+            raise DependenciaNoDisponible("Suscripción no responde.")
+        if self.modo == "sin_enlaces":
+            return None
+        return EnlaceCertificado(f"/{idioma}/sign#t=token-de-firma", self.vence)
+
 
 class CorreoFalso:
     def __init__(self, fallos: int = 0, codigo: str = "MessageRejected"):

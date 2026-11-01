@@ -206,6 +206,32 @@ def _auditoria_inmutable(*_args: object) -> None:
     raise RuntimeError("La auditoría del asesor es inmutable")
 
 
+class EnlaceFirmaDB(BaseSuscripcion):
+    """Enlace de firma enviado por correo (HU39). No guarda el token: se recalcula con la clave del servicio."""
+
+    __tablename__ = "enlaces_firma"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    suscripcion_id: Mapped[str] = mapped_column(String(36), ForeignKey(f"{SCHEMA}.suscripciones.id"))
+    asesor_id: Mapped[str] = mapped_column(String(36))
+    estado: Mapped[str] = mapped_column(String(20))  # ACTIVO | REEMPLAZADO | USADO
+    vence_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    usado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_enlace_suscripcion", "suscripcion_id", "creado_en"),
+        # Un solo enlace activo por suscripción, aunque dos réplicas envíen a la vez.
+        Index(
+            "uq_enlace_activo",
+            "suscripcion_id",
+            unique=True,
+            postgresql_where=text("estado = 'ACTIVO'"),
+            sqlite_where=text("estado = 'ACTIVO'"),
+        ),
+    )
+
+
 class RevisionAsistidaDB(BaseSuscripcion):
     """Caso derivado a una persona (HU15 solo lo registra; resolverlo es de otra historia)."""
 
