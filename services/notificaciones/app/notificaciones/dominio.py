@@ -27,6 +27,7 @@ class EstadoEnvio(StrEnum):
 
 class TipoNotificacion(StrEnum):
     POLIZA_EMITIDA = "POLIZA_EMITIDA"
+    FIRMA_SOLICITADA = "FIRMA_SOLICITADA"
 
 
 class Prioridad(StrEnum):

@@ -92,3 +92,19 @@ class ClienteSuscripcion:
         d = r.json()
         vence = datetime.fromisoformat(d["vence_en"])
         return EnlaceCertificado(ruta=d["ruta"], vence_en=vence if vence.tzinfo else vence.replace(tzinfo=UTC))
+
+    async def token_enlace_firma(self, enlace_id: str, idioma: str) -> EnlaceCertificado | None:
+        """`POST /v1/interno/firma/enlaces/{id}/token` (HU39). Nulo si el enlace ya no está activo."""
+        try:
+            r = await self._http.post(
+                f"/v1/interno/firma/enlaces/{enlace_id}/token", json={"idioma": idioma}, headers={"X-Service-Key": self._clave}
+            )
+        except httpx.HTTPError as error:
+            raise DependenciaNoDisponible("Suscripción no responde.") from error
+        if r.status_code == 410:
+            return None
+        if r.status_code != 200:
+            raise DependenciaNoDisponible(f"Suscripción respondió {r.status_code}.")
+        d = r.json()
+        vence = datetime.fromisoformat(d["vence_en"])
+        return EnlaceCertificado(ruta=d["ruta"], vence_en=vence if vence.tzinfo else vence.replace(tzinfo=UTC))

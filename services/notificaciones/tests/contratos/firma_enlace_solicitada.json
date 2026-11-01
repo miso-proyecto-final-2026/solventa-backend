@@ -1,0 +1,17 @@
+{
+  "event_id": "1f6a7a0e-6d0b-4f0f-8a53-0c8f7a5d2b11",
+  "event_type": "firma_enlace_solicitada",
+  "source": "ms-suscripcion",
+  "timestamp": "2026-10-23T13:00:00Z",
+  "correlation_id": "e595c630-8288-4686-9bae-44950bf2ae23",
+  "trace_id": "ffb5d6da-f3ad-4ac0-8c4c-64119cc80699",
+  "version": "1.0",
+  "payload": {
+    "enlace_id": "b7d2c1f0-77a1-4c52-9d6e-1e2f3a4b5c6d",
+    "suscripcion_id": "e595c630-8288-4686-9bae-44950bf2ae23",
+    "cliente_id": "cli-1",
+    "numero_poliza": "5GXX27E6D3TK6J73DWWS",
+    "producto": "microseguro_vida",
+    "vence_en": "2026-10-24T13:00:00+00:00"
+  }
+}

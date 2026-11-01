@@ -12,6 +12,7 @@ que cada uno guarda una copia: el productor prueba que sigue emitiendo esta form
 | `cobro_prima_reembolsado.json` | MS Pagos (HU21) | MS Suscripción (`solventa-suscripcion.pagos`) | `solventa.pagos.resultados` |
 | `poliza_emitida.json` | MS Suscripción (HU20) | MS Notificaciones, Siniestros y analítica | `solventa.polizas.ciclovida` |
 | `confirmacion_reenvio_solicitada.json` | MS Suscripción (HU39) | MS Notificaciones (`solventa-notificaciones.polizas`) | `solventa.polizas.ciclovida` |
+| `firma_enlace_solicitada.json` | MS Suscripción (HU39) | MS Notificaciones (`solventa-notificaciones.polizas`) | `solventa.polizas.ciclovida` |
 
 Si cambia la forma de un evento, se regenera en el productor y se copia al consumidor en el mismo PR. Las copias de
 `services/pagos/tests/contratos/` y `services/suscripcion/tests/contratos/` deben ser idénticas. Los tokens son de prueba

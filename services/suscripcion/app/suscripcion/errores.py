@@ -101,6 +101,10 @@ class EnlaceVencido(ErrorSuscripcion):
     status, code, mensaje = 410, "ENLACE_VENCIDO", "El enlace venció. Descargue el certificado desde la aplicación."
 
 
+class EnlaceReemplazado(ErrorSuscripcion):
+    status, code, mensaje = 410, "ENLACE_REEMPLAZADO", "Este enlace ya no sirve. Use el más reciente que recibió en su correo."
+
+
 class EnlacesNoConfigurados(ErrorSuscripcion):
     status, code, mensaje = 503, "ENLACES_NO_CONFIGURADOS", "La descarga por enlace no está disponible por ahora."
 

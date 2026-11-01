@@ -7481,6 +7481,88 @@
               "type": "noauth"
             }
           }
+        },
+        {
+          "name": "Enviar el enlace de firma de una suscripción inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('código estándar', () => pm.expect(pm.response.json().error.code).to.eql('SUSCRIPCION_NO_ENCONTRADA'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{asesor_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/asistidas/00000000-0000-4000-8000-000000000000/firma/enlace",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "asistidas",
+                "00000000-0000-4000-8000-000000000000",
+                "firma",
+                "enlace"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Documento con un enlace de firma inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('código estándar', () => pm.expect(pm.response.json().error.code).to.eql('ENLACE_INVALIDO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Enlace-Firma",
+                "value": "token-invalido",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/enlace-firma/documento",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "enlace-firma",
+                "documento"
+              ]
+            }
+          }
         }
       ]
     },

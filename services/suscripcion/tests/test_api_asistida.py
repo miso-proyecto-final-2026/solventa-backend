@@ -9,8 +9,10 @@ import pytest
 from app.suscripcion.acceso import VerificadorJwtHs256
 from app.suscripcion.api import router as suscripciones
 from app.suscripcion.api_asistida import router as asistidas
+from app.suscripcion.api_enlace_firma import router as enlace_firma
 from app.suscripcion.api_firma import router as firma
-from app.suscripcion.certificado import ServicioCertificado
+from app.suscripcion.certificado import FirmadorEnlaces, ServicioCertificado
+from app.suscripcion.enlace_firma import ServicioEnlaceFirma
 from app.suscripcion.errores import DependenciaNoDisponible, registrar_errores
 from app.suscripcion.firma_asistida import ServicioFirmaAsistida
 from app.suscripcion.modelos_db import AuditoriaAsesorDB, SuscripcionDB
@@ -26,6 +28,7 @@ SECRETO = "secreto-de-prueba-de-al-menos-32-bytes"
 EMISOR = "solventa-identidad"
 ASESOR_ID = "ase-1"
 TOKEN_TARJETA = "tok_sim_abc123"
+CLAVE_ENLACES = "clave-de-enlaces-de-firma-de-prueba"
 
 
 def _jwt(sub=ASESOR_ID, rol="ASESOR", secreto=SECRETO, minutos=30):
@@ -40,11 +43,18 @@ OTRO_ASESOR = _jwt(sub="ase-2")
 def _armar_app(servicio_suscripcion, servicio_firma, fabrica, identidad=None):
     app = FastAPI()
     app.include_router(asistidas)
+    app.include_router(enlace_firma)
     app.include_router(suscripciones)
     app.include_router(firma)
     registrar_errores(app)
     app.state.servicio_suscripcion = servicio_suscripcion
     app.state.servicio_firma = servicio_firma
+    enlaces = ServicioEnlaceFirma(
+        fabrica=fabrica,
+        firma=servicio_firma,
+        firmador=FirmadorEnlaces(CLAVE_ENLACES, timedelta(hours=24)),
+        reloj=servicio_firma._reloj,
+    )
     app.state.servicio_asistida = ServicioFirmaAsistida(
         fabrica=fabrica,
         suscripciones=servicio_suscripcion,
@@ -57,8 +67,10 @@ def _armar_app(servicio_suscripcion, servicio_firma, fabrica, identidad=None):
             firmador=None,
             reloj=servicio_firma._reloj,
         ),
+        enlaces=enlaces,
         reloj=servicio_firma._reloj,
     )
+    app.state.servicio_enlace_firma = enlaces
     app.state.verificador_asesor = VerificadorJwtHs256(SECRETO, EMISOR)
     app.state.tareas = set()
     return app

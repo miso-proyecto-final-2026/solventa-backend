@@ -32,7 +32,7 @@ from tests.test_polizas import AlmacenMemoria, _generador
 pytestmark = pytest.mark.contenedores
 
 RAIZ = Path(__file__).parents[1]
-TABLAS = {"suscripciones", "revisiones_asistidas", "eventos_salida", "eventos_procesados", "polizas", "firmas", "auditoria_asesor"}
+TABLAS = {"suscripciones", "revisiones_asistidas", "eventos_salida", "eventos_procesados", "polizas", "firmas", "auditoria_asesor", "enlaces_firma"}
 REPLICAS = 8
 PEDIDO = {"token": "token-1", "cotizacion_id": "cot-1", "metodo_pago": "tok_visa_123", "acepta_terminos": True}
 
@@ -397,3 +397,59 @@ def test_dos_barridos_a_la_vez_piden_un_solo_reembolso_de_una_firma_vencida(fabr
             text(f"SELECT count(*) FROM {SCHEMA}.eventos_salida WHERE payload->>'event_type' = 'reembolso_cobro_solicitado'")
         ).scalar()
     assert reembolsos == 1
+
+
+# --- firma por enlace (HU39) ---------------------------------------------------------------------------------------------
+
+def _servicio_enlace(fabrica_pg, firma):
+    from datetime import timedelta
+
+    from app.suscripcion.certificado import FirmadorEnlaces
+    from app.suscripcion.enlace_firma import ServicioEnlaceFirma
+
+    f = firma()
+    return ServicioEnlaceFirma(
+        fabrica=fabrica_pg, firma=f, firmador=FirmadorEnlaces("clave-de-enlaces-de-prueba", timedelta(hours=24)), reloj=f._reloj
+    )
+
+
+def test_enviar_desde_varias_replicas_deja_un_solo_enlace_activo(fabrica_pg):
+    from app.suscripcion.errores import CorreoMuySeguido
+
+    susc, firma = _lista_para_firmar(fabrica_pg)
+    enlaces = _servicio_enlace(fabrica_pg, firma)
+
+    async def replica(_):
+        return await asyncio.to_thread(enlaces.crear, susc.id, "ase-1")
+
+    resultados = _en_paralelo(REPLICAS, replica)
+
+    assert all(not isinstance(r, Exception) or isinstance(r, CorreoMuySeguido) for r in resultados), resultados
+    with fabrica_pg() as s:
+        assert s.execute(text(f"SELECT count(*) FROM {SCHEMA}.enlaces_firma WHERE estado = 'ACTIVO'")).scalar() == 1
+
+
+def test_la_base_acepta_la_firma_por_enlace_con_su_evidencia(fabrica_pg):
+    """La restricción `ck_firma_modalidad` solo existe en PostgreSQL: en SQLite este error no se vería."""
+    from dataclasses import replace
+
+    from app.suscripcion.firma import MODALIDAD_ASISTIDA_ENLACE
+
+    from tests.test_firma import ORIGEN, OTP
+
+    susc, firma = _lista_para_firmar(fabrica_pg)
+    enlaces = _servicio_enlace(fabrica_pg, firma)
+    enlace = enlaces.crear(susc.id, "ase-1")
+    token = enlaces._firmador.firmar(enlace.id, "es-CO", enlace.vence_en)
+
+    async def firmar():
+        documento = await enlaces.documento(token)
+        return await enlaces.firmar(
+            token, documento_sha256=documento.documento_sha256, documento_revisado=True, codigo=OTP, origen=replace(ORIGEN, canal="WEB")
+        )
+
+    firma_db, creada, _ = asyncio.run(firmar())
+
+    assert creada and (firma_db.modalidad, firma_db.asesor_id) == (MODALIDAD_ASISTIDA_ENLACE, "ase-1")
+    with fabrica_pg() as s:
+        assert s.execute(text(f"SELECT estado FROM {SCHEMA}.enlaces_firma")).scalar() == "USADO"

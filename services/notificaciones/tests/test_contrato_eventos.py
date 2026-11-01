@@ -53,3 +53,17 @@ async def test_el_ejemplo_de_reenvio_produce_solo_un_correo(armar, fabrica):
         (envio,) = s.execute(select(EnvioDB)).scalars()
     assert (envio.canal, envio.estado) == ("CORREO", "ENVIADO")
     assert evento.payload["numero_poliza"] in correo.enviados[0].texto
+
+
+async def test_el_ejemplo_de_enlace_de_firma_produce_solo_un_correo(armar, fabrica):
+    correo = CorreoFalso()
+    servicio = armar(correo=correo)
+    evento = Evento.model_validate_json((EJEMPLO.parent / "firma_enlace_solicitada.json").read_text(encoding="utf-8"))
+
+    await _recibir(servicio, fabrica, evento)
+    await servicio.procesar_pendientes()
+
+    with fabrica() as s:
+        (envio,) = s.execute(select(EnvioDB)).scalars()
+    assert (envio.canal, envio.tipo, envio.estado) == ("CORREO", "FIRMA_SOLICITADA", "ENVIADO")
+    assert evento.payload["numero_poliza"] in correo.enviados[0].texto

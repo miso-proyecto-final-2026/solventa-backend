@@ -26,6 +26,7 @@ class Reglas:
     firma_vigencia_horas: int = 24
     firma_max_intentos: int = 3
     correo_espera_segundos: int = 60
+    firma_enlace_vigencia_horas: int = 24
 
     def __post_init__(self) -> None:
         if not (0 <= self.endeudamiento_aprobacion <= self.endeudamiento_maximo_con_ajuste <= 1):
@@ -61,5 +62,6 @@ def cargar_reglas(version: str = "v1", directorio: Path | None = None) -> Reglas
         reportes_maximo_derivable=int(d["reportes_negativos"]["maximo_derivable"]),
         firma_vigencia_horas=int(d.get("firma", {}).get("vigencia_horas", 24)),
         firma_max_intentos=int(d.get("firma", {}).get("max_intentos_autenticacion", 3)),
+        firma_enlace_vigencia_horas=int(d.get("firma", {}).get("enlace_vigencia_horas", 24)),
         correo_espera_segundos=int(d.get("correo", {}).get("espera_entre_envios_segundos", 60)),
     )

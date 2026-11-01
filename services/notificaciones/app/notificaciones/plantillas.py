@@ -40,6 +40,10 @@ TEXTOS: dict[str, dict[str, Any]] = {
         "push_texto": "Tu póliza ya está activa. Toca para ver tu certificado.",
         "push_titulo_publico": "Solventa",
         "push_texto_publico": "Tienes una notificación nueva.",
+        "firma_asunto": "Revisa y firma tu póliza",
+        "firma_intro": "Tu asesor te envió tu póliza para que la revises y la firmes.",
+        "firma_boton": "Revisar y firmar",
+        "firma_vence": "El enlace vence el {vence}. Para firmar necesitarás el código que te enviaremos. Si no pediste esta póliza, ignora este correo.",
         "asunto": "Tu póliza está activa",
         "saludo": "Hola, {nombre}:",
         "saludo_sin_nombre": "Hola:",
@@ -63,6 +67,10 @@ TEXTOS: dict[str, dict[str, Any]] = {
         "push_texto": "Your policy is now active. Tap to see your certificate.",
         "push_titulo_publico": "Solventa",
         "push_texto_publico": "You have a new notification.",
+        "firma_asunto": "Review and sign your policy",
+        "firma_intro": "Your advisor sent you your policy to review and sign.",
+        "firma_boton": "Review and sign",
+        "firma_vence": "The link expires on {vence}. To sign, you will need the code we will send you. If you did not request this policy, ignore this email.",
         "asunto": "Your policy is active",
         "saludo": "Hello, {nombre}:",
         "saludo_sin_nombre": "Hello:",
@@ -184,3 +192,46 @@ def construir_correo(
         f"{bloque_descarga}<p>{escape(t['cierre'])}</p></div></body></html>"
     )
     return Correo(destinatario=destinatario, asunto=t["asunto"], texto=texto, html=html)
+
+
+def construir_correo_firma(
+    *,
+    destinatario: str,
+    nombre: str | None,
+    idioma: str,
+    numero_poliza: str,
+    producto: str,
+    enlace: str,
+    vence: datetime,
+) -> Correo:
+    """El enlace para firmar (HU39). Mismo formato que la confirmación, con su botón."""
+    t = TEXTOS[idioma]
+    nombre_producto = t["productos"].get(producto, producto)
+    saludo = t["saludo"].format(nombre=nombre) if nombre else t["saludo_sin_nombre"]
+    aviso = t["firma_vence"].format(vence=fecha(vence, idioma))
+    texto = "\n".join(
+        [
+            saludo,
+            "",
+            t["firma_intro"],
+            "",
+            f"{t['numero']}: {numero_poliza}",
+            f"{t['producto']}: {nombre_producto}",
+            "",
+            f"{t['firma_boton']}: {enlace}",
+            aviso,
+            "",
+            t["cierre"],
+        ]
+    )
+    html = (
+        f'<html lang="{idioma}"><body style="margin:0;padding:24px;background:#f4f6fa;font-family:Arial,Helvetica,sans-serif;'
+        f'color:#1b1f2a;font-size:16px;line-height:1.5"><div style="max-width:560px;margin:0 auto;background:#ffffff;'
+        f'border-radius:12px;padding:24px">'
+        f"<p>{escape(saludo)}</p><p>{escape(t['firma_intro'])}</p>"
+        f"<ul><li><b>{escape(t['numero'])}:</b> {escape(numero_poliza)}</li>"
+        f"<li><b>{escape(t['producto'])}:</b> {escape(nombre_producto)}</li></ul>"
+        f"{_boton(t['firma_boton'], enlace)}"
+        f'<p style="{_PEQUENO}">{escape(aviso)}</p><p>{escape(t["cierre"])}</p></div></body></html>'
+    )
+    return Correo(destinatario=destinatario, asunto=t["firma_asunto"], texto=texto, html=html)
