@@ -105,6 +105,10 @@ class EnlacesNoConfigurados(ErrorSuscripcion):
     status, code, mensaje = 503, "ENLACES_NO_CONFIGURADOS", "La descarga por enlace no está disponible por ahora."
 
 
+class CorreoMuySeguido(ErrorSuscripcion):
+    status, code, mensaje = 429, "CORREO_MUY_SEGUIDO", "Este correo se envió hace muy poco. Espere un momento antes de intentarlo de nuevo."
+
+
 class ClaveDeServicioInvalida(ErrorSuscripcion):
     status, code, mensaje = 401, "CLAVE_DE_SERVICIO_INVALIDA", "Se requiere la clave de un servicio."
 

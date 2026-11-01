@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -13,6 +13,7 @@ from sqlalchemy.pool import StaticPool
 from app.suscripcion.modelos_db import (
     ESTADOS_QUE_LIBERAN_LA_COTIZACION,
     SCHEMA,
+    AuditoriaAsesorDB,
     BaseSuscripcion,
     EventoSalidaDB,
     PolizaDB,
@@ -217,6 +218,23 @@ def suscripciones_de_asesor(
         .offset((pagina - 1) * tamano)
     )
     return [(s, p) for s, p in filas], total
+
+
+def accion_reciente(sesion: Session, suscripcion_id: str, accion: str, ahora: datetime, espera: timedelta) -> bool:
+    """Si el asesor completó esta acción sobre la suscripción hace menos de `espera`."""
+    return (
+        sesion.execute(
+            select(AuditoriaAsesorDB.id)
+            .where(
+                AuditoriaAsesorDB.suscripcion_id == suscripcion_id,
+                AuditoriaAsesorDB.accion == accion,
+                AuditoriaAsesorDB.resultado == "EXITO",
+                AuditoriaAsesorDB.created_at > ahora - espera,
+            )
+            .limit(1)
+        ).first()
+        is not None
+    )
 
 
 # --- outbox ----------------------------------------------------------------------------------------------------

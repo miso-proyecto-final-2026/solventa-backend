@@ -43,6 +43,8 @@ from app.suscripcion.dominio import EstadoSaga, PasoSaga
 from app.suscripcion.errores import PolizaNoEncontrada, PolizaNoLista
 from app.suscripcion.modelos_db import PolizaDB, SuscripcionDB
 
+EVENTO_REENVIO_CONFIRMACION = "confirmacion_reenvio_solicitada"
+
 log = logging.getLogger("suscripcion.polizas")
 
 FUENTE = "ms-suscripcion"
@@ -364,11 +366,23 @@ def emitir_poliza(sesion: Session, poliza_id: str, ahora: datetime) -> PolizaDB:
     susc.paso_actual = PasoSaga.EMISION.value
     susc.updated_at = ahora
 
+    _encolar_ciclo_vida(sesion, "poliza_emitida", poliza, susc, ahora)
+    log.info("poliza emitida poliza_id=%s suscripcion_id=%s", poliza.id, susc.id)
+    return poliza
+
+
+def encolar_reenvio_confirmacion(sesion: Session, poliza: PolizaDB, susc: SuscripcionDB, ahora: datetime) -> None:
+    """El asesor pide reenviar el correo de confirmación (HU39). Cada reenvío es un evento propio, con los datos de la emisión."""
+    _encolar_ciclo_vida(sesion, EVENTO_REENVIO_CONFIRMACION, poliza, susc, ahora)
+    log.info("reenvio de confirmacion solicitado poliza_id=%s suscripcion_id=%s", poliza.id, susc.id)
+
+
+def _encolar_ciclo_vida(sesion: Session, tipo: str, poliza: PolizaDB, susc: SuscripcionDB, ahora: datetime) -> None:
     campos: dict[str, Any] = {}
     if traza_id.get():
         campos["trace_id"] = traza_id.get()
     evento = Evento(
-        event_type="poliza_emitida",
+        event_type=tipo,
         source=FUENTE,
         timestamp=ahora,
         correlation_id=susc.correlacion_id or susc.id,
@@ -380,7 +394,7 @@ def emitir_poliza(sesion: Session, poliza_id: str, ahora: datetime) -> PolizaDB:
             "producto": susc.producto,
             "vigencia_desde": repo.utc(poliza.vigencia_desde).isoformat(),
             "fecha_vencimiento": repo.utc(poliza.fecha_vencimiento).isoformat(),
-            "fecha_emision": ahora.isoformat(),
+            "fecha_emision": (repo.utc(poliza.fecha_emision) or ahora).isoformat(),
         },
         **campos,
     )
@@ -388,5 +402,3 @@ def emitir_poliza(sesion: Session, poliza_id: str, ahora: datetime) -> PolizaDB:
         sesion, event_id=evento.event_id, topic=TOPIC_CICLO_VIDA, clave=poliza.id,
         payload=evento.model_dump(mode="json"), ahora=ahora,
     )
-    log.info("poliza emitida poliza_id=%s suscripcion_id=%s", poliza.id, susc.id)
-    return poliza

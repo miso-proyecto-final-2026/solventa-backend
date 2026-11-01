@@ -41,6 +41,9 @@ from app.notificaciones.modelos_db import EnvioDB
 log = logging.getLogger("notificaciones")
 
 POLIZA_EMITIDA = "poliza_emitida"
+# El asesor pide otro correo desde la consola (HU39). Solo el correo: el push ya avisó de la emisión.
+REENVIO_CONFIRMACION = "confirmacion_reenvio_solicitada"
+CANALES_POR_EVENTO = {POLIZA_EMITIDA: (Canal.PUSH, Canal.CORREO), REENVIO_CONFIRMACION: (Canal.CORREO,)}
 CAMPOS_REQUERIDOS = ("poliza_id", "suscripcion_id", "cliente_id", "numero_poliza", "producto", "vigencia_desde", "fecha_vencimiento")
 
 
@@ -94,18 +97,19 @@ class ServicioNotificaciones:
 
     async def manejar_evento(self, evento: Evento, sesion: Session) -> None:
         """Manejador del consumidor de `solventa.polizas.ciclovida` (corre en la transacción de la plantilla)."""
-        if evento.event_type != POLIZA_EMITIDA:
+        canales = CANALES_POR_EVENTO.get(evento.event_type)
+        if canales is None:
             log.info("evento ignorado event_type=%s event_id=%s", evento.event_type, evento.event_id)
             return
         faltan = [c for c in CAMPOS_REQUERIDOS if not evento.payload.get(c)]
         if faltan:
             # Un evento mal formado no mejora al reintentarlo: el consumidor lo manda a la cola de fallidos.
-            raise ValueError(f"poliza_emitida sin: {', '.join(faltan)}")
+            raise ValueError(f"{evento.event_type} sin: {', '.join(faltan)}")
         datos = {c: str(evento.payload[c]) for c in CAMPOS_REQUERIDOS}
         cliente_id = datos["cliente_id"]
         idioma = repo.idioma_de(sesion, cliente_id)
         ahora = self._reloj()
-        for canal in (Canal.PUSH, Canal.CORREO):
+        for canal in canales:
             creado = repo.crear_envio(
                 sesion,
                 EnvioDB(

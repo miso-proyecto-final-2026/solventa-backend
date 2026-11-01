@@ -10,6 +10,7 @@ from app.suscripcion.acceso import VerificadorJwtHs256
 from app.suscripcion.api import router as suscripciones
 from app.suscripcion.api_asistida import router as asistidas
 from app.suscripcion.api_firma import router as firma
+from app.suscripcion.certificado import ServicioCertificado
 from app.suscripcion.errores import DependenciaNoDisponible, registrar_errores
 from app.suscripcion.firma_asistida import ServicioFirmaAsistida
 from app.suscripcion.modelos_db import AuditoriaAsesorDB, SuscripcionDB
@@ -49,6 +50,13 @@ def _armar_app(servicio_suscripcion, servicio_firma, fabrica, identidad=None):
         suscripciones=servicio_suscripcion,
         firma=servicio_firma,
         identidad=identidad or IdentidadFalsa(),
+        certificados=ServicioCertificado(
+            fabrica=fabrica,
+            identidad=identidad or IdentidadFalsa(),
+            almacen=servicio_firma._almacen,
+            firmador=None,
+            reloj=servicio_firma._reloj,
+        ),
         reloj=servicio_firma._reloj,
     )
     app.state.verificador_asesor = VerificadorJwtHs256(SECRETO, EMISOR)

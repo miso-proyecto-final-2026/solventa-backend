@@ -8,7 +8,7 @@ notificación, recordatorios de vencimiento y avisos de cobro y siniestro.
 ## Cómo fluye
 
 ```
-MS Suscripción ──poliza_emitida──▶ solventa.polizas.ciclovida ──▶ consumidor (solventa-notificaciones.polizas)
+MS Suscripción ──poliza_emitida / confirmacion_reenvio_solicitada──▶ solventa.polizas.ciclovida ──▶ consumidor (solventa-notificaciones.polizas)
                                                                    │ 1. un envío PENDIENTE por canal
                                                                    ▼    (evento de origen + canal: único)
                                           procesador ──▶ CORREO: Identidad (correo) + Suscripción (enlace) ──▶ Amazon SES
