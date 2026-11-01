@@ -271,6 +271,10 @@ class ServicioCertificado:
         cliente_id = await self._identidad.cliente_de_token(token)
         if cliente_id is None:
             raise NoAutenticado
+        return await self.descargar_como(suscripcion_id, cliente_id, idioma)
+
+    async def descargar_como(self, suscripcion_id: str, cliente_id: str, idioma: str) -> Certificado:
+        """Por un cliente ya identificado: su sesión (móvil) o el asesor que lo atendió (HU39)."""
 
         def leer() -> tuple[PolizaDB, SuscripcionDB] | None:
             with self._fabrica() as s:

@@ -4,6 +4,7 @@ import logging
 from datetime import UTC, datetime
 
 import pytest
+from app.eventos import Evento
 from app.notificaciones import repositorio as repo
 from app.notificaciones.modelos_db import BandejaPushDB, EnvioDB
 from sqlalchemy import select
@@ -15,6 +16,7 @@ from tests.dobles import (
     CorreoFalso,
     IdentidadFalsa,
     PushFalso,
+    payload,
     poliza_emitida,
 )
 
@@ -326,3 +328,43 @@ async def test_el_vencimiento_del_enlace_se_muestra_en_la_fecha_de_colombia_y_no
     await servicio.procesar_pendientes()
 
     assert "vence el 31 de octubre de 2026" in correo.enviados[0].texto
+
+
+# --- reenvío de la confirmación (HU39) -----------------------------------------------------------------------------------
+
+def _reenvio(**cambios) -> Evento:
+    return Evento(
+        event_type="confirmacion_reenvio_solicitada", source="ms-suscripcion", correlation_id="susc-1", payload=payload(**cambios)
+    )
+
+
+async def test_el_reenvio_entrega_otro_correo_con_enlace_y_sin_otro_push(armar, fabrica):
+    correo = CorreoFalso()
+    servicio = armar(correo=correo)
+    await _recibir(servicio, fabrica, poliza_emitida())
+    await servicio.procesar_pendientes()
+
+    await _recibir(servicio, fabrica, _reenvio())
+    await servicio.procesar_pendientes()
+
+    assert sorted(e.canal for e in _envios(fabrica)) == ["CORREO", "CORREO", "PUSH"]
+    assert {e.estado for e in _envios(fabrica)} == {"ENVIADO"}
+    assert len(correo.enviados) == 2 and "36GBQKV2CWMM3EBB8Q6Q" in correo.enviados[1].texto
+    assert len(_bandeja(fabrica)) == 1
+
+
+async def test_reentregar_un_reenvio_no_duplica_el_correo(armar, fabrica):
+    correo = CorreoFalso()
+    servicio = armar(correo=correo)
+    evento = _reenvio()
+
+    await _recibir(servicio, fabrica, evento)
+    await _recibir(servicio, fabrica, evento)
+    await servicio.procesar_pendientes()
+
+    assert len(_envios(fabrica)) == 1 and len(correo.enviados) == 1
+
+
+async def test_un_reenvio_mal_formado_se_rechaza_para_que_vaya_a_la_cola_de_fallidos(armar, fabrica):
+    with pytest.raises(ValueError, match="confirmacion_reenvio_solicitada sin: cliente_id"):
+        await _recibir(armar(), fabrica, _reenvio(cliente_id=None))

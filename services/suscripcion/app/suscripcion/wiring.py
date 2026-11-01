@@ -108,7 +108,12 @@ def construir_servicio_firma(config: ConfigSuscripcion, engine: Engine, clientes
 
 
 def construir_servicio_asistida(
-    servicio: ServicioSuscripcion, firma: ServicioFirma, engine: Engine, clientes: list[httpx.AsyncClient], config: ConfigSuscripcion
+    servicio: ServicioSuscripcion,
+    firma: ServicioFirma,
+    certificados: ServicioCertificado,
+    engine: Engine,
+    clientes: list[httpx.AsyncClient],
+    config: ConfigSuscripcion,
 ) -> ServicioFirmaAsistida:
     """Venta asistida (HU39): lo que hace el asesor sobre la saga, con los mismos servicios de HU15 y HU21."""
     return ServicioFirmaAsistida(
@@ -116,6 +121,8 @@ def construir_servicio_asistida(
         suscripciones=servicio,
         firma=firma,
         identidad=ClienteIdentidad(clientes[0], config.identidad_key),
+        certificados=certificados,
+        espera_correo=timedelta(seconds=cargar_reglas().correo_espera_segundos),
     )
 
 

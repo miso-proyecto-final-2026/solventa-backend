@@ -7364,6 +7364,123 @@
               "raw": "{\"cotizacion_id\": \"00000000-0000-4000-8000-000000000000\", \"metodo_pago\": \"tok_sim_postman\", \"acepta_terminos\": true}"
             }
           }
+        },
+        {
+          "name": "Certificado de una suscripción inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('código estándar', () => pm.expect(pm.response.json().error.code).to.eql('SUSCRIPCION_NO_ENCONTRADA'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{asesor_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/asistidas/00000000-0000-4000-8000-000000000000/certificado",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "asistidas",
+                "00000000-0000-4000-8000-000000000000",
+                "certificado"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reenviar la confirmación de una suscripción inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('código estándar', () => pm.expect(pm.response.json().error.code).to.eql('SUSCRIPCION_NO_ENCONTRADA'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{asesor_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/asistidas/00000000-0000-4000-8000-000000000000/confirmacion/reenvio",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "asistidas",
+                "00000000-0000-4000-8000-000000000000",
+                "confirmacion",
+                "reenvio"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Certificado sin sesión",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/asistidas/00000000-0000-4000-8000-000000000000/certificado",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "asistidas",
+                "00000000-0000-4000-8000-000000000000",
+                "certificado"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
         }
       ]
     },

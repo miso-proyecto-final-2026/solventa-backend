@@ -11,15 +11,18 @@ import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.suscripcion import repositorio as repo
 from app.suscripcion.acceso import Asesor
+from app.suscripcion.certificado import Certificado, ServicioCertificado
 from app.suscripcion.clientes import Identidad, ResumenCliente
 from app.suscripcion.errores import (
     AccesoDenegado,
+    CertificadoNoDisponible,
+    CorreoMuySeguido,
     DependenciaNoDisponible,
     SuscripcionNoEncontrada,
 )
@@ -36,6 +39,7 @@ from app.suscripcion.modelos_db import (
     PolizaDB,
     SuscripcionDB,
 )
+from app.suscripcion.polizas import VIGENTE, encolar_reenvio_confirmacion
 from app.suscripcion.servicio import ServicioSuscripcion
 
 log = logging.getLogger("suscripcion.asistida")
@@ -47,6 +51,8 @@ SOLICITAR_CODIGO = "SOLICITAR_CODIGO"
 FIRMAR = "FIRMAR"
 DESCARGAR_DOCUMENTO = "DESCARGAR_DOCUMENTO"
 DESCARGAR_FIRMADA = "DESCARGAR_FIRMADA"
+DESCARGAR_CERTIFICADO = "DESCARGAR_CERTIFICADO"
+REENVIAR_CONFIRMACION = "REENVIAR_CONFIRMACION"
 
 
 def _ahora() -> datetime:
@@ -69,12 +75,16 @@ class ServicioFirmaAsistida:
         suscripciones: ServicioSuscripcion,
         firma: ServicioFirma,
         identidad: Identidad,
+        certificados: ServicioCertificado,
+        espera_correo: timedelta = timedelta(seconds=60),
         reloj: Callable[[], datetime] = _ahora,
     ) -> None:
         self._fabrica = fabrica
         self._suscripciones = suscripciones
         self._firma = firma
         self._identidad = identidad
+        self._certificados = certificados
+        self._espera_correo = espera_correo
         self._reloj = reloj
 
     # --- acceso y auditoría -----------------------------------------------------------------------------------------
@@ -226,3 +236,28 @@ class ServicioFirmaAsistida:
         async with self._auditando(asesor, DESCARGAR_FIRMADA, suscripcion_id):
             susc = await asyncio.to_thread(self._autorizar, suscripcion_id, asesor)
             return await self._firma.copia_firmada_como(suscripcion_id, susc.cliente_id)
+
+    # --- certificado y confirmación -----------------------------------------------------------------------------------
+
+    async def certificado(self, suscripcion_id: str, asesor: Asesor, idioma: str) -> Certificado:
+        """El mismo certificado del titular (HU22), para los clientes que este asesor atendió (ADR-0021)."""
+        async with self._auditando(asesor, DESCARGAR_CERTIFICADO, suscripcion_id):
+            susc = await asyncio.to_thread(self._autorizar, suscripcion_id, asesor)
+            return await self._certificados.descargar_como(suscripcion_id, susc.cliente_id, idioma)
+
+    async def reenviar_confirmacion(self, suscripcion_id: str, asesor: Asesor) -> None:
+        """Pide a Notificaciones otro correo de confirmación. La entrega es asíncrona: aquí solo se registra la solicitud."""
+        async with self._auditando(asesor, REENVIAR_CONFIRMACION, suscripcion_id):
+            await asyncio.to_thread(self._autorizar, suscripcion_id, asesor)
+            await asyncio.to_thread(self._encolar_reenvio, suscripcion_id)
+
+    def _encolar_reenvio(self, suscripcion_id: str) -> None:
+        ahora = self._reloj()
+        with self._fabrica() as s, s.begin():
+            susc = repo.obtener(s, suscripcion_id)
+            poliza = repo.poliza_de_suscripcion(s, suscripcion_id)
+            if poliza is None or poliza.estado != VIGENTE:
+                raise CertificadoNoDisponible
+            if repo.accion_reciente(s, suscripcion_id, REENVIAR_CONFIRMACION, ahora, self._espera_correo):
+                raise CorreoMuySeguido
+            encolar_reenvio_confirmacion(s, poliza, susc, ahora)

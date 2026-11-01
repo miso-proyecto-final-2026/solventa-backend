@@ -20,6 +20,7 @@ from app.suscripcion.api import (
     _firma_resumen,
     a_salida,
 )
+from app.suscripcion.api_certificado import _pdf
 from app.suscripcion.api_firma import (
     DocumentoFirmaOut,
     FirmaOut,
@@ -27,6 +28,7 @@ from app.suscripcion.api_firma import (
     _salida,
     _salida_documento,
 )
+from app.suscripcion.certificado import normalizar_idioma
 from app.suscripcion.dominio import PASOS, EstadoSaga
 from app.suscripcion.firma import OrigenFirma
 from app.suscripcion.firma_asistida import ServicioFirmaAsistida, SuscripcionAsistida
@@ -259,3 +261,28 @@ async def descargar_firmada(suscripcion_id: str, servicio: Asistida, asesor: Ase
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="poliza-{numero}-firmada.pdf"', "Cache-Control": "no-store"},
     )
+
+
+@router.get(
+    "/{suscripcion_id}/certificado",
+    summary="Certificado de cobertura en PDF, en el idioma de `Accept-Language`",
+    response_class=Response,
+    responses={200: {"content": {"application/pdf": {}}}},
+)
+async def certificado(
+    suscripcion_id: str,
+    servicio: Asistida,
+    asesor: AsesorActual,
+    accept_language: Annotated[str | None, Header()] = None,
+) -> Response:
+    return _pdf(await servicio.certificado(suscripcion_id, asesor, normalizar_idioma(accept_language)))
+
+
+@router.post(
+    "/{suscripcion_id}/confirmacion/reenvio",
+    status_code=202,
+    summary="Solicita reenviar al cliente el correo de confirmación; la entrega es asíncrona",
+)
+async def reenviar_confirmacion(suscripcion_id: str, servicio: Asistida, asesor: AsesorActual) -> Response:
+    await servicio.reenviar_confirmacion(suscripcion_id, asesor)
+    return Response(status_code=202)

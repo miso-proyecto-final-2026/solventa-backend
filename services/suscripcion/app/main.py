@@ -56,9 +56,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     firma = construir_servicio_firma(config, engine, clientes)
     app.state.servicio_suscripcion = servicio
     app.state.servicio_firma = firma
-    app.state.servicio_asistida = construir_servicio_asistida(servicio, firma, engine, clientes, config)
-    app.state.verificador_asesor = construir_verificador(config)
     app.state.servicio_certificado = construir_servicio_certificado(config, engine, clientes)
+    app.state.servicio_asistida = construir_servicio_asistida(
+        servicio, firma, app.state.servicio_certificado, engine, clientes, config
+    )
+    app.state.verificador_asesor = construir_verificador(config)
     app.state.tareas = set()
     segundo_plano = [
         asyncio.create_task(relay.ejecutar()),
