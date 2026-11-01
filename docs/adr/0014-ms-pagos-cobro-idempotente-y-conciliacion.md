@@ -2,7 +2,7 @@
 
 - **Estado:** Propuesto (pendiente de revisión por un integrante distinto del autor)
 - **Fecha:** 2026-10-25
-- **Historia:** HU18 (Sprint 2, F09); enmienda por HU19 (2026-10-28, al final). Requisitos RQ-S2 (EC-S2.1), RQ-D1 (EC-D1.2), RQ-M2 (EC-M2.2); HA05, HA08
+- **Historia:** HU18 (Sprint 2, F09); enmienda por HU19 (2026-10-28, al final; verificada en staging el 2026-11-01). Requisitos RQ-S2 (EC-S2.1), RQ-D1 (EC-D1.2), RQ-M2 (EC-M2.2); HA05, HA08
 - **Depende de:** [ADR-0001](0001-descomposicion-microservicios-bounded-contexts.md) (Pagos dueño de `Transacción` y `Token_Tarjeta`; el PAN nunca se persiste), [ADR-0002](0002-comunicacion-sincrona-asincrona-por-flujo.md) (suscripción y cobro por Kafka), [ADR-0004](0004-patron-adaptadores-cambio-de-proveedor.md) (puerto, adaptador, selección por configuración y suite de contrato), [ADR-0010](0010-eventos-sobre-msk-plantilla-por-servicio.md) (plantilla de eventos) y [ADR-0012](0012-ms-suscripcion-saga-decision-y-outbox.md) (saga y cola de salida)
 
 ## Contexto
@@ -73,11 +73,19 @@ pasarela que se pueda cambiar tocando solo el adaptador (EC-M2.2).
 
 ## Enmienda 2026-10-28 — Gestión de cobros fallidos (HU19)
 
-**Estado de la enmienda:** Propuesta. Los puntos marcados como *supuesto* se confirman con el equipo en la revisión del PR.
+**Estado de la enmienda:** Propuesta, como el resto del ADR. Verificada en staging el 2026-11-01 (al final).
+
+**Decisiones de HU19.** Decisiones de diseño tomadas por el autor de la historia; el detalle está en los puntos que
+siguen y su comportamiento se verificó en staging el 2026-11-01:
+
+1. El borde publica solo `/v1/pagos/cobros-fallidos`; el resto de Pagos sigue interno.
+2. El reintento usa el token ya registrado del cliente.
+3. Gracia de 3 días, con alerta de «próximo a vencer» cuando faltan menos de 24 h.
+4. La bandeja y el detalle no muestran datos de contacto del cliente.
 
 - **Exposición en el borde (cambia «sin borde público»).** El borde publica **solo** el prefijo
   `/v1/pagos/cobros-fallidos`. `/v1/pagos/cobros`, `/v1/pagos/tokenizar` y `/v1/pagos/transacciones` siguen internos
-  (clave de servicio, sin ruta en el borde); infra valida que ningún otro prefijo de Pagos se publique. *Supuesto.*
+  (clave de servicio, sin ruta en el borde); infra valida que ningún otro prefijo de Pagos se publique.
 - **Autenticación de la gestión.** Las rutas de cobros fallidos exigen el JWT HS256 que emite Identidad (patrón
   [ADR-0008](0008-autenticacion-provisional-del-asesor-y-cotizacion-sin-cuenta.md)), con rol `ASESOR` u `OPERADOR`; la clave de servicio no las abre.
   El verificador se copia en Pagos, como en Cotización, para no acoplar servicios por una librería compartida. Sin
@@ -88,8 +96,8 @@ pasarela que se pueda cambiar tocando solo el adaptador (EC-M2.2).
   y se avisó al operador) → `RECUPERADO` (un reintento aprobado). Un caso `VENCIDO` todavía se puede reintentar. La
   migración 0002 crea los casos de los rechazos anteriores. Las notas (`notas_cobro_fallido`) guardan autor y fecha y
   rechazan texto con forma de número de tarjeta.
-- **Reintento.** Usa el token ya registrado del cliente (registrar una tarjeta nueva desde mobile queda fuera de HU19;
-  *supuesto*) y una transacción nueva con `origen = gestion` y clave `cobro_prima:<suscripcion_id>:<n>`, así que la
+- **Reintento.** Usa el token ya registrado del cliente (registrar una tarjeta nueva desde mobile queda fuera de HU19)
+  y una transacción nueva con `origen = gestion` y clave `cobro_prima:<suscripcion_id>:<n>`, así que la
   pasarela cobra una sola vez por reintento. La cabecera `Idempotency-Key` de la consola hace que dos clics devuelvan el
   mismo reintento (`Idempotent-Replay: true`), y mientras uno está `PENDIENTE` no se crea otro. El reintento no extiende
   la gracia. El resultado se publica a `solventa.pagos.resultados` igual que el cobro original, así que la saga de
@@ -100,9 +108,52 @@ pasarela que se pueda cambiar tocando solo el adaptador (EC-M2.2).
   `SKIP LOCKED` evita que dos réplicas avisen dos veces. Todavía no hay consumidor de ese topic; Pagos necesita permiso
   de escritura sobre él, porque la cola de salida se detiene en el primer evento que no puede publicar.
 - **Gracia y urgencia.** 3 días (`PERIODO_GRACIA_DIAS`, provisional) y «próximo a vencer» = menos de 24 h
-  (`PAGOS_HORAS_POR_VENCER`). *Supuestos.*
+  (`PAGOS_HORAS_POR_VENCER`).
 - **Datos visibles.** La bandeja y el detalle muestran monto, intentos, último intento, motivo, código de la pasarela,
-  marca y últimos 4. Nunca el token ni datos de contacto del cliente (viven en Identidad; ADR-0008). *Supuesto.*
+  marca y últimos 4. Nunca el token ni datos de contacto del cliente (viven en Identidad; ADR-0008).
 - **Consecuencias.** Pagos pasa de servicio interno a tener una superficie pública acotada (más pruebas de seguridad:
   `tests/test_seguridad.py` recorre también la gestión). La bandeja se ordena por `gracia_hasta` y pagina en la base
   (índice `ix_caso_estado_gracia`).
+
+### Verificación en staging (2026-11-01)
+
+Staging de `solventa-infra` levantado desde `main` (backend `2a4cc53`, infra `d304566`, web `888cf75`): EKS con
+3 × t3.medium en dos zonas, PostgreSQL en RDS Multi-AZ, Redis, MSK (`enable_events = true`) y el borde CloudFront →
+API Gateway → NLB. La consola web se publicó en el bucket de staging detrás de la misma distribución. El ambiente se
+destruyó al terminar. Videos en el issue #72.
+
+- **Borde.** `/v1/pagos/cobros-fallidos` responde 401 sin token y 200 con el token de un asesor; `/v1/pagos/cobros`,
+  `/v1/pagos/tokenizar` y `/v1/pagos/transacciones` responden 404, también por el prefijo `/api/pagos` de la consola y con
+  intentos de rodeo (`/cobros-fallidos/../cobros` sin normalizar y `/cobros-fallidosX`).
+- **Consola web (8 flujos grabados).** Login de asesor, bandeja y filtros (vencido y próximo a vencer primero); login de
+  operador, su navegación y el caso vencido con «Operador avisado»; detalle con historial y notas, incluida la nota con un
+  número de tarjeta, que se rechaza; reintento aprobado; reintento rechazado; pasarela caída (`NO_DISPONIBLE`, el caso
+  sigue pendiente y se muestra el mensaje); botón «Reintentar cobro» bloqueado con un reintento pendiente, también al
+  recargar; guard (sin sesión lleva al login y vuelve; un rol sin permiso vuelve al inicio).
+- **Conciliación automática.** El reintento del caso vencido quedó pendiente con la pasarela caída (3 intentos
+  `NO_DISPONIBLE`); al volver la pasarela, la conciliación lo aprobó con la misma clave y el caso pasó a `RECUPERADO`.
+  El simulador registró una sola solicitud por clave.
+- **Aviso al operador.** El detector pasó el caso vencido a `VENCIDO` y la cola de salida publicó `cobro_gracia_vencida`
+  en `solventa.notificaciones`; los 7 eventos de la cola (6 en `solventa.pagos.resultados` y ese aviso) quedaron
+  publicados en MSK, sin errores en los logs de Pagos.
+
+**Desviaciones de la verificación.**
+
+- Cotización (`solventa-backend`) a 1 réplica (Deployment y `minReplicas` del HPA, con `kubectl`, fuera de Terraform)
+  por capacidad: 3 × t3.medium con un solo nodo en una zona, más el reparto `DoNotSchedule` de HA04.
+- El bootstrap de infra se aplicó a mitad de la sesión: los access entries de EKS necesitaban los roles de CI de Pagos,
+  Notificaciones y la web.
+- `terraform untaint` de la instancia de RDS y de la distribución de CloudFront, marcadas por cortes de DNS local
+  durante la espera del apply y verificadas sanas antes.
+- Siembra por rutas internas: los tres casos (normal, próximo a vencer y vencido) se crearon con
+  `POST /v1/pagos/cobros` por `port-forward`, la gracia de dos de ellos se ajustó por SQL y el modo de la pasarela
+  simulada se cambió con `PASARELA_SIM_MODO`.
+
+**Hallazgos.**
+
+- **HA04:** con nodos desbalanceados entre zonas (2 en una, 1 en la otra), el `topologySpreadConstraints` con
+  `DoNotSchedule` deja réplicas en `Pending` cuando la zona con menos nodos se queda sin CPU, aunque la otra tenga
+  capacidad libre.
+- **Infra:** RDS crea el grupo de logs `/aws/rds/instance/<instancia>/postgresql` por
+  `enabled_cloudwatch_logs_exports`, fuera del estado de Terraform y sin retención, así que sobrevive al destroy;
+  `verificar-teardown.sh` no revisa los logs de RDS.
