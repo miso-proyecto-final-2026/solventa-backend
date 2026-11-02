@@ -23,7 +23,7 @@ Cada petición lleva pruebas (`pm.test`) y guarda las variables que necesita la 
 | MS Cotización / Cotizaciones | `POST /v1/cotizaciones`, `GET /v1/cotizaciones/{id}`, `PUT /v1/cotizaciones/{id}/latencia-cliente` (ambos productos, validaciones, `X-Correlation-Id`, 404) |
 | MS Cotización / Auditoría | `GET /v1/cotizaciones/{id}/desglose` y `GET /v1/cotizaciones/{id}/consultas-externas` (auditor; 401/403/404/422) |
 | MS Siniestros (HU27) | `POST /v1/siniestros/eventos` (202 acuse, 200 duplicado, 400 inválido/fuente ajena, 401) y `GET …/eventos/resumen` |
-| MS Siniestros — validación paramétrica (HU28) | Cinco peticiones en orden: cumple (sismo 6.4), no cumple (5.0), otra zona, póliza vencida y duplicado (200). Las pruebas comprueban el acuse; el resultado de la evaluación se lee en `siniestros.evaluaciones_parametricas` (no hay endpoint de lectura). Requiere pólizas sembradas: ver «Sembrar HU28» abajo. |
+| MS Siniestros — validación paramétrica (HU28) | Siembra de pólizas `pol-demo-*`, cinco casos (cumple, no cumple por umbral, otra zona, póliza vencida y duplicado) con la consulta de su resultado, consulta por póliza y limpieza. Ver «Probar HU28» abajo. |
 | MS Perfilamiento (HU23) | `POST /v1/perfilamiento/{id}/enriquecer`, `GET …/perfil` y `GET …/linaje` (con credencial; 401/403/404/422) |
 | MS Suscripción (HU15) | `POST /v1/suscripciones` (202, idempotencia, cotización ya usada, 401/404/422), `GET /v1/suscripciones/{id}`. Usa el cliente y la cotización de las carpetas anteriores. Quedan fuera `COTIZACION_VENCIDA` (exige una cotización vencida) y las decisiones rechazada/derivada (dependen del perfil del cliente; se prueban en pytest). |
 | MS Suscripción — póliza (HU20) | `GET /v1/suscripciones/{id}/poliza` (404 antes del cobro, inexistente y de otro cliente; 401) y `GET /v1/polizas?cliente_id=` (billetera 200; 403 de otro cliente; 422 sin `cliente_id`; 401). El camino 200 de la póliza exige un cobro confirmado, que llega por Kafka desde MS Pagos: se prueba en pytest y con el recorrido de `docs/evidencias/HU20-documento-poliza.md`. |
@@ -154,43 +154,28 @@ chocar con registros previos.
 - **Sin secretos:** las claves del entorno son valores de desarrollo local. Para otro ambiente, crea un entorno aparte y
   no subas sus claves a git.
 
-## Sembrar las pólizas de HU28
+## Probar HU28 (validación de la condición paramétrica)
 
-La carpeta «MS Siniestros — validación paramétrica (HU28)» usa tres pólizas que deben existir en `siniestros.polizas_parametricas` (variables `param_poliza_id`, `param_poliza_otra_zona_id` y `param_poliza_vencida_id`). En staging Siniestros no puede publicar en `solventa.polizas.ciclovida` (solo Suscripción produce ahí), así que se insertan desde el pod, con el código del propio servicio:
+Todo se hace con la carpeta «MS Siniestros — validación paramétrica (HU28)», sin SQL ni `kubectl`. Necesita un Siniestros con `GET /v1/siniestros/evaluaciones` y `POST/DELETE /v1/siniestros/polizas-demo`, y con el consumidor de eventos funcionando (Kafka); sin Kafka la evaluación no ocurre.
 
-```bash
-kubectl -n staging exec deploy/solventa-siniestros -- python -c "
-import os
-from datetime import datetime, UTC
-from sqlalchemy.orm import Session
-from app.siniestros.repositorio import crear_engine
-from app.siniestros.modelos_db import PolizaParametricaDB as P
-e = crear_engine(os.environ.get('SINIESTROS_DATABASE_URL') or os.environ['DATABASE_URL'])
-d = datetime.fromisoformat
-with Session(e) as s, s.begin():
-    for pid, zona, desde, hasta in [
-        ('pol-demo-001','bogota','2026-01-01T00:00:00+00:00','2027-12-31T00:00:00+00:00'),
-        ('pol-demo-002','cali','2026-01-01T00:00:00+00:00','2027-12-31T00:00:00+00:00'),
-        ('pol-demo-003','bogota','2025-01-01T00:00:00+00:00','2025-12-31T00:00:00+00:00'),
-    ]:
-        s.merge(P(poliza_id=pid, producto='parametrico_clima', zona=zona,
-                  vigencia_desde=d(desde), fecha_vencimiento=d(hasta), actualizada_en=datetime.now(UTC)))
-print('sembradas')
-"
-```
+**Variables del entorno:** `siniestros_url`, `siniestros_key` (secret) y `siniestros_fuente`. En staging, con túnel (`kubectl -n staging port-forward svc/solventa-siniestros 8004:80`) o por la URL pública, `siniestros_fuente` = `proveedor-simulado`. Las `param_*` y `hu28_*` ya traen valores por defecto.
 
-La zona del evento es `param_zona_evento` (`bogota`). Para ver el resultado:
+**Cómo ejecutarla:** botón derecho en la carpeta → *Run folder* (Collection Runner), en orden. Cada petición «b» consulta el resultado del evento anterior y reintenta hasta 10 veces mientras el consumidor lo procesa. Para correrla a mano, ejecuta cada una en orden y, si una «b» dice que no hay evaluación, espera unos segundos y reenvíala.
 
-```bash
-kubectl -n staging exec deploy/solventa-siniestros -- python -c "
-import os
-from sqlalchemy import text
-from app.siniestros.repositorio import crear_engine
-e = crear_engine(os.environ.get('SINIESTROS_DATABASE_URL') or os.environ['DATABASE_URL'])
-with e.connect() as c:
-    for r in c.execute(text(\"select poliza_id, resultado, motivo, valores, version_reglas, comando_id from siniestros.evaluaciones_parametricas where poliza_id like 'pol-demo-%' order by evaluado_en\")):
-        print(r)
-"
-```
+| # | Petición | Qué hace | Resultado esperado |
+|---|---|---|---|
+| 0 | Sembrar pólizas de prueba | `POST /polizas-demo` con `pol-demo-001` (zona del evento), `002` (otra zona) y `003` (vencida) | 200, `sembradas: 3` |
+| 1 / 1b | Cumple | Sismo 6.4 a la 001; luego `GET /evaluaciones?evento_id=…` | 202; `CORRESPONDE_PAGO`, `condicion_cumplida`, con `comando_id` |
+| 2 / 2b | No cumple (5.0) | Sismo 5.0 a la 001 | `NO_CORRESPONDE`, `condicion_no_cumplida:magnitud`, sin comando |
+| 3 / 3b | Otra zona | Sismo 6.4 a la 002 | `NO_CORRESPONDE`, `fuera_de_la_zona_asegurada` |
+| 4 / 4b | Póliza vencida | Sismo 6.4 a la 003 | `NO_CORRESPONDE`, `poliza_vencida` |
+| 5 / 5b | Duplicado | Reenvía el evento del caso 1 | 200, `duplicado: true`; luego una sola evaluación con el mismo `comando_id` |
+| 6 | Consultar por póliza | `GET /evaluaciones?poliza_id=…&limite=20` | Lista con la auditoría de cada par |
+| 7 | Limpiar pólizas de prueba | `DELETE /polizas-demo` | 200, `borradas ≥ 3` |
 
-`evaluaciones_parametricas` es de solo inserción: esas filas no se pueden borrar después.
+Notas:
+
+- `/polizas-demo` solo acepta ids `pol-demo-*` y productos del archivo de reglas; el `DELETE` solo borra esos ids. No toca pólizas reales.
+- `evaluaciones_parametricas` es de solo inserción: las filas de la prueba se conservan aunque se limpien las pólizas. Por eso cada ejecución usa `evento_id` nuevos (`pm-hu28-<timestamp>`).
+- `GET /evaluaciones` solo devuelve eventos que recibió la fuente de la llave.
+- La reentrega del bus al consumidor (EC-D1.1) no se puede forzar por la API; la petición 5b comprueba su efecto (un solo pago).

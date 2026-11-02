@@ -7947,10 +7947,65 @@
     },
     {
       "name": "MS Siniestros — validación paramétrica (HU28)",
-      "description": "Ejecutar en orden (1→5). Las pólizas `param_*` deben estar sembradas en `siniestros.polizas_parametricas`. Las pruebas comprueban el acuse; el resultado de la evaluación se verifica en la base (no hay endpoint de lectura).",
+      "description": "Ejecutar la carpeta completa con el Collection Runner, en orden (0 → 7). Necesita Siniestros con el GET de evaluaciones y la siembra (PR #66). Cada caso envía un evento y consulta su resultado.",
       "item": [
         {
-          "name": "1. Cumple - sismo 6.4 en la zona asegurada",
+          "name": "0. Sembrar pólizas de prueba",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('3 pólizas sembradas', () => pm.expect(d.sembradas).to.eql(3));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/polizas-demo",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "polizas-demo"
+              ]
+            },
+            "description": "Crea (o actualiza) tres pólizas `pol-demo-*` en la copia local de Siniestros: 001 en la zona del evento, 002 en otra zona y 003 ya vencida. Idempotente: puede ejecutarse varias veces. Sustituye al insert por SQL desde el pod.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"polizas\": [\n    {\n      \"poliza_id\": \"{{param_poliza_id}}\",\n      \"producto\": \"parametrico_clima\",\n      \"zona\": \"{{param_zona_evento}}\",\n      \"vigencia_desde\": \"2026-01-01T00:00:00Z\",\n      \"fecha_vencimiento\": \"2030-12-31T00:00:00Z\"\n    },\n    {\n      \"poliza_id\": \"{{param_poliza_otra_zona_id}}\",\n      \"producto\": \"parametrico_clima\",\n      \"zona\": \"cali\",\n      \"vigencia_desde\": \"2026-01-01T00:00:00Z\",\n      \"fecha_vencimiento\": \"2030-12-31T00:00:00Z\"\n    },\n    {\n      \"poliza_id\": \"{{param_poliza_vencida_id}}\",\n      \"producto\": \"parametrico_clima\",\n      \"zona\": \"{{param_zona_evento}}\",\n      \"vigencia_desde\": \"2024-01-01T00:00:00Z\",\n      \"fecha_vencimiento\": \"2024-12-31T00:00:00Z\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "1. Cumple - enviar sismo 6.4 en la zona asegurada",
           "event": [
             {
               "listen": "prerequest",
@@ -7968,7 +8023,7 @@
                 "exec": [
                   "pm.test('Responde 202', () => pm.response.to.have.status(202));",
                   "const d = pm.response.json();",
-                  "pm.test('acuse de recibido, no duplicado', () => { pm.expect(d.estado).to.eql('recibido'); pm.expect(d.duplicado).to.eql(false); });",
+                  "pm.test('recibido, no duplicado', () => { pm.expect(d.estado).to.eql('recibido'); pm.expect(d.duplicado).to.eql(false); });",
                   "pm.collectionVariables.set('hu28_evento_uuid', d.evento_uuid);"
                 ]
               }
@@ -8002,7 +8057,7 @@
                 "eventos"
               ]
             },
-            "description": "Corresponde pago: magnitud 6.4 >= 6.0 y la zona del evento es la asegurada. Se dirige a una sola póliza (`poliza_id`) para no evaluar las demás del ambiente. El resultado se ve en `siniestros.evaluaciones_parametricas` (resultado «corresponde_pago», comando_id con valor) y en el topic `solventa.siniestros.comandos`; la API solo devuelve el acuse. Requiere sembrar antes la póliza (ver README de esta carpeta).",
+            "description": "Magnitud 6.4 >= 6.0 y la zona coincide con la de la póliza. Se dirige a una sola póliza (`poliza_id`) para no evaluar las demás del ambiente.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"evento_id\": \"{{hu28_evento_cumple}}\",\n  \"tipo\": \"sismo\",\n  \"fuente\": \"{{siniestros_fuente}}\",\n  \"ocurrido_en\": \"{{$isoTimestamp}}\",\n  \"poliza_id\": \"{{param_poliza_id}}\",\n  \"datos\": {\n    \"magnitud\": 6.4,\n    \"zona\": \"{{param_zona_evento}}\"\n  }\n}",
@@ -8015,7 +8070,66 @@
           }
         },
         {
-          "name": "2. No cumple - sismo 5.0 (bajo el umbral)",
+          "name": "1b. Cumple - ver resultado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const lista = pm.response.json();",
+                  "const intento = Number(pm.collectionVariables.get('hu28_intento') || 0);",
+                  "if (lista.length === 0 && intento < 10) {",
+                  "  pm.collectionVariables.set('hu28_intento', intento + 1);",
+                  "  setTimeout(() => {}, 1500);",
+                  "  postman.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "  pm.collectionVariables.set('hu28_intento', 0);",
+                  "  pm.test('hay una evaluación (si falla, el consumidor aún no procesa: espera y reenvía esta petición)', () => pm.expect(lista.length).to.eql(1));",
+                  "  const e = lista[0] || {};",
+                  "pm.test('corresponde pago, con comando', () => { pm.expect(e.resultado).to.eql('CORRESPONDE_PAGO'); pm.expect(e.motivo).to.eql('condicion_cumplida'); pm.expect(e.comando_id).to.be.a('string'); });",
+                  "pm.test('auditoría completa', () => { pm.expect(e.version_reglas).to.be.a('string'); pm.expect(e.valores).to.have.property('magnitud'); });",
+                  "pm.collectionVariables.set('hu28_comando_id', e.comando_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/evaluaciones?evento_id={{hu28_evento_cumple}}",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "evaluaciones"
+              ],
+              "query": [
+                {
+                  "key": "evento_id",
+                  "value": "{{hu28_evento_cumple}}"
+                }
+              ]
+            },
+            "description": "Debe ser CORRESPONDE_PAGO con `comando_id`. Si la lista viene vacía, el consumidor aún no procesa el evento: espera unos segundos y reenvía."
+          }
+        },
+        {
+          "name": "2. No cumple - enviar sismo 5.0 (bajo el umbral)",
           "event": [
             {
               "listen": "prerequest",
@@ -8032,8 +8146,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Responde 202', () => pm.response.to.have.status(202));",
-                  "const d = pm.response.json();",
-                  "pm.test('acuse de recibido, no duplicado', () => { pm.expect(d.estado).to.eql('recibido'); pm.expect(d.duplicado).to.eql(false); });"
+                  "const d = pm.response.json();"
                 ]
               }
             }
@@ -8066,7 +8179,7 @@
                 "eventos"
               ]
             },
-            "description": "No corresponde: magnitud 5.0 < 6.0. Se registra el motivo y no se emite comando.",
+            "description": "Magnitud 5.0 < 6.0: no corresponde y no se emite comando.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"evento_id\": \"{{hu28_evento_nocumple}}\",\n  \"tipo\": \"sismo\",\n  \"fuente\": \"{{siniestros_fuente}}\",\n  \"ocurrido_en\": \"{{$isoTimestamp}}\",\n  \"poliza_id\": \"{{param_poliza_id}}\",\n  \"datos\": {\n    \"magnitud\": 5.0,\n    \"zona\": \"{{param_zona_evento}}\"\n  }\n}",
@@ -8079,7 +8192,64 @@
           }
         },
         {
-          "name": "3. No cumple - otra zona asegurada",
+          "name": "2b. No cumple - ver resultado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const lista = pm.response.json();",
+                  "const intento = Number(pm.collectionVariables.get('hu28_intento') || 0);",
+                  "if (lista.length === 0 && intento < 10) {",
+                  "  pm.collectionVariables.set('hu28_intento', intento + 1);",
+                  "  setTimeout(() => {}, 1500);",
+                  "  postman.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "  pm.collectionVariables.set('hu28_intento', 0);",
+                  "  pm.test('hay una evaluación (si falla, el consumidor aún no procesa: espera y reenvía esta petición)', () => pm.expect(lista.length).to.eql(1));",
+                  "  const e = lista[0] || {};",
+                  "pm.test('no corresponde, sin comando', () => { pm.expect(e.resultado).to.eql('NO_CORRESPONDE'); pm.expect(e.motivo).to.eql('condicion_no_cumplida:magnitud'); pm.expect(e.comando_id).to.eql(null); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/evaluaciones?evento_id={{hu28_evento_nocumple}}",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "evaluaciones"
+              ],
+              "query": [
+                {
+                  "key": "evento_id",
+                  "value": "{{hu28_evento_nocumple}}"
+                }
+              ]
+            },
+            "description": "NO_CORRESPONDE con motivo `condicion_no_cumplida:magnitud` y sin comando."
+          }
+        },
+        {
+          "name": "3. No cumple - enviar a una póliza de otra zona",
           "event": [
             {
               "listen": "prerequest",
@@ -8096,8 +8266,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Responde 202', () => pm.response.to.have.status(202));",
-                  "const d = pm.response.json();",
-                  "pm.test('acuse de recibido, no duplicado', () => { pm.expect(d.estado).to.eql('recibido'); pm.expect(d.duplicado).to.eql(false); });"
+                  "const d = pm.response.json();"
                 ]
               }
             }
@@ -8130,7 +8299,7 @@
                 "eventos"
               ]
             },
-            "description": "Magnitud 6.4 pero la póliza asegura otra zona: no corresponde, motivo `fuera_de_la_zona_asegurada`.",
+            "description": "Magnitud 6.4 pero la póliza asegura otra zona.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"evento_id\": \"{{hu28_evento_otra_zona}}\",\n  \"tipo\": \"sismo\",\n  \"fuente\": \"{{siniestros_fuente}}\",\n  \"ocurrido_en\": \"{{$isoTimestamp}}\",\n  \"poliza_id\": \"{{param_poliza_otra_zona_id}}\",\n  \"datos\": {\n    \"magnitud\": 6.4,\n    \"zona\": \"{{param_zona_evento}}\"\n  }\n}",
@@ -8143,7 +8312,64 @@
           }
         },
         {
-          "name": "4. No cumple - póliza vencida",
+          "name": "3b. Otra zona - ver resultado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const lista = pm.response.json();",
+                  "const intento = Number(pm.collectionVariables.get('hu28_intento') || 0);",
+                  "if (lista.length === 0 && intento < 10) {",
+                  "  pm.collectionVariables.set('hu28_intento', intento + 1);",
+                  "  setTimeout(() => {}, 1500);",
+                  "  postman.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "  pm.collectionVariables.set('hu28_intento', 0);",
+                  "  pm.test('hay una evaluación (si falla, el consumidor aún no procesa: espera y reenvía esta petición)', () => pm.expect(lista.length).to.eql(1));",
+                  "  const e = lista[0] || {};",
+                  "pm.test('fuera de la zona asegurada', () => { pm.expect(e.resultado).to.eql('NO_CORRESPONDE'); pm.expect(e.motivo).to.eql('fuera_de_la_zona_asegurada'); pm.expect(e.comando_id).to.eql(null); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/evaluaciones?evento_id={{hu28_evento_otra_zona}}",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "evaluaciones"
+              ],
+              "query": [
+                {
+                  "key": "evento_id",
+                  "value": "{{hu28_evento_otra_zona}}"
+                }
+              ]
+            },
+            "description": "NO_CORRESPONDE con motivo `fuera_de_la_zona_asegurada`."
+          }
+        },
+        {
+          "name": "4. No cumple - enviar a una póliza vencida",
           "event": [
             {
               "listen": "prerequest",
@@ -8160,8 +8386,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Responde 202', () => pm.response.to.have.status(202));",
-                  "const d = pm.response.json();",
-                  "pm.test('acuse de recibido, no duplicado', () => { pm.expect(d.estado).to.eql('recibido'); pm.expect(d.duplicado).to.eql(false); });"
+                  "const d = pm.response.json();"
                 ]
               }
             }
@@ -8194,7 +8419,7 @@
                 "eventos"
               ]
             },
-            "description": "La póliza no cubre la fecha del evento: no corresponde, motivo `poliza_vencida`.",
+            "description": "La póliza no cubre la fecha del evento.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"evento_id\": \"{{hu28_evento_vencida}}\",\n  \"tipo\": \"sismo\",\n  \"fuente\": \"{{siniestros_fuente}}\",\n  \"ocurrido_en\": \"{{$isoTimestamp}}\",\n  \"poliza_id\": \"{{param_poliza_vencida_id}}\",\n  \"datos\": {\n    \"magnitud\": 6.4,\n    \"zona\": \"{{param_zona_evento}}\"\n  }\n}",
@@ -8207,7 +8432,64 @@
           }
         },
         {
-          "name": "5. Duplicado - reenvío del evento 1",
+          "name": "4b. Póliza vencida - ver resultado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const lista = pm.response.json();",
+                  "const intento = Number(pm.collectionVariables.get('hu28_intento') || 0);",
+                  "if (lista.length === 0 && intento < 10) {",
+                  "  pm.collectionVariables.set('hu28_intento', intento + 1);",
+                  "  setTimeout(() => {}, 1500);",
+                  "  postman.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "  pm.collectionVariables.set('hu28_intento', 0);",
+                  "  pm.test('hay una evaluación (si falla, el consumidor aún no procesa: espera y reenvía esta petición)', () => pm.expect(lista.length).to.eql(1));",
+                  "  const e = lista[0] || {};",
+                  "pm.test('póliza vencida', () => { pm.expect(e.resultado).to.eql('NO_CORRESPONDE'); pm.expect(e.motivo).to.eql('poliza_vencida'); pm.expect(e.comando_id).to.eql(null); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/evaluaciones?evento_id={{hu28_evento_vencida}}",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "evaluaciones"
+              ],
+              "query": [
+                {
+                  "key": "evento_id",
+                  "value": "{{hu28_evento_vencida}}"
+                }
+              ]
+            },
+            "description": "NO_CORRESPONDE con motivo `poliza_vencida`."
+          }
+        },
+        {
+          "name": "5. Duplicado - reenviar el evento del caso 1",
           "event": [
             {
               "listen": "test",
@@ -8249,7 +8531,7 @@
                 "eventos"
               ]
             },
-            "description": "Reenvía el `evento_id` del caso 1: 200 con `duplicado: true`, el mismo `evento_uuid`, y no se crea otra evaluación ni otro comando. (La reentrega del bus al consumidor, EC-D1.1, no se puede forzar por la API: se verifica en la base con una sola fila por par evento–póliza.)",
+            "description": "Mismo `evento_id` que el caso 1: 200 con `duplicado: true` y el mismo `evento_uuid`. La reentrega del bus al consumidor (EC-D1.1) no se puede forzar por la API: se comprueba en el paso siguiente.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"evento_id\": \"{{hu28_evento_cumple}}\",\n  \"tipo\": \"sismo\",\n  \"fuente\": \"{{siniestros_fuente}}\",\n  \"ocurrido_en\": \"{{$isoTimestamp}}\",\n  \"poliza_id\": \"{{param_poliza_id}}\",\n  \"datos\": {\n    \"magnitud\": 6.4,\n    \"zona\": \"{{param_zona_evento}}\"\n  }\n}",
@@ -8259,6 +8541,145 @@
                 }
               }
             }
+          }
+        },
+        {
+          "name": "5b. Duplicado - sigue habiendo un solo pago",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const lista = pm.response.json();",
+                  "pm.test('una sola evaluación', () => pm.expect(lista.length).to.eql(1));",
+                  "pm.test('mismo comando que el primer envío', () => pm.expect(lista[0].comando_id).to.eql(pm.collectionVariables.get('hu28_comando_id')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/evaluaciones?evento_id={{hu28_evento_cumple}}",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "evaluaciones"
+              ],
+              "query": [
+                {
+                  "key": "evento_id",
+                  "value": "{{hu28_evento_cumple}}"
+                }
+              ]
+            },
+            "description": "Una sola evaluación y el mismo `comando_id` que en el caso 1: no se emitió un segundo comando."
+          }
+        },
+        {
+          "name": "6. Consultar por póliza",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const lista = pm.response.json();",
+                  "pm.test('cada fila trae el resultado y su auditoría', () => lista.forEach(e => { pm.expect(e).to.include.keys('evento_id','poliza_id','resultado','motivo','valores','version_reglas','comando_id','evaluado_en'); }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/evaluaciones?poliza_id={{param_poliza_id}}&limite=20",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "evaluaciones"
+              ],
+              "query": [
+                {
+                  "key": "poliza_id",
+                  "value": "{{param_poliza_id}}"
+                },
+                {
+                  "key": "limite",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Todas las evaluaciones de la póliza 001, más reciente primero (`limite` opcional, 1 a 200)."
+          }
+        },
+        {
+          "name": "7. Limpiar pólizas de prueba",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('borró las 3 pólizas demo', () => pm.expect(pm.response.json().borradas).to.be.at.least(3));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/polizas-demo",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "polizas-demo"
+              ]
+            },
+            "description": "Borra solo las `pol-demo-*`. No toca pólizas reales ni las evaluaciones (son de solo inserción: las filas de esta prueba se conservan)."
           }
         }
       ]
@@ -9974,6 +10395,14 @@
     },
     {
       "key": "hu28_evento_uuid",
+      "value": ""
+    },
+    {
+      "key": "hu28_comando_id",
+      "value": ""
+    },
+    {
+      "key": "hu28_intento",
       "value": ""
     }
   ]
