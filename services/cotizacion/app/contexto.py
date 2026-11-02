@@ -13,3 +13,4 @@ correlacion_id: ContextVar[str | None] = ContextVar("correlacion_id", default=No
 cotizacion_en_curso: ContextVar[str | None] = ContextVar(
     "cotizacion_en_curso", default=None
 )
+traza_id: ContextVar[str | None] = ContextVar("traza_id", default=None)

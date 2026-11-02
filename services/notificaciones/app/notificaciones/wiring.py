@@ -24,6 +24,7 @@ from app.eventos import (
     brokers_desde_entorno,
     parametros_seguridad,
 )
+from app.logs import ganchos_http
 from app.notificaciones.canales import CorreoSes, CorreoSimulado, PushSimulado
 from app.notificaciones.clientes import ClienteIdentidad, ClienteSuscripcion, Identidad
 from app.notificaciones.config import (
@@ -43,7 +44,7 @@ def _http(url: str | None, variable: str, config: ConfigNotificaciones) -> httpx
     if not url:
         # Sin sustituto: Notificaciones no tiene sentido sin sus vecinos, ni siquiera en desarrollo.
         raise RuntimeError(f"Falta {variable} (URL del servicio vecino)")
-    return httpx.AsyncClient(base_url=url.rstrip("/"), timeout=config.timeout_s)
+    return httpx.AsyncClient(base_url=url.rstrip("/"), timeout=config.timeout_s, event_hooks=ganchos_http())
 
 
 def construir_correo(config: ConfigNotificaciones) -> CanalCorreo:

@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.correlacion import MiddlewareCorrelacion
+from app.logs import configurar_logs
 from app.perfilamiento.api import router as perfilamiento_router
 from app.perfilamiento.config import ConfigPerfilamiento
 from app.perfilamiento.errores import registrar_errores
@@ -26,6 +27,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await fuentes.cerrar()
         engine.dispose()
 
+
+configurar_logs()
 
 app = FastAPI(title="Solventa — MS Perfilamiento", version="0.1.0", lifespan=lifespan)
 app.include_router(perfilamiento_router)
