@@ -7946,6 +7946,324 @@
       ]
     },
     {
+      "name": "MS Siniestros — validación paramétrica (HU28)",
+      "description": "Ejecutar en orden (1→5). Las pólizas `param_*` deben estar sembradas en `siniestros.polizas_parametricas`. Las pruebas comprueban el acuse; el resultado de la evaluación se verifica en la base (no hay endpoint de lectura).",
+      "item": [
+        {
+          "name": "1. Cumple - sismo 6.4 en la zona asegurada",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('hu28_evento_cumple', 'pm-hu28-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 202', () => pm.response.to.have.status(202));",
+                  "const d = pm.response.json();",
+                  "pm.test('acuse de recibido, no duplicado', () => { pm.expect(d.estado).to.eql('recibido'); pm.expect(d.duplicado).to.eql(false); });",
+                  "pm.collectionVariables.set('hu28_evento_uuid', d.evento_uuid);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/eventos",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "eventos"
+              ]
+            },
+            "description": "Corresponde pago: magnitud 6.4 >= 6.0 y la zona del evento es la asegurada. Se dirige a una sola póliza (`poliza_id`) para no evaluar las demás del ambiente. El resultado se ve en `siniestros.evaluaciones_parametricas` (resultado «corresponde_pago», comando_id con valor) y en el topic `solventa.siniestros.comandos`; la API solo devuelve el acuse. Requiere sembrar antes la póliza (ver README de esta carpeta).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"evento_id\": \"{{hu28_evento_cumple}}\",\n  \"tipo\": \"sismo\",\n  \"fuente\": \"{{siniestros_fuente}}\",\n  \"ocurrido_en\": \"{{$isoTimestamp}}\",\n  \"poliza_id\": \"{{param_poliza_id}}\",\n  \"datos\": {\n    \"magnitud\": 6.4,\n    \"zona\": \"{{param_zona_evento}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "2. No cumple - sismo 5.0 (bajo el umbral)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('hu28_evento_nocumple', 'pm-hu28-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 202', () => pm.response.to.have.status(202));",
+                  "const d = pm.response.json();",
+                  "pm.test('acuse de recibido, no duplicado', () => { pm.expect(d.estado).to.eql('recibido'); pm.expect(d.duplicado).to.eql(false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/eventos",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "eventos"
+              ]
+            },
+            "description": "No corresponde: magnitud 5.0 < 6.0. Se registra el motivo y no se emite comando.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"evento_id\": \"{{hu28_evento_nocumple}}\",\n  \"tipo\": \"sismo\",\n  \"fuente\": \"{{siniestros_fuente}}\",\n  \"ocurrido_en\": \"{{$isoTimestamp}}\",\n  \"poliza_id\": \"{{param_poliza_id}}\",\n  \"datos\": {\n    \"magnitud\": 5.0,\n    \"zona\": \"{{param_zona_evento}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "3. No cumple - otra zona asegurada",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('hu28_evento_otra_zona', 'pm-hu28-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 202', () => pm.response.to.have.status(202));",
+                  "const d = pm.response.json();",
+                  "pm.test('acuse de recibido, no duplicado', () => { pm.expect(d.estado).to.eql('recibido'); pm.expect(d.duplicado).to.eql(false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/eventos",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "eventos"
+              ]
+            },
+            "description": "Magnitud 6.4 pero la póliza asegura otra zona: no corresponde, motivo `fuera_de_la_zona_asegurada`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"evento_id\": \"{{hu28_evento_otra_zona}}\",\n  \"tipo\": \"sismo\",\n  \"fuente\": \"{{siniestros_fuente}}\",\n  \"ocurrido_en\": \"{{$isoTimestamp}}\",\n  \"poliza_id\": \"{{param_poliza_otra_zona_id}}\",\n  \"datos\": {\n    \"magnitud\": 6.4,\n    \"zona\": \"{{param_zona_evento}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "4. No cumple - póliza vencida",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('hu28_evento_vencida', 'pm-hu28-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 202', () => pm.response.to.have.status(202));",
+                  "const d = pm.response.json();",
+                  "pm.test('acuse de recibido, no duplicado', () => { pm.expect(d.estado).to.eql('recibido'); pm.expect(d.duplicado).to.eql(false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/eventos",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "eventos"
+              ]
+            },
+            "description": "La póliza no cubre la fecha del evento: no corresponde, motivo `poliza_vencida`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"evento_id\": \"{{hu28_evento_vencida}}\",\n  \"tipo\": \"sismo\",\n  \"fuente\": \"{{siniestros_fuente}}\",\n  \"ocurrido_en\": \"{{$isoTimestamp}}\",\n  \"poliza_id\": \"{{param_poliza_vencida_id}}\",\n  \"datos\": {\n    \"magnitud\": 6.4,\n    \"zona\": \"{{param_zona_evento}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "5. Duplicado - reenvío del evento 1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('es el mismo evento', () => { pm.expect(d.duplicado).to.eql(true); pm.expect(d.evento_uuid).to.eql(pm.collectionVariables.get('hu28_evento_uuid')); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/eventos",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "eventos"
+              ]
+            },
+            "description": "Reenvía el `evento_id` del caso 1: 200 con `duplicado: true`, el mismo `evento_uuid`, y no se crea otra evaluación ni otro comando. (La reentrega del bus al consumidor, EC-D1.1, no se puede forzar por la API: se verifica en la base con una sola fila por par evento–póliza.)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"evento_id\": \"{{hu28_evento_cumple}}\",\n  \"tipo\": \"sismo\",\n  \"fuente\": \"{{siniestros_fuente}}\",\n  \"ocurrido_en\": \"{{$isoTimestamp}}\",\n  \"poliza_id\": \"{{param_poliza_id}}\",\n  \"datos\": {\n    \"magnitud\": 6.4,\n    \"zona\": \"{{param_zona_evento}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "MS Pagos (HU18)",
       "description": "Servicio interno (sin borde público): todas las rutas exigen `X-Service-Key`. En staging se llega por `kubectl port-forward` (ver README). La pasarela es el simulador: el prefijo del token elige el modo (`tok_sim_rechazar_…`, `tok_sim_perder_…`, `tok_sim_tardar_…`). Nunca se envía un número de tarjeta.",
       "item": [
@@ -9621,6 +9939,42 @@
     {
       "key": "notificaciones_url",
       "value": "http://localhost:8006"
+    },
+    {
+      "key": "param_poliza_id",
+      "value": "pol-demo-001"
+    },
+    {
+      "key": "param_poliza_otra_zona_id",
+      "value": "pol-demo-002"
+    },
+    {
+      "key": "param_poliza_vencida_id",
+      "value": "pol-demo-003"
+    },
+    {
+      "key": "param_zona_evento",
+      "value": "bogota"
+    },
+    {
+      "key": "hu28_evento_cumple",
+      "value": ""
+    },
+    {
+      "key": "hu28_evento_nocumple",
+      "value": ""
+    },
+    {
+      "key": "hu28_evento_otra_zona",
+      "value": ""
+    },
+    {
+      "key": "hu28_evento_vencida",
+      "value": ""
+    },
+    {
+      "key": "hu28_evento_uuid",
+      "value": ""
     }
   ]
 }
