@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import Engine, create_engine, event, func, select
+from sqlalchemy import Engine, create_engine, delete, event, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -17,8 +17,10 @@ from app.siniestros.modelos_db import (
     EVENTOS_PROCESADOS,
     SCHEMA,
     BaseSiniestros,
+    EvaluacionParametricaDB,
     EventoParametricoDB,
     EventoRechazadoDB,
+    PolizaParametricaDB,
     PublicacionBusDB,
 )
 
@@ -210,3 +212,51 @@ class RepositorioEventos:
                 )
                 or 0,
             }
+
+    def evaluaciones(
+        self, fuente: str, evento_id: str | None, poliza_id: str | None, limite: int
+    ) -> list[dict[str, Any]]:
+        """Resultados de HU28 de los eventos que recibió `fuente` (nunca los de otra fuente), del más reciente al más antiguo."""
+        consulta = (
+            select(EvaluacionParametricaDB, EventoParametricoDB.evento_id)
+            .join(EventoParametricoDB, EventoParametricoDB.id == EvaluacionParametricaDB.evento_uuid)
+            .where(EventoParametricoDB.fuente == fuente)
+            .order_by(EvaluacionParametricaDB.evaluado_en.desc(), EvaluacionParametricaDB.poliza_id)
+            .limit(limite)
+        )
+        if evento_id is not None:
+            consulta = consulta.where(EventoParametricoDB.evento_id == evento_id)
+        if poliza_id is not None:
+            consulta = consulta.where(EvaluacionParametricaDB.poliza_id == poliza_id)
+        with self._fabrica() as sesion:
+            return [
+                {
+                    "evento_id": id_proveedor,
+                    "evento_uuid": ev.evento_uuid,
+                    "poliza_id": ev.poliza_id,
+                    "resultado": ev.resultado,
+                    "motivo": ev.motivo,
+                    "valores": ev.valores,
+                    "version_reglas": ev.version_reglas,
+                    "comando_id": ev.comando_id,
+                    "evaluado_en": _utc(ev.evaluado_en).isoformat(),
+                }
+                for ev, id_proveedor in sesion.execute(consulta)
+            ]
+
+    def sembrar_polizas(self, polizas: list[dict[str, Any]], actualizada_en: datetime) -> int:
+        """Crea o actualiza pólizas de prueba en la copia local (idempotente por `poliza_id`)."""
+        with self._fabrica() as sesion:
+            for p in polizas:
+                sesion.merge(PolizaParametricaDB(**p, actualizada_en=actualizada_en))
+            sesion.commit()
+        return len(polizas)
+
+    def borrar_polizas_demo(self, prefijo: str) -> int:
+        """Borra solo las pólizas cuyo id empieza por `prefijo`. No toca las evaluaciones (son de solo inserción)."""
+        with self._fabrica() as sesion:
+            n = sesion.execute(
+                delete(PolizaParametricaDB).where(PolizaParametricaDB.poliza_id.like(f"{prefijo}%"))
+            ).rowcount
+            sesion.commit()
+        return n or 0

@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, Request, Response
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.seguridad import clave_valida
 from app.siniestros.dominio import TIPOS_EVENTO
 from app.siniestros.errores import EventoInvalido, NoAutenticado
+from app.siniestros.parametrico import cargar_reglas
 from app.siniestros.servicio import Receptor
 
 
@@ -78,6 +80,18 @@ class ResumenOut(BaseModel):
     reentregas: int
 
 
+class EvaluacionOut(BaseModel):
+    evento_id: str
+    evento_uuid: str
+    poliza_id: str
+    resultado: str
+    motivo: str
+    valores: dict[str, Any]
+    version_reglas: str
+    comando_id: str | None
+    evaluado_en: str
+
+
 router = APIRouter(prefix="/v1/siniestros", tags=["siniestros"])
 
 
@@ -125,3 +139,93 @@ async def recibir_evento(
 )
 async def resumen(_fuente: Proveedor, receptor: ReceptorActual) -> dict[str, int]:
     return await receptor.resumen()
+
+
+@router.get(
+    "/evaluaciones",
+    response_model=list[EvaluacionOut],
+    summary="Resultado de validar la condición paramétrica de los eventos recibidos (HU28)",
+)
+async def evaluaciones(
+    fuente: Proveedor,
+    receptor: ReceptorActual,
+    evento_id: Annotated[str | None, Query(max_length=64, description="El evento_id que asignó el proveedor")] = None,
+    poliza_id: Annotated[str | None, Query(max_length=64)] = None,
+    limite: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[dict[str, Any]]:
+    """Solo lectura. Devuelve únicamente las evaluaciones de eventos que recibió la fuente de la llave.
+
+    Muestra, por cada par evento–póliza, el resultado, el motivo, los valores evaluados, la versión de las
+    reglas y el id del comando emitido (nulo si no corresponde pago). Aparece cuando el consumidor ya procesó el evento.
+    """
+    return await receptor.evaluaciones(fuente, evento_id, poliza_id, limite)
+
+
+# --- Siembra de pólizas de prueba ------------------------------------------------------------
+
+PREFIJO_DEMO = "pol-demo-"
+
+
+class PolizaDemoIn(BaseModel):
+    poliza_id: str = Field(pattern=r"^pol-demo-[A-Za-z0-9_-]{1,50}$", description="Debe empezar por `pol-demo-`")
+    producto: str
+    zona: str | None = Field(default=None, max_length=64)
+    vigencia_desde: datetime
+    fecha_vencimiento: datetime
+
+    @field_validator("vigencia_desde", "fecha_vencimiento")
+    @classmethod
+    def _con_zona_horaria(cls, valor: datetime) -> datetime:
+        if valor.tzinfo is None:
+            raise ValueError("debe incluir zona horaria (ISO 8601, por ejemplo 2026-01-01T00:00:00Z)")
+        return valor
+
+    @model_validator(mode="after")
+    def _rango(self) -> PolizaDemoIn:
+        if self.fecha_vencimiento <= self.vigencia_desde:
+            raise ValueError("fecha_vencimiento debe ser posterior a vigencia_desde")
+        return self
+
+
+class SiembraIn(BaseModel):
+    polizas: list[PolizaDemoIn] = Field(min_length=1, max_length=100)
+
+
+class SiembraOut(BaseModel):
+    sembradas: int
+
+
+class BorradoOut(BaseModel):
+    borradas: int
+
+
+@router.post(
+    "/polizas-demo",
+    response_model=SiembraOut,
+    summary="Sembrar pólizas paramétricas de prueba (solo ambientes de prueba)",
+)
+async def sembrar_polizas(_fuente: Proveedor, receptor: ReceptorActual, cuerpo: SiembraIn) -> SiembraOut:
+    """Crea o actualiza pólizas en la copia local, sin pasar por `poliza_emitida`. Idempotente por `poliza_id`.
+
+    Solo acepta ids `pol-demo-*` y productos que existan en el archivo de reglas.
+    """
+    productos = cargar_reglas().productos
+    invalidos = [
+        {"campo": f"polizas[{i}].producto", "motivo": f"debe ser uno de: {', '.join(sorted(productos))}"}
+        for i, p in enumerate(cuerpo.polizas)
+        if p.producto not in productos
+    ]
+    if invalidos:
+        raise EventoInvalido(invalidos, codigo="POLIZA_INVALIDA")
+    n = await receptor.sembrar_polizas([p.model_dump() for p in cuerpo.polizas])
+    return SiembraOut(sembradas=n)
+
+
+@router.delete(
+    "/polizas-demo",
+    response_model=BorradoOut,
+    summary="Borrar las pólizas de prueba sembradas (solo `pol-demo-*`)",
+)
+async def borrar_polizas_demo(_fuente: Proveedor, receptor: ReceptorActual) -> BorradoOut:
+    """No toca pólizas reales ni las evaluaciones ya registradas (solo inserción)."""
+    return BorradoOut(borradas=await receptor.borrar_polizas_demo(PREFIJO_DEMO))
