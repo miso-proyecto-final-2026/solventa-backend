@@ -17,6 +17,7 @@ from app.siniestros.modelos_db import (
     EVENTOS_PROCESADOS,
     SCHEMA,
     BaseSiniestros,
+    EvaluacionParametricaDB,
     EventoParametricoDB,
     EventoRechazadoDB,
     PublicacionBusDB,
@@ -210,3 +211,34 @@ class RepositorioEventos:
                 )
                 or 0,
             }
+
+    def evaluaciones(
+        self, fuente: str, evento_id: str | None, poliza_id: str | None, limite: int
+    ) -> list[dict[str, Any]]:
+        """Resultados de HU28 de los eventos que recibió `fuente` (nunca los de otra fuente), del más reciente al más antiguo."""
+        consulta = (
+            select(EvaluacionParametricaDB, EventoParametricoDB.evento_id)
+            .join(EventoParametricoDB, EventoParametricoDB.id == EvaluacionParametricaDB.evento_uuid)
+            .where(EventoParametricoDB.fuente == fuente)
+            .order_by(EvaluacionParametricaDB.evaluado_en.desc(), EvaluacionParametricaDB.poliza_id)
+            .limit(limite)
+        )
+        if evento_id is not None:
+            consulta = consulta.where(EventoParametricoDB.evento_id == evento_id)
+        if poliza_id is not None:
+            consulta = consulta.where(EvaluacionParametricaDB.poliza_id == poliza_id)
+        with self._fabrica() as sesion:
+            return [
+                {
+                    "evento_id": id_proveedor,
+                    "evento_uuid": ev.evento_uuid,
+                    "poliza_id": ev.poliza_id,
+                    "resultado": ev.resultado,
+                    "motivo": ev.motivo,
+                    "valores": ev.valores,
+                    "version_reglas": ev.version_reglas,
+                    "comando_id": ev.comando_id,
+                    "evaluado_en": _utc(ev.evaluado_en).isoformat(),
+                }
+                for ev, id_proveedor in sesion.execute(consulta)
+            ]

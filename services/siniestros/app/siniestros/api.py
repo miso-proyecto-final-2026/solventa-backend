@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, Request, Response
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from pydantic import BaseModel
 
 from app.seguridad import clave_valida
@@ -78,6 +78,18 @@ class ResumenOut(BaseModel):
     reentregas: int
 
 
+class EvaluacionOut(BaseModel):
+    evento_id: str
+    evento_uuid: str
+    poliza_id: str
+    resultado: str
+    motivo: str
+    valores: dict[str, Any]
+    version_reglas: str
+    comando_id: str | None
+    evaluado_en: str
+
+
 router = APIRouter(prefix="/v1/siniestros", tags=["siniestros"])
 
 
@@ -125,3 +137,23 @@ async def recibir_evento(
 )
 async def resumen(_fuente: Proveedor, receptor: ReceptorActual) -> dict[str, int]:
     return await receptor.resumen()
+
+
+@router.get(
+    "/evaluaciones",
+    response_model=list[EvaluacionOut],
+    summary="Resultado de validar la condición paramétrica de los eventos recibidos (HU28)",
+)
+async def evaluaciones(
+    fuente: Proveedor,
+    receptor: ReceptorActual,
+    evento_id: Annotated[str | None, Query(max_length=64, description="El evento_id que asignó el proveedor")] = None,
+    poliza_id: Annotated[str | None, Query(max_length=64)] = None,
+    limite: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[dict[str, Any]]:
+    """Solo lectura. Devuelve únicamente las evaluaciones de eventos que recibió la fuente de la llave.
+
+    Muestra, por cada par evento–póliza, el resultado, el motivo, los valores evaluados, la versión de las
+    reglas y el id del comando emitido (nulo si no corresponde pago). Aparece cuando el consumidor ya procesó el evento.
+    """
+    return await receptor.evaluaciones(fuente, evento_id, poliza_id, limite)

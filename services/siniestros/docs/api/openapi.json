@@ -169,6 +169,108 @@
         }
       }
     },
+    "/v1/siniestros/evaluaciones": {
+      "get": {
+        "tags": [
+          "siniestros"
+        ],
+        "summary": "Resultado de validar la condición paramétrica de los eventos recibidos (HU28)",
+        "description": "Solo lectura. Devuelve únicamente las evaluaciones de eventos que recibió la fuente de la llave.\n\nMuestra, por cada par evento–póliza, el resultado, el motivo, los valores evaluados, la versión de las\nreglas y el id del comando emitido (nulo si no corresponde pago). Aparece cuando el consumidor ya procesó el evento.",
+        "operationId": "evaluaciones_v1_siniestros_evaluaciones_get",
+        "parameters": [
+          {
+            "name": "evento_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "El evento_id que asignó el proveedor",
+              "title": "Evento Id"
+            },
+            "description": "El evento_id que asignó el proveedor"
+          },
+          {
+            "name": "poliza_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Poliza Id"
+            }
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limite"
+            }
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EvaluacionOut"
+                  },
+                  "title": "Response Evaluaciones V1 Siniestros Evaluaciones Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -226,6 +328,67 @@
           "recibido_en"
         ],
         "title": "AcuseOut"
+      },
+      "EvaluacionOut": {
+        "properties": {
+          "evento_id": {
+            "type": "string",
+            "title": "Evento Id"
+          },
+          "evento_uuid": {
+            "type": "string",
+            "title": "Evento Uuid"
+          },
+          "poliza_id": {
+            "type": "string",
+            "title": "Poliza Id"
+          },
+          "resultado": {
+            "type": "string",
+            "title": "Resultado"
+          },
+          "motivo": {
+            "type": "string",
+            "title": "Motivo"
+          },
+          "valores": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Valores"
+          },
+          "version_reglas": {
+            "type": "string",
+            "title": "Version Reglas"
+          },
+          "comando_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comando Id"
+          },
+          "evaluado_en": {
+            "type": "string",
+            "title": "Evaluado En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "evento_id",
+          "evento_uuid",
+          "poliza_id",
+          "resultado",
+          "motivo",
+          "valores",
+          "version_reglas",
+          "comando_id",
+          "evaluado_en"
+        ],
+        "title": "EvaluacionOut"
       },
       "HTTPValidationError": {
         "properties": {

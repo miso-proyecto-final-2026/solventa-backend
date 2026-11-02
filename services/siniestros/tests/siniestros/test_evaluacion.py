@@ -302,3 +302,58 @@ async def test_un_evento_ilegible_para_el_evaluador_va_a_la_cola_de_fallidos(esc
     await consumidor.procesar(mensaje_de("solventa.siniestros.eventos", "k", malo))
 
     assert esc.e.publicador.crudos[0][0] == "solventa.siniestros.eventos.dlq"
+
+
+# --- Consulta de las evaluaciones por HTTP (solo lectura) ---------------------------------------------------------
+
+
+async def test_la_consulta_devuelve_el_resultado_el_motivo_y_el_comando_de_cada_par(esc):
+    await esc.alta(emitida("pol-1"), emitida("pol-2", zona="cali"))
+    await esc.recibir_y_evaluar(sismo(evento_id="evt-consulta"))
+
+    r = esc.e.cliente.get(
+        "/v1/siniestros/evaluaciones", params={"evento_id": "evt-consulta"}, headers=esc.e.cabeceras
+    )
+
+    assert r.status_code == 200
+    por_poliza = {i["poliza_id"]: i for i in r.json()}
+    assert set(por_poliza) == {"pol-1", "pol-2"}
+    pago, fuera = por_poliza["pol-1"], por_poliza["pol-2"]
+    assert pago["resultado"] == "CORRESPONDE_PAGO" and pago["comando_id"] and pago["evento_id"] == "evt-consulta"
+    assert pago["version_reglas"] == REGLAS.version
+    assert fuera["resultado"] == "NO_CORRESPONDE" and fuera["motivo"] == "fuera_de_la_zona_asegurada"
+    assert fuera["comando_id"] is None
+
+
+async def test_la_consulta_se_filtra_por_poliza_y_respeta_el_limite(esc):
+    await esc.alta(emitida("pol-1"), emitida("pol-2"))
+    await esc.recibir_y_evaluar(sismo(evento_id="evt-a"))
+
+    por_poliza = esc.e.cliente.get(
+        "/v1/siniestros/evaluaciones", params={"poliza_id": "pol-2"}, headers=esc.e.cabeceras
+    ).json()
+    limitada = esc.e.cliente.get("/v1/siniestros/evaluaciones", params={"limite": 1}, headers=esc.e.cabeceras).json()
+
+    assert [i["poliza_id"] for i in por_poliza] == ["pol-2"]
+    assert len(limitada) == 1
+
+
+async def test_la_consulta_no_muestra_los_eventos_de_otra_fuente(esc):
+    await esc.alta(emitida("pol-1"))
+    await esc.recibir_y_evaluar(sismo(evento_id="evt-propio"))
+    esc.e.app.state.api_keys = {"otra-clave": "otra-fuente"}
+
+    r = esc.e.cliente.get(
+        "/v1/siniestros/evaluaciones", params={"evento_id": "evt-propio"}, headers={"X-Service-Key": "otra-clave"}
+    )
+
+    assert r.status_code == 200 and r.json() == []
+
+
+def test_la_consulta_exige_la_llave_y_valida_el_limite(entorno):
+    assert entorno.cliente.get("/v1/siniestros/evaluaciones").status_code == 401
+    assert entorno.cliente.get("/v1/siniestros/evaluaciones", headers={"X-Service-Key": "mala"}).status_code == 401
+    assert (
+        entorno.cliente.get("/v1/siniestros/evaluaciones", params={"limite": 0}, headers=entorno.cabeceras).status_code
+        == 422
+    )
