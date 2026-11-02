@@ -14,13 +14,6 @@ from datetime import UTC, datetime, timedelta
 
 import jwt
 import pytest
-from app.logs import (
-    ENMASCARADO_PAN,
-    ENMASCARADO_TOKEN,
-    FiltroDatosTarjeta,
-    FormateadorJson,
-    redactar,
-)
 from app.pagos.acceso import VerificadorJwtHs256
 from app.pagos.api import router
 from app.pagos.api_gestion import router as router_gestion
@@ -33,6 +26,13 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from app.contexto import correlacion_id, traza_id
+from app.logs import (
+    ENMASCARADO_PAN,
+    ENMASCARADO_TOKEN,
+    FiltroDatosTarjeta,
+    FormateadorJson,
+    redactar,
+)
 from tests.dobles import PasarelaFalsa, comando, evento
 
 # Números de prueba públicos de las marcas (no son tarjetas reales).

@@ -9,12 +9,12 @@ from datetime import UTC, datetime
 
 import boto3
 import pytest
-from app.logs import FiltroDatosSensibles, FormateadorJson, redactar
 from app.suscripcion import formato_es_co as fmt
 from app.suscripcion.almacen import AlmacenLocal, AlmacenS3
 from moto import mock_aws
 
 from app.contexto import correlacion_id, traza_id
+from app.logs import FiltroDatosSensibles, FormateadorJson, redactar
 
 BUCKET = "solventa-test-polizas"
 CLAVE = "polizas/susc-1/ABCDEFGHJKMNPQRSTVWX.pdf"
