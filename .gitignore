@@ -16,3 +16,6 @@ reports/
 
 .venv*/
 .evidencias-kyc/
+
+# Claves locales generadas por scripts/sembrar-HU19.sh
+.env
