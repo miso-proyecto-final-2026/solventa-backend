@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.seguridad import clave_valida
 from app.siniestros.dominio import TIPOS_EVENTO
-from app.siniestros.errores import EventoInvalido, NoAutenticado, SiembraDeshabilitada
+from app.siniestros.errores import EventoInvalido, NoAutenticado
 from app.siniestros.parametrico import cargar_reglas
 from app.siniestros.servicio import Receptor
 
@@ -161,18 +161,9 @@ async def evaluaciones(
     return await receptor.evaluaciones(fuente, evento_id, poliza_id, limite)
 
 
-# --- Siembra de pólizas de prueba (ambientes de prueba) ------------------------------------------------------------
+# --- Siembra de pólizas de prueba ------------------------------------------------------------
 
 PREFIJO_DEMO = "pol-demo-"
-
-
-def exigir_siembra(request: Request) -> None:
-    """404 si el ambiente no habilitó la siembra (SINIESTROS_SIEMBRA_HABILITADA): el endpoint "no existe"."""
-    if not getattr(request.app.state, "siembra_habilitada", False):
-        raise SiembraDeshabilitada
-
-
-SiembraHabilitada = Depends(exigir_siembra)
 
 
 class PolizaDemoIn(BaseModel):
@@ -211,14 +202,12 @@ class BorradoOut(BaseModel):
 @router.post(
     "/polizas-demo",
     response_model=SiembraOut,
-    dependencies=[SiembraHabilitada],
     summary="Sembrar pólizas paramétricas de prueba (solo ambientes de prueba)",
 )
 async def sembrar_polizas(_fuente: Proveedor, receptor: ReceptorActual, cuerpo: SiembraIn) -> SiembraOut:
     """Crea o actualiza pólizas en la copia local, sin pasar por `poliza_emitida`. Idempotente por `poliza_id`.
 
-    Solo acepta ids `pol-demo-*` y productos que existan en el archivo de reglas. Responde 404 si el ambiente
-    no habilitó la siembra.
+    Solo acepta ids `pol-demo-*` y productos que existan en el archivo de reglas.
     """
     productos = cargar_reglas().productos
     invalidos = [
@@ -235,7 +224,6 @@ async def sembrar_polizas(_fuente: Proveedor, receptor: ReceptorActual, cuerpo: 
 @router.delete(
     "/polizas-demo",
     response_model=BorradoOut,
-    dependencies=[SiembraHabilitada],
     summary="Borrar las pólizas de prueba sembradas (solo `pol-demo-*`)",
 )
 async def borrar_polizas_demo(_fuente: Proveedor, receptor: ReceptorActual) -> BorradoOut:

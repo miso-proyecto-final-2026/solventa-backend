@@ -377,15 +377,7 @@ def sembrar(esc, *polizas):
     return esc.e.cliente.post("/v1/siniestros/polizas-demo", json={"polizas": list(polizas)}, headers=esc.e.cabeceras)
 
 
-def test_la_siembra_esta_apagada_por_defecto_y_responde_404(esc):
-    r = sembrar(esc, poliza_demo())
-
-    assert r.status_code == 404 and r.json()["error"]["code"] == "SIEMBRA_DESHABILITADA"
-    assert esc.e.cliente.delete("/v1/siniestros/polizas-demo", headers=esc.e.cabeceras).status_code == 404
-
-
 async def test_las_polizas_sembradas_se_evaluan_como_las_que_llegan_por_el_bus(esc):
-    esc.e.app.state.siembra_habilitada = True
     r = sembrar(esc, poliza_demo(), poliza_demo(poliza_id="pol-demo-002", zona="cali"))
     assert r.status_code == 200 and r.json() == {"sembradas": 2}
 
@@ -397,7 +389,6 @@ async def test_las_polizas_sembradas_se_evaluan_como_las_que_llegan_por_el_bus(e
 
 
 def test_sembrar_dos_veces_la_misma_poliza_la_actualiza_sin_duplicarla(esc):
-    esc.e.app.state.siembra_habilitada = True
     sembrar(esc, poliza_demo(zona="bogota"))
     sembrar(esc, poliza_demo(zona="cali"))
 
@@ -415,13 +406,11 @@ def test_sembrar_dos_veces_la_misma_poliza_la_actualiza_sin_duplicarla(esc):
     ],
 )
 def test_la_siembra_rechaza_polizas_mal_formadas(esc, cambios):
-    esc.e.app.state.siembra_habilitada = True
 
     assert sembrar(esc, poliza_demo(**cambios)).status_code == 422
 
 
 def test_la_siembra_rechaza_un_producto_que_no_esta_en_las_reglas(esc):
-    esc.e.app.state.siembra_habilitada = True
 
     r = sembrar(esc, poliza_demo(producto="seguro-de-vida"))
 
@@ -429,7 +418,6 @@ def test_la_siembra_rechaza_un_producto_que_no_esta_en_las_reglas(esc):
 
 
 def test_el_borrado_solo_quita_las_polizas_demo(esc):
-    esc.e.app.state.siembra_habilitada = True
     sembrar(esc, poliza_demo(), poliza_demo(poliza_id="pol-demo-002"))
     with esc.e.fabrica() as s, s.begin():
         s.add(
@@ -447,7 +435,5 @@ def test_el_borrado_solo_quita_las_polizas_demo(esc):
 
 
 def test_la_siembra_exige_la_llave(esc):
-    esc.e.app.state.siembra_habilitada = True
-
     assert esc.e.cliente.post("/v1/siniestros/polizas-demo", json={"polizas": [poliza_demo()]}).status_code == 401
     assert esc.e.cliente.delete("/v1/siniestros/polizas-demo").status_code == 401

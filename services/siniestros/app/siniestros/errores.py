@@ -23,10 +23,6 @@ class BusNoDisponible(Exception):
     """El evento quedó registrado pero el bus no lo aceptó: el proveedor debe reenviarlo."""
 
 
-class SiembraDeshabilitada(Exception):
-    """La siembra de pólizas de prueba está apagada en este ambiente (el endpoint se comporta como si no existiera)."""
-
-
 class NoAutenticado(Exception):
     """Sin llave de API, o con una llave que no corresponde a ningún proveedor."""
 
@@ -54,13 +50,6 @@ def registrar_errores(app: FastAPI) -> None:
         return JSONResponse(
             status_code=400,
             content=cuerpo_error(exc.codigo, "El evento no es válido.", exc.detalles),
-        )
-
-    @app.exception_handler(SiembraDeshabilitada)
-    async def _siembra_deshabilitada(_req: Request, _exc: SiembraDeshabilitada) -> JSONResponse:
-        return JSONResponse(
-            status_code=404,
-            content=cuerpo_error("SIEMBRA_DESHABILITADA", "La siembra de pólizas de prueba no está habilitada."),
         )
 
     @app.exception_handler(NoAutenticado)

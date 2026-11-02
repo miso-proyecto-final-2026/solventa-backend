@@ -16,7 +16,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     ensamblado = construir_ensamblado(config)
     app.state.receptor = ensamblado.receptor
     app.state.api_keys = config.api_keys or {}
-    app.state.siembra_habilitada = config.siembra_habilitada
     await ensamblado.iniciar()
     try:
         yield
