@@ -23,7 +23,7 @@ Cada petición lleva pruebas (`pm.test`) y guarda las variables que necesita la 
 | MS Cotización / Cotizaciones | `POST /v1/cotizaciones`, `GET /v1/cotizaciones/{id}`, `PUT /v1/cotizaciones/{id}/latencia-cliente` (ambos productos, validaciones, `X-Correlation-Id`, 404) |
 | MS Cotización / Auditoría | `GET /v1/cotizaciones/{id}/desglose` y `GET /v1/cotizaciones/{id}/consultas-externas` (auditor; 401/403/404/422) |
 | MS Siniestros (HU27) | `POST /v1/siniestros/eventos` (202 acuse, 200 duplicado, 400 inválido/fuente ajena, 401) y `GET …/eventos/resumen` |
-| MS Siniestros — validación paramétrica (HU28) | Cinco peticiones en orden: cumple (sismo 6.4), no cumple (5.0), otra zona, póliza vencida y duplicado (200). Las pruebas comprueban el acuse; el resultado de la evaluación se lee en `siniestros.evaluaciones_parametricas` (no hay endpoint de lectura). Requiere pólizas sembradas: ver «Sembrar HU28» abajo. |
+| MS Siniestros — validación paramétrica (HU28) | Siembra de pólizas (`POST /v1/siniestros/polizas-demo`), cinco eventos en orden (cumple 6.4, no cumple 5.0, otra zona, póliza vencida, duplicado 200) y cinco lecturas de `GET /v1/siniestros/evaluaciones` que comprueban resultado, motivo, versión de reglas y `comando_id`. El consumidor es asíncrono: si las lecturas salen vacías, espere y repita. |
 | MS Perfilamiento (HU23) | `POST /v1/perfilamiento/{id}/enriquecer`, `GET …/perfil` y `GET …/linaje` (con credencial; 401/403/404/422) |
 | MS Suscripción (HU15) | `POST /v1/suscripciones` (202, idempotencia, cotización ya usada, 401/404/422), `GET /v1/suscripciones/{id}`. Usa el cliente y la cotización de las carpetas anteriores. Quedan fuera `COTIZACION_VENCIDA` (exige una cotización vencida) y las decisiones rechazada/derivada (dependen del perfil del cliente; se prueban en pytest). |
 | MS Suscripción — póliza (HU20) | `GET /v1/suscripciones/{id}/poliza` (404 antes del cobro, inexistente y de otro cliente; 401) y `GET /v1/polizas?cliente_id=` (billetera 200; 403 de otro cliente; 422 sin `cliente_id`; 401). El camino 200 de la póliza exige un cobro confirmado, que llega por Kafka desde MS Pagos: se prueba en pytest y con el recorrido de `docs/evidencias/HU20-documento-poliza.md`. |
@@ -154,9 +154,21 @@ chocar con registros previos.
 - **Sin secretos:** las claves del entorno son valores de desarrollo local. Para otro ambiente, crea un entorno aparte y
   no subas sus claves a git.
 
+## Siniestros en staging (HU27 y HU28)
+
+Importe `solventa-backend-staging.postman_environment.json` y complete **en Postman** (valor actual, nunca en git):
+
+| Variable | Valor en staging |
+|---|---|
+| `siniestros_url` | URL del borde de staging (el borde publica `/v1/siniestros`). |
+| `siniestros_key` | `aws secretsmanager get-secret-value --secret-id solventa/staging/siniestros-api-key --query SecretString --output text` (el campo `value` del JSON). |
+| `siniestros_fuente` | `proveedor-simulado`: la llave de staging no tiene nombre y el servicio la asocia a esa fuente. Con otra fuente la respuesta es 400 `FUENTE_DESCONOCIDA`. |
+
+En local el entorno «Local» usa `proveedor-sismos` y `dev-siniestros-key`.
+
 ## Sembrar las pólizas de HU28
 
-La carpeta «MS Siniestros — validación paramétrica (HU28)» usa tres pólizas que deben existir en `siniestros.polizas_parametricas` (variables `param_poliza_id`, `param_poliza_otra_zona_id` y `param_poliza_vencida_id`). En staging Siniestros no puede publicar en `solventa.polizas.ciclovida` (solo Suscripción produce ahí), así que se insertan desde el pod, con el código del propio servicio:
+La petición «0. Sembrar pólizas de prueba» de la carpeta HU28 crea las tres pólizas `pol-demo-*` (idempotente) y `DELETE /v1/siniestros/polizas-demo` las borra; las evaluaciones ya registradas no se tocan (solo inserción). Si el borde de staging no expone ese endpoint, Siniestros no puede publicar en `solventa.polizas.ciclovida` (solo Suscripción produce ahí), así que se insertan desde el pod, con el código del propio servicio:
 
 ```bash
 kubectl -n staging exec deploy/solventa-siniestros -- python -c "
