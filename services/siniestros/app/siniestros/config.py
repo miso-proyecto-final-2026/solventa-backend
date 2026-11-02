@@ -35,6 +35,9 @@ class ConfigSiniestros:
     api_keys: dict[str, str] | None = None
     # None = sin configurar; solo en modo desarrollo se sustituye por un publicador en memoria.
     kafka_brokers: str | None = None
+    # Habilita POST/DELETE /v1/siniestros/polizas-demo (siembra de pólizas de prueba). Apagado por defecto: solo
+    # se enciende en un ambiente de pruebas (SINIESTROS_SIEMBRA_HABILITADA=true).
+    siembra_habilitada: bool = False
 
     @classmethod
     def desde_entorno(cls, env: dict[str, str] | None = None) -> ConfigSiniestros:
@@ -43,4 +46,5 @@ class ConfigSiniestros:
             database_url=e.get("SINIESTROS_DATABASE_URL") or e.get("DATABASE_URL"),
             api_keys=_claves(e.get("SINIESTROS_API_KEYS", "")),
             kafka_brokers=e.get("KAFKA_BOOTSTRAP_SERVERS") or None,
+            siembra_habilitada=e.get("SINIESTROS_SIEMBRA_HABILITADA", "").strip().lower() in ("1", "true", "yes"),
         )

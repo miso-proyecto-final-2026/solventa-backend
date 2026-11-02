@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import Engine, create_engine, event, func, select
+from sqlalchemy import Engine, create_engine, delete, event, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -20,6 +20,7 @@ from app.siniestros.modelos_db import (
     EvaluacionParametricaDB,
     EventoParametricoDB,
     EventoRechazadoDB,
+    PolizaParametricaDB,
     PublicacionBusDB,
 )
 
@@ -242,3 +243,20 @@ class RepositorioEventos:
                 }
                 for ev, id_proveedor in sesion.execute(consulta)
             ]
+
+    def sembrar_polizas(self, polizas: list[dict[str, Any]], actualizada_en: datetime) -> int:
+        """Crea o actualiza pólizas de prueba en la copia local (idempotente por `poliza_id`)."""
+        with self._fabrica() as sesion:
+            for p in polizas:
+                sesion.merge(PolizaParametricaDB(**p, actualizada_en=actualizada_en))
+            sesion.commit()
+        return len(polizas)
+
+    def borrar_polizas_demo(self, prefijo: str) -> int:
+        """Borra solo las pólizas cuyo id empieza por `prefijo`. No toca las evaluaciones (son de solo inserción)."""
+        with self._fabrica() as sesion:
+            n = sesion.execute(
+                delete(PolizaParametricaDB).where(PolizaParametricaDB.poliza_id.like(f"{prefijo}%"))
+            ).rowcount
+            sesion.commit()
+        return n or 0

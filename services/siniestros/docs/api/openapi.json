@@ -271,6 +271,114 @@
         }
       }
     },
+    "/v1/siniestros/polizas-demo": {
+      "post": {
+        "tags": [
+          "siniestros"
+        ],
+        "summary": "Sembrar pólizas paramétricas de prueba (solo ambientes de prueba)",
+        "description": "Crea o actualiza pólizas en la copia local, sin pasar por `poliza_emitida`. Idempotente por `poliza_id`.\n\nSolo acepta ids `pol-demo-*` y productos que existan en el archivo de reglas. Responde 404 si el ambiente\nno habilitó la siembra.",
+        "operationId": "sembrar_polizas_v1_siniestros_polizas_demo_post",
+        "parameters": [
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiembraIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiembraOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "siniestros"
+        ],
+        "summary": "Borrar las pólizas de prueba sembradas (solo `pol-demo-*`)",
+        "description": "No toca pólizas reales ni las evaluaciones ya registradas (solo inserción).",
+        "operationId": "borrar_polizas_demo_v1_siniestros_polizas_demo_delete",
+        "parameters": [
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorradoOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -328,6 +436,19 @@
           "recibido_en"
         ],
         "title": "AcuseOut"
+      },
+      "BorradoOut": {
+        "properties": {
+          "borradas": {
+            "type": "integer",
+            "title": "Borradas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "borradas"
+        ],
+        "title": "BorradoOut"
       },
       "EvaluacionOut": {
         "properties": {
@@ -403,6 +524,50 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "PolizaDemoIn": {
+        "properties": {
+          "poliza_id": {
+            "type": "string",
+            "pattern": "^pol-demo-[A-Za-z0-9_-]{1,50}$",
+            "title": "Poliza Id",
+            "description": "Debe empezar por `pol-demo-`"
+          },
+          "producto": {
+            "type": "string",
+            "title": "Producto"
+          },
+          "zona": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zona"
+          },
+          "vigencia_desde": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Vigencia Desde"
+          },
+          "fecha_vencimiento": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Vencimiento"
+          }
+        },
+        "type": "object",
+        "required": [
+          "poliza_id",
+          "producto",
+          "vigencia_desde",
+          "fecha_vencimiento"
+        ],
+        "title": "PolizaDemoIn"
+      },
       "ResumenOut": {
         "properties": {
           "recibidos": {
@@ -435,6 +600,37 @@
           "reentregas"
         ],
         "title": "ResumenOut"
+      },
+      "SiembraIn": {
+        "properties": {
+          "polizas": {
+            "items": {
+              "$ref": "#/components/schemas/PolizaDemoIn"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Polizas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "polizas"
+        ],
+        "title": "SiembraIn"
+      },
+      "SiembraOut": {
+        "properties": {
+          "sembradas": {
+            "type": "integer",
+            "title": "Sembradas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sembradas"
+        ],
+        "title": "SiembraOut"
       },
       "ValidationError": {
         "properties": {

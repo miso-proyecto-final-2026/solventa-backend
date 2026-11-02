@@ -357,3 +357,97 @@ def test_la_consulta_exige_la_llave_y_valida_el_limite(entorno):
         entorno.cliente.get("/v1/siniestros/evaluaciones", params={"limite": 0}, headers=entorno.cabeceras).status_code
         == 422
     )
+
+
+# --- Siembra de pólizas de prueba por HTTP ------------------------------------------------------------------------
+
+
+def poliza_demo(**cambios):
+    return {
+        "poliza_id": "pol-demo-001",
+        "producto": "parametrico_clima",
+        "zona": "bogota",
+        "vigencia_desde": "2026-01-01T00:00:00Z",
+        "fecha_vencimiento": "2027-12-31T00:00:00Z",
+        **cambios,
+    }
+
+
+def sembrar(esc, *polizas):
+    return esc.e.cliente.post("/v1/siniestros/polizas-demo", json={"polizas": list(polizas)}, headers=esc.e.cabeceras)
+
+
+def test_la_siembra_esta_apagada_por_defecto_y_responde_404(esc):
+    r = sembrar(esc, poliza_demo())
+
+    assert r.status_code == 404 and r.json()["error"]["code"] == "SIEMBRA_DESHABILITADA"
+    assert esc.e.cliente.delete("/v1/siniestros/polizas-demo", headers=esc.e.cabeceras).status_code == 404
+
+
+async def test_las_polizas_sembradas_se_evaluan_como_las_que_llegan_por_el_bus(esc):
+    esc.e.app.state.siembra_habilitada = True
+    r = sembrar(esc, poliza_demo(), poliza_demo(poliza_id="pol-demo-002", zona="cali"))
+    assert r.status_code == 200 and r.json() == {"sembradas": 2}
+
+    await esc.recibir_y_evaluar(sismo(evento_id="evt-sembrado", poliza_id="pol-demo-001"))
+
+    [evaluacion] = esc.evaluaciones()
+    assert evaluacion.poliza_id == "pol-demo-001" and evaluacion.resultado == "CORRESPONDE_PAGO"
+    assert len(esc.comandos()) == 1
+
+
+def test_sembrar_dos_veces_la_misma_poliza_la_actualiza_sin_duplicarla(esc):
+    esc.e.app.state.siembra_habilitada = True
+    sembrar(esc, poliza_demo(zona="bogota"))
+    sembrar(esc, poliza_demo(zona="cali"))
+
+    with esc.e.fabrica() as s:
+        filas = list(s.scalars(select(PolizaParametricaDB)))
+    assert [(f.poliza_id, f.zona) for f in filas] == [("pol-demo-001", "cali")]
+
+
+@pytest.mark.parametrize(
+    "cambios",
+    [
+        {"poliza_id": "pol-real-001"},  # fuera del prefijo de pruebas
+        {"vigencia_desde": "2026-01-01T00:00:00"},  # sin zona horaria
+        {"fecha_vencimiento": "2025-01-01T00:00:00Z"},  # vence antes de empezar
+    ],
+)
+def test_la_siembra_rechaza_polizas_mal_formadas(esc, cambios):
+    esc.e.app.state.siembra_habilitada = True
+
+    assert sembrar(esc, poliza_demo(**cambios)).status_code == 422
+
+
+def test_la_siembra_rechaza_un_producto_que_no_esta_en_las_reglas(esc):
+    esc.e.app.state.siembra_habilitada = True
+
+    r = sembrar(esc, poliza_demo(producto="seguro-de-vida"))
+
+    assert r.status_code == 400 and r.json()["error"]["code"] == "POLIZA_INVALIDA"
+
+
+def test_el_borrado_solo_quita_las_polizas_demo(esc):
+    esc.e.app.state.siembra_habilitada = True
+    sembrar(esc, poliza_demo(), poliza_demo(poliza_id="pol-demo-002"))
+    with esc.e.fabrica() as s, s.begin():
+        s.add(
+            PolizaParametricaDB(
+                poliza_id="pol-real-9", producto="parametrico_clima", zona="bogota",
+                vigencia_desde=DESDE, fecha_vencimiento=HASTA, actualizada_en=AHORA,
+            )
+        )
+
+    r = esc.e.cliente.delete("/v1/siniestros/polizas-demo", headers=esc.e.cabeceras)
+
+    assert r.status_code == 200 and r.json() == {"borradas": 2}
+    with esc.e.fabrica() as s:
+        assert [f.poliza_id for f in s.scalars(select(PolizaParametricaDB))] == ["pol-real-9"]
+
+
+def test_la_siembra_exige_la_llave(esc):
+    esc.e.app.state.siembra_habilitada = True
+
+    assert esc.e.cliente.post("/v1/siniestros/polizas-demo", json={"polizas": [poliza_demo()]}).status_code == 401
+    assert esc.e.cliente.delete("/v1/siniestros/polizas-demo").status_code == 401

@@ -127,6 +127,12 @@ class Receptor:
     ) -> list[dict[str, Any]]:
         return await asyncio.to_thread(self._repo.evaluaciones, fuente, evento_id, poliza_id, limite)
 
+    async def sembrar_polizas(self, polizas: list[dict[str, Any]]) -> int:
+        return await asyncio.to_thread(self._repo.sembrar_polizas, polizas, self._reloj())
+
+    async def borrar_polizas_demo(self, prefijo: str) -> int:
+        return await asyncio.to_thread(self._repo.borrar_polizas_demo, prefijo)
+
 
 async def procesar_evento(evento: Evento, sesion: Session) -> None:
     """Manejador sin efecto: la constancia de procesado la deja la reserva de idempotencia.
