@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -105,10 +106,23 @@ class ConsumidorEventos:
 
         ultimo_error: Exception | None = None
         for intento in range(1, self._politica.intentos + 1):
+            inicio = time.perf_counter()
             try:
-                if await self._intentar(evento):
-                    return
-                log.info("reentrega omitida event_id=%s grupo=%s", evento.event_id, self._grupo)
+                procesado = await self._intentar(evento)
+                log.info(
+                    "evento_consumido" if procesado else "reentrega omitida",
+                    extra={"campos": {
+                        "evento": "evento_consumido" if procesado else "evento_reentrega_omitida",
+                        "topic": self._topic,
+                        "particion": mensaje.partition,
+                        "offset": mensaje.offset,
+                        "grupo": self._grupo,
+                        "event_id": evento.event_id,
+                        "event_type": evento.event_type,
+                        "intento": intento,
+                        "duracion_ms": round((time.perf_counter() - inicio) * 1000, 1),
+                    }},
+                )
                 return
             except Exception as error:  # noqa: BLE001  (cualquier fallo del manejador se reintenta)
                 ultimo_error = error

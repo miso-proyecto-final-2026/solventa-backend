@@ -14,6 +14,7 @@ from urllib.parse import quote
 
 import httpx
 
+from app.logs import ganchos_http
 from app.proveedores.dominio import EstadoConsentimiento, VerificacionConsentimiento
 
 log = logging.getLogger("solventa.consentimiento")
@@ -65,7 +66,7 @@ class ConsentimientoHttp:
         reloj: Callable[[], float] = time.monotonic,
     ) -> None:
         self._http = cliente or httpx.AsyncClient(
-            base_url=base_url.rstrip("/"), timeout=timeout_s
+            base_url=base_url.rstrip("/"), timeout=timeout_s, event_hooks=ganchos_http()
         )
         self._cabeceras = {"X-Service-Key": api_key}
         self._umbral = umbral_fallos

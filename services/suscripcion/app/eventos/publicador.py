@@ -2,12 +2,26 @@
 
 from __future__ import annotations
 
+import json
+import logging
+import time
 from collections.abc import Mapping
 from typing import Any, Protocol, Self
 
 from aiokafka import AIOKafkaProducer
 
 from .sobre import Evento
+
+log = logging.getLogger("solventa.eventos")
+
+
+def _event_id(valor: bytes) -> str | None:
+    """`event_id` del sobre, si el valor lo trae (los mensajes a la cola de fallidos reenvían el original)."""
+    try:
+        dato = json.loads(valor).get("event_id")
+    except (ValueError, AttributeError):
+        return None
+    return dato if isinstance(dato, str) else None
 
 
 class PublicadorEventos(Protocol):
@@ -56,11 +70,26 @@ class PublicadorKafka:
         )
 
     async def publicar_crudo(self, topic: str, clave: str, valor: bytes, cabeceras: Mapping[str, str]) -> None:
-        await self._productor.send_and_wait(
+        inicio = time.perf_counter()
+        metadatos = await self._productor.send_and_wait(
             topic,
             valor,
             key=_exigir_clave(clave),
             headers=[(k, v.encode()) for k, v in cabeceras.items()],
+        )
+        # Solo metadatos: ni el valor del evento ni datos personales llegan al log.
+        log.info(
+            "evento_publicado",
+            extra={"campos": {
+                "evento": "evento_publicado",
+                "topic": topic,
+                "particion": metadatos.partition,
+                "offset": metadatos.offset,
+                "clave": clave,
+                "event_id": _event_id(valor),
+                "event_type": cabeceras.get("event_type"),
+                "duracion_ms": round((time.perf_counter() - inicio) * 1000, 1),
+            }},
         )
 
 

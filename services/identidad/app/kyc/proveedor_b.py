@@ -25,6 +25,7 @@ from app.kyc.dominio import (
     ResultadoVerificacion,
     SolicitudVerificacion,
 )
+from app.logs import ganchos_http
 
 RUTA = "/v2/identity-checks"
 
@@ -57,7 +58,7 @@ class VerificadorProveedorB:
     def __init__(self, config: ConfigProveedorB, cliente: httpx.AsyncClient | None = None) -> None:
         self._clave = config.api_key
         self._http = cliente or httpx.AsyncClient(
-            base_url=config.base_url.rstrip("/"), timeout=config.timeout_s
+            base_url=config.base_url.rstrip("/"), timeout=config.timeout_s, event_hooks=ganchos_http()
         )
 
     async def verificar(self, solicitud: SolicitudVerificacion) -> ResultadoVerificacion:
