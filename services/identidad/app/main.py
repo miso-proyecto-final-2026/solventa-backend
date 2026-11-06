@@ -1,4 +1,6 @@
-from fastapi import FastAPI
+import logging
+
+from fastapi import FastAPI, Request
 
 from app.correlacion import MiddlewareCorrelacion
 from app.db import DATABASE_URL, Base, engine
@@ -16,6 +18,7 @@ if DATABASE_URL.startswith("sqlite"):
     Base.metadata.create_all(bind=engine)
 
 configurar_logs()
+log = logging.getLogger("solventa.identidad")
 
 app = FastAPI(title="Solventa — MS Identidad", version="0.1.0")
 app.add_middleware(MiddlewareCorrelacion)
@@ -29,5 +32,9 @@ app.include_router(contactos_cliente_router)
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+def health(request: Request) -> dict[str, str]:
+    # Demostración del CD (HS1): una línea visible al consultar /health a mano. Las sondas de Kubernetes
+    # (liveness/readiness, cada pocos segundos por réplica) no se registran para no llenar Loki.
+    if not request.headers.get("user-agent", "").startswith("kube-probe"):
+        log.info("health_consultado servicio=solventa-identidad", extra={"campos": {"evento": "health_consultado"}})
     return {"status": "ok"}
