@@ -1,7 +1,8 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 
 from app.correlacion import MiddlewareCorrelacion
 from app.logs import configurar_logs
@@ -12,6 +13,7 @@ from app.notificaciones.errores import registrar_errores
 from app.notificaciones.wiring import construir_ensamblado
 
 configurar_logs()
+log = logging.getLogger("solventa.notificaciones")
 
 
 @asynccontextmanager
@@ -36,5 +38,9 @@ app.add_middleware(MiddlewareCorrelacion)
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+def health(request: Request) -> dict[str, str]:
+    # Demostración del CD (HS1): una línea visible al consultar /health a mano. Las sondas de Kubernetes
+    # (liveness/readiness, cada pocos segundos por réplica) no se registran para no llenar Loki.
+    if not request.headers.get("user-agent", "").startswith("kube-probe"):
+        log.info("health_consultado servicio=solventa-notificaciones", extra={"campos": {"evento": "health_consultado"}})
     return {"status": "ok"}

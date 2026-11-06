@@ -79,3 +79,15 @@ def test_la_aplicacion_arranca_y_responde_health(monkeypatch):
 
     with TestClient(app) as cliente:
         assert cliente.get("/health").json() == {"status": "ok"}
+
+
+def test_health_registra_la_consulta_manual_pero_no_las_sondas(monkeypatch, caplog):
+    for k, v in ENTORNO.items():
+        monkeypatch.setenv(k, v)
+    from app.main import app
+
+    with TestClient(app) as cliente, caplog.at_level("INFO", logger="solventa.notificaciones"):
+        cliente.get("/health", headers={"User-Agent": "kube-probe/1.35"})
+        assert not [r for r in caplog.records if r.name == "solventa.notificaciones"]
+        cliente.get("/health")
+    assert [r.campos["evento"] for r in caplog.records if r.name == "solventa.notificaciones"] == ["health_consultado"]
