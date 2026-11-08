@@ -1,0 +1,96 @@
+# Entorno local de HU19 (cobros fallidos): MS Pagos y MS Identidad contra PostgreSQL y Kafka.
+# No se levanta a mano: lo levanta y siembra scripts/sembrar-HU19.sh --local (ver docs/como-probar-HU19.md).
+# Las claves salen de services/pagos/.env, que el script genera al azar la primera vez y que git ignora.
+#   docker compose up -d --build --wait     # levantar
+#   docker compose down -v                  # apagar y borrar los datos
+# Puertos: Identidad en 8001 y Pagos en 8005, los que usa el proxy de `ng serve` en solventa-web.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: solventa
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?generado por scripts/sembrar-HU19.sh}
+      POSTGRES_DB: solventa
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U solventa"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  kafka:
+    image: apache/kafka:3.9.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+
+  identidad-migrar:
+    build: ../identidad
+    command: [alembic, upgrade, head]
+    environment:
+      DATABASE_URL: postgresql://solventa:${POSTGRES_PASSWORD}@postgres:5432/solventa
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  identidad:
+    build: ../identidad
+    environment:
+      DATABASE_URL: postgresql://solventa:${POSTGRES_PASSWORD}@postgres:5432/solventa
+      ASESOR_JWT_SECRETO: ${ASESOR_JWT_SECRETO:?generado por scripts/sembrar-HU19.sh}
+    ports:
+      - "8001:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    depends_on:
+      identidad-migrar: { condition: service_completed_successfully }
+
+  pagos-migrar:
+    build: .
+    command: [alembic, upgrade, head]
+    environment:
+      PAGOS_DATABASE_URL: postgresql://solventa:${POSTGRES_PASSWORD}@postgres:5432/solventa
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  pagos:
+    build: .
+    environment:
+      PAGOS_DATABASE_URL: postgresql://solventa:${POSTGRES_PASSWORD}@postgres:5432/solventa
+      PAGOS_API_KEYS: siembra=${PAGOS_SEED_KEY:?generado por scripts/sembrar-HU19.sh}
+      ASESOR_JWT_SECRETO: ${ASESOR_JWT_SECRETO}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_SEGURIDAD: PLAINTEXT
+      PASARELA_PROVEEDOR: simulador
+      # El script lo cambia (RECHAZAR para sembrar, NO_DISPONIBLE para los flujos 06 y 07) y lo devuelve a APROBAR.
+      PASARELA_SIM_MODO: ${PASARELA_SIM_MODO:-APROBAR}
+      PERIODO_GRACIA_DIAS: "3"
+      PAGOS_HORAS_POR_VENCER: "24"
+      # Más cortos que en staging (60 s y 5 s) para no esperar durante la prueba.
+      PAGOS_DETECTOR_GRACIA_S: "5"
+      PAGOS_REINTENTO_BASE_S: "5"
+    ports:
+      - "8005:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    depends_on:
+      pagos-migrar: { condition: service_completed_successfully }
+      kafka: { condition: service_healthy }
