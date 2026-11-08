@@ -1691,6 +1691,81 @@
         }
       }
     },
+    "/v1/suscripciones/{suscripcion_id}/certificado/enlace": {
+      "post": {
+        "tags": [
+          "certificado"
+        ],
+        "summary": "Emite un enlace de descarga del certificado para el titular (HU35: lo muestra el QR de la credencial)",
+        "description": "El enlace vence (HU22) y se puede abrir sin sesión desde otro teléfono. Una póliza ajena responde como inexistente.",
+        "operationId": "emitir_enlace_del_titular_v1_suscripciones__suscripcion_id__certificado_enlace_post",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "accept-language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnlaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/interno/certificados/enlaces": {
       "post": {
         "tags": [

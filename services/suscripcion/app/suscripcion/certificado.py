@@ -307,6 +307,28 @@ class ServicioCertificado:
             raise PolizaNoEncontrada
         return self._firmador.emitir(poliza_id, idioma, self._reloj())
 
+    async def emitir_enlace_titular(self, suscripcion_id: str, token: str | None, idioma: str) -> tuple[str, datetime]:
+        """(token del enlace, vencimiento) para que el titular comparta o muestre el certificado de su póliza (HU35, QR).
+
+        La suscripción de otro cliente responde como inexistente; una póliza que no está vigente, también.
+        """
+        if not token:
+            raise NoAutenticado
+        cliente_id = await self._identidad.cliente_de_token(token)
+        if cliente_id is None:
+            raise NoAutenticado
+
+        def leer() -> str | None:
+            with self._fabrica() as s:
+                susc = repo.obtener(s, suscripcion_id)
+                poliza = repo.poliza_de_suscripcion(s, suscripcion_id)
+                return poliza.id if susc is not None and poliza is not None and susc.cliente_id == cliente_id else None
+
+        poliza_id = await asyncio.to_thread(leer)
+        if poliza_id is None:
+            raise SuscripcionNoEncontrada
+        return await self.emitir_enlace(poliza_id, idioma)
+
     async def descargar_por_enlace(self, token: str) -> Certificado:
         if self._firmador is None:
             raise EnlacesNoConfigurados
