@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -37,7 +38,9 @@ class FiltroDatosSensibles(logging.Filter):
 
 class FormateadorJson(logging.Formatter):
     def format(self, registro: logging.LogRecord) -> str:
+        campos = getattr(registro, "campos", None) or {}
         linea: dict[str, Any] = {
+            **{k: redactar(v) if isinstance(v, str) else v for k, v in campos.items()},
             "timestamp": datetime.fromtimestamp(registro.created, UTC).isoformat(),
             "level": registro.levelname,
             "logger": registro.name,
@@ -64,3 +67,35 @@ def configurar_logs(nivel: int = logging.INFO) -> None:
         registro = logging.getLogger(nombre)
         registro.handlers = []
         registro.propagate = True
+    # Cada request ya se registra con método, ruta, estado y duración (MiddlewareCorrelacion): el access log
+    # de uvicorn lo duplica y además trae el query string.
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    # httpx registra la URL completa con su query string; `request_saliente` (ganchos_http) la sustituye sin ella.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+def ganchos_http() -> dict[str, list[Any]]:
+    """`event_hooks` de httpx: un log por request saliente con host, ruta (sin query), estado y duración.
+
+    No registra cabeceras, cuerpos ni query string: pueden traer tokens o datos personales.
+    """
+
+    async def antes(peticion: Any) -> None:
+        peticion.extensions["inicio"] = time.perf_counter()
+
+    async def despues(respuesta: Any) -> None:
+        peticion = respuesta.request
+        inicio = peticion.extensions.get("inicio")
+        logging.getLogger("solventa.http").info(
+            "request_saliente",
+            extra={"campos": {
+                "evento": "request_saliente",
+                "metodo": peticion.method,
+                "host": peticion.url.host,
+                "ruta": peticion.url.path,
+                "estado": respuesta.status_code,
+                "duracion_ms": round((time.perf_counter() - inicio) * 1000, 1) if inicio else None,
+            }},
+        )
+
+    return {"request": [antes], "response": [despues]}

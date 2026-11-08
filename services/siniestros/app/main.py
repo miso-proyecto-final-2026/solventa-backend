@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.correlacion import MiddlewareCorrelacion
+from app.logs import configurar_logs
 from app.siniestros.api import router as siniestros_router
 from app.siniestros.config import ConfigSiniestros
 from app.siniestros.errores import registrar_errores
@@ -22,6 +23,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         await ensamblado.detener()
 
+
+configurar_logs()
 
 app = FastAPI(title="Solventa — MS Siniestros", version="0.1.0", lifespan=lifespan)
 app.include_router(siniestros_router)

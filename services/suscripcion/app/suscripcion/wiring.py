@@ -20,6 +20,7 @@ from app.eventos import (
     brokers_desde_entorno,
     parametros_seguridad,
 )
+from app.logs import ganchos_http
 from app.suscripcion.almacen import AlmacenDocumentos, AlmacenLocal, AlmacenS3
 from app.suscripcion.certificado import FirmadorEnlaces, ServicioCertificado
 from app.suscripcion.clientes import (
@@ -50,7 +51,7 @@ def _http(url: str | None, variable: str, config: ConfigSuscripcion) -> httpx.As
     if not url:
         # Sin sustituto: Suscripción no tiene sentido sin sus vecinos, ni siquiera en desarrollo.
         raise RuntimeError(f"Falta {variable} (URL del servicio vecino)")
-    return httpx.AsyncClient(base_url=url.rstrip("/"), timeout=config.timeout_s)
+    return httpx.AsyncClient(base_url=url.rstrip("/"), timeout=config.timeout_s, event_hooks=ganchos_http())
 
 
 def construir_servicio(config: ConfigSuscripcion | None = None) -> tuple[ServicioSuscripcion, Engine, list[httpx.AsyncClient]]:

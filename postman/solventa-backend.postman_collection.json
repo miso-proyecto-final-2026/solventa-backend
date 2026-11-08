@@ -7947,8 +7947,62 @@
     },
     {
       "name": "MS Siniestros — validación paramétrica (HU28)",
-      "description": "Ejecutar en orden (1→5). Las pólizas `param_*` deben estar sembradas en `siniestros.polizas_parametricas`. Las pruebas comprueban el acuse; el resultado de la evaluación se verifica en la base (no hay endpoint de lectura).",
+      "description": "Ejecutar en orden (0→10). La petición 0 siembra las pólizas `pol-demo-*` con `POST /v1/siniestros/polizas-demo`. Las peticiones 1–5 envían eventos (acuse) y las 6–10 leen `GET /v1/siniestros/evaluaciones` para comprobar el resultado de cada par evento–póliza. El consumidor es asíncrono: si 6–10 salen vacías, espere unos segundos y repita. Requiere Kafka (en local sin Kafka no hay consumidor). En staging use el entorno «Staging»: la fuente de la llave es `proveedor-simulado`.",
       "item": [
+        {
+          "name": "0. Sembrar pólizas de prueba",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('sembró las 3 pólizas', () => pm.expect(pm.response.json().sembradas).to.eql(3));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/polizas-demo",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "polizas-demo"
+              ]
+            },
+            "description": "Crea (o actualiza) las tres pólizas `pol-demo-*` en la copia local de MS Siniestros. Idempotente. Si el borde de staging no expone este endpoint, siembre con el `kubectl exec` del README.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"polizas\": [\n    {\n      \"poliza_id\": \"{{param_poliza_id}}\",\n      \"producto\": \"parametrico_clima\",\n      \"zona\": \"bogota\",\n      \"vigencia_desde\": \"2026-01-01T00:00:00Z\",\n      \"fecha_vencimiento\": \"2027-12-31T00:00:00Z\"\n    },\n    {\n      \"poliza_id\": \"{{param_poliza_otra_zona_id}}\",\n      \"producto\": \"parametrico_clima\",\n      \"zona\": \"cali\",\n      \"vigencia_desde\": \"2026-01-01T00:00:00Z\",\n      \"fecha_vencimiento\": \"2027-12-31T00:00:00Z\"\n    },\n    {\n      \"poliza_id\": \"{{param_poliza_vencida_id}}\",\n      \"producto\": \"parametrico_clima\",\n      \"zona\": \"bogota\",\n      \"vigencia_desde\": \"2025-01-01T00:00:00Z\",\n      \"fecha_vencimiento\": \"2025-12-31T00:00:00Z\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
         {
           "name": "1. Cumple - sismo 6.4 en la zona asegurada",
           "event": [
@@ -8259,6 +8313,287 @@
                 }
               }
             }
+          }
+        },
+        {
+          "name": "6. Resultado - cumple (CORRESPONDE_PAGO)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const filas = pm.response.json();",
+                  "// El consumidor procesa de forma asíncrona: si sale vacío, espere unos segundos y repita.",
+                  "pm.test('hay una evaluación (si no, repita: el consumidor aún no procesa el evento)', () => pm.expect(filas.length).to.be.above(0));",
+                  "if (filas.length) {",
+                  "  pm.test('resultado CORRESPONDE_PAGO', () => pm.expect(filas[0].resultado).to.eql('CORRESPONDE_PAGO'));",
+                  "  pm.test('trae versión de reglas y valores', () => { pm.expect(filas[0].version_reglas).to.be.a('string'); pm.expect(filas[0].valores).to.be.an('object'); });",
+                  "  pm.test('comando_id emitido', () => pm.expect(filas[0].comando_id).to.be.a('string'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/evaluaciones?evento_id={{hu28_evento_cumple}}&poliza_id={{param_poliza_id}}",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "evaluaciones"
+              ],
+              "query": [
+                {
+                  "key": "evento_id",
+                  "value": "{{hu28_evento_cumple}}"
+                },
+                {
+                  "key": "poliza_id",
+                  "value": "{{param_poliza_id}}"
+                }
+              ]
+            },
+            "description": "Criterios 2 y 7: resultado, valores evaluados, versión de reglas y comando emitido."
+          }
+        },
+        {
+          "name": "7. Resultado - bajo el umbral (NO_CORRESPONDE)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const filas = pm.response.json();",
+                  "// El consumidor procesa de forma asíncrona: si sale vacío, espere unos segundos y repita.",
+                  "pm.test('hay una evaluación (si no, repita: el consumidor aún no procesa el evento)', () => pm.expect(filas.length).to.be.above(0));",
+                  "if (filas.length) {",
+                  "  pm.test('resultado NO_CORRESPONDE', () => pm.expect(filas[0].resultado).to.eql('NO_CORRESPONDE'));",
+                  "  pm.test('trae versión de reglas y valores', () => { pm.expect(filas[0].version_reglas).to.be.a('string'); pm.expect(filas[0].valores).to.be.an('object'); });",
+                  "  pm.test('comando_id nulo', () => pm.expect(filas[0].comando_id).to.eql(null));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/evaluaciones?evento_id={{hu28_evento_nocumple}}&poliza_id={{param_poliza_id}}",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "evaluaciones"
+              ],
+              "query": [
+                {
+                  "key": "evento_id",
+                  "value": "{{hu28_evento_nocumple}}"
+                },
+                {
+                  "key": "poliza_id",
+                  "value": "{{param_poliza_id}}"
+                }
+              ]
+            },
+            "description": "Criterio 3: no corresponde, con motivo y sin comando."
+          }
+        },
+        {
+          "name": "8. Resultado - otra zona (NO_CORRESPONDE)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const filas = pm.response.json();",
+                  "// El consumidor procesa de forma asíncrona: si sale vacío, espere unos segundos y repita.",
+                  "pm.test('hay una evaluación (si no, repita: el consumidor aún no procesa el evento)', () => pm.expect(filas.length).to.be.above(0));",
+                  "if (filas.length) {",
+                  "  pm.test('resultado NO_CORRESPONDE', () => pm.expect(filas[0].resultado).to.eql('NO_CORRESPONDE'));",
+                  "  pm.test('motivo fuera_de_la_zona_asegurada', () => pm.expect(filas[0].motivo).to.eql('fuera_de_la_zona_asegurada'));",
+                  "  pm.test('trae versión de reglas y valores', () => { pm.expect(filas[0].version_reglas).to.be.a('string'); pm.expect(filas[0].valores).to.be.an('object'); });",
+                  "  pm.test('comando_id nulo', () => pm.expect(filas[0].comando_id).to.eql(null));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/evaluaciones?evento_id={{hu28_evento_otra_zona}}&poliza_id={{param_poliza_otra_zona_id}}",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "evaluaciones"
+              ],
+              "query": [
+                {
+                  "key": "evento_id",
+                  "value": "{{hu28_evento_otra_zona}}"
+                },
+                {
+                  "key": "poliza_id",
+                  "value": "{{param_poliza_otra_zona_id}}"
+                }
+              ]
+            },
+            "description": "Criterio 1: la zona del evento no es la asegurada."
+          }
+        },
+        {
+          "name": "9. Resultado - póliza vencida (NO_CORRESPONDE)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const filas = pm.response.json();",
+                  "// El consumidor procesa de forma asíncrona: si sale vacío, espere unos segundos y repita.",
+                  "pm.test('hay una evaluación (si no, repita: el consumidor aún no procesa el evento)', () => pm.expect(filas.length).to.be.above(0));",
+                  "if (filas.length) {",
+                  "  pm.test('resultado NO_CORRESPONDE', () => pm.expect(filas[0].resultado).to.eql('NO_CORRESPONDE'));",
+                  "  pm.test('motivo poliza_vencida', () => pm.expect(filas[0].motivo).to.eql('poliza_vencida'));",
+                  "  pm.test('trae versión de reglas y valores', () => { pm.expect(filas[0].version_reglas).to.be.a('string'); pm.expect(filas[0].valores).to.be.an('object'); });",
+                  "  pm.test('comando_id nulo', () => pm.expect(filas[0].comando_id).to.eql(null));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/evaluaciones?evento_id={{hu28_evento_vencida}}&poliza_id={{param_poliza_vencida_id}}",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "evaluaciones"
+              ],
+              "query": [
+                {
+                  "key": "evento_id",
+                  "value": "{{hu28_evento_vencida}}"
+                },
+                {
+                  "key": "poliza_id",
+                  "value": "{{param_poliza_vencida_id}}"
+                }
+              ]
+            },
+            "description": "Criterio 4: póliza sin vigencia a la fecha del evento."
+          }
+        },
+        {
+          "name": "10. Un solo pago por evento y póliza",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const filas = pm.response.json();",
+                  "pm.test('exactamente una evaluación y un comando pese al reenvío', () => { pm.expect(filas.length).to.eql(1); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/evaluaciones?evento_id={{hu28_evento_cumple}}&poliza_id={{param_poliza_id}}",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "evaluaciones"
+              ],
+              "query": [
+                {
+                  "key": "evento_id",
+                  "value": "{{hu28_evento_cumple}}"
+                },
+                {
+                  "key": "poliza_id",
+                  "value": "{{param_poliza_id}}"
+                }
+              ]
+            },
+            "description": "Criterio 5: tras el duplicado (petición 5) sigue habiendo una sola evaluación para el par evento–póliza."
           }
         }
       ]

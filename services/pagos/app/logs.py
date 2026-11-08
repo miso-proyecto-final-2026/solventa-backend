@@ -37,7 +37,9 @@ class FiltroDatosTarjeta(logging.Filter):
 
 class FormateadorJson(logging.Formatter):
     def format(self, registro: logging.LogRecord) -> str:
+        campos = getattr(registro, "campos", None) or {}
         linea: dict[str, Any] = {
+            **{k: redactar(v) if isinstance(v, str) else v for k, v in campos.items()},
             "timestamp": datetime.fromtimestamp(registro.created, UTC).isoformat(),
             "level": registro.levelname,
             "logger": registro.name,
@@ -64,3 +66,8 @@ def configurar_logs(nivel: int = logging.INFO) -> None:
         registro = logging.getLogger(nombre)
         registro.handlers = []
         registro.propagate = True
+    # Cada request ya se registra con método, ruta, estado y duración (MiddlewareCorrelacion): el access log
+    # de uvicorn lo duplica y además trae el query string.
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    # httpx registra la URL completa con su query string; `request_saliente` (ganchos_http) la sustituye sin ella.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
