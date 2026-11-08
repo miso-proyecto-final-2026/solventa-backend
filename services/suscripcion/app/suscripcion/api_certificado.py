@@ -75,6 +75,23 @@ class EnlaceOut(BaseModel):
 
 
 @router.post(
+    "/v1/suscripciones/{suscripcion_id}/certificado/enlace",
+    response_model=EnlaceOut,
+    status_code=201,
+    summary="Emite un enlace de descarga del certificado para el titular (HU35: lo muestra el QR de la credencial)",
+)
+async def emitir_enlace_del_titular(
+    suscripcion_id: str,
+    servicio: Certificados,
+    authorization: Annotated[str | None, Header()] = None,
+    accept_language: Annotated[str | None, Header()] = None,
+) -> EnlaceOut:
+    """El enlace vence (HU22) y se puede abrir sin sesión desde otro teléfono. Una póliza ajena responde como inexistente."""
+    token, vence = await servicio.emitir_enlace_titular(suscripcion_id, _token(authorization), normalizar_idioma(accept_language))
+    return EnlaceOut(ruta=f"/v1/certificados/{token}", vence_en=vence)
+
+
+@router.post(
     "/v1/interno/certificados/enlaces",
     response_model=EnlaceOut,
     status_code=201,
