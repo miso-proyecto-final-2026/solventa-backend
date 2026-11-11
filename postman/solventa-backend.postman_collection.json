@@ -7006,6 +7006,126 @@
           }
         },
         {
+          "name": "Enlace del certificado antes de emitir la póliza",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error estándar SUSCRIPCION_NO_ENCONTRADA', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('SUSCRIPCION_NO_ENCONTRADA'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/{{suscripcion_id}}/certificado/enlace",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "{{suscripcion_id}}",
+                "certificado",
+                "enlace"
+              ]
+            },
+            "description": "HU35 (QR de la credencial): sin póliza emitida no hay enlace. Con póliza emitida responde 201 con `ruta` y `vence_en`; ese camino se prueba en pytest (`test_api_certificado.py`)."
+          }
+        },
+        {
+          "name": "Enlace del certificado de otro cliente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error estándar SUSCRIPCION_NO_ENCONTRADA', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('SUSCRIPCION_NO_ENCONTRADA'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{otro_access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/{{suscripcion_id}}/certificado/enlace",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "{{suscripcion_id}}",
+                "certificado",
+                "enlace"
+              ]
+            },
+            "description": "Responde igual que una inexistente: no revela que existe."
+          }
+        },
+        {
+          "name": "Enlace del certificado sin sesión",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error estándar NO_AUTENTICADO', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('NO_AUTENTICADO'); pm.expect(e.message).to.be.a('string').and.not.empty; pm.expect(e.trace_id).to.be.a('string').and.not.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/{{suscripcion_id}}/certificado/enlace",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "{{suscripcion_id}}",
+                "certificado",
+                "enlace"
+              ]
+            },
+            "description": "Sin token no se emite el enlace."
+          }
+        },
+        {
           "name": "Pedir un enlace sin clave de servicio",
           "event": [
             {

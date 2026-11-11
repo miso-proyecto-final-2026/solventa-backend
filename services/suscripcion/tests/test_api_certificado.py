@@ -127,3 +127,38 @@ async def test_un_enlace_para_una_poliza_inexistente_es_404(escenario):
     r = await api.post("/v1/interno/certificados/enlaces", json={"poliza_id": "no-existe"}, headers=SERVICIO)
 
     assert r.status_code == 404 and r.json()["error"]["code"] == "POLIZA_NO_ENCONTRADA"
+
+
+async def test_el_titular_pide_su_enlace_y_cualquiera_descarga_el_certificado_con_el(escenario):
+    api, susc, *_ = escenario
+
+    emitido = await api.post(f"/v1/suscripciones/{susc.id}/certificado/enlace", headers={**TOKEN_1, "Accept-Language": "en-US"})
+    descarga = await api.get(emitido.json()["ruta"])  # sin ninguna cabecera
+
+    assert emitido.status_code == 201 and emitido.json()["ruta"].startswith("/v1/certificados/") and emitido.json()["vence_en"]
+    assert descarga.status_code == 200 and descarga.headers["content-type"] == "application/pdf"
+    assert "Certificate of coverage" in _texto(descarga.content)
+
+
+async def test_el_enlace_del_titular_exige_sesion_y_la_suscripcion_ajena_es_404(escenario):
+    api, susc, *_ = escenario
+
+    sin = await api.post(f"/v1/suscripciones/{susc.id}/certificado/enlace")
+    ajeno = await api.post(f"/v1/suscripciones/{susc.id}/certificado/enlace", headers=TOKEN_2)
+    inexistente = await api.post("/v1/suscripciones/no-existe/certificado/enlace", headers=TOKEN_2)
+
+    assert sin.status_code == 401
+    assert ajeno.status_code == inexistente.status_code == 404
+    assert ajeno.json()["error"]["code"] == inexistente.json()["error"]["code"] == "SUSCRIPCION_NO_ENCONTRADA"
+
+
+async def test_el_enlace_del_titular_no_se_emite_si_la_poliza_no_esta_vigente(escenario, fabrica):
+    from app.suscripcion.modelos_db import PolizaDB
+
+    api, susc, poliza, _ = escenario
+    with fabrica() as s, s.begin():
+        s.get(PolizaDB, poliza.id).estado = "ANULADA"
+
+    r = await api.post(f"/v1/suscripciones/{susc.id}/certificado/enlace", headers=TOKEN_1)
+
+    assert r.status_code == 404 and r.json()["error"]["code"] == "POLIZA_NO_ENCONTRADA"
