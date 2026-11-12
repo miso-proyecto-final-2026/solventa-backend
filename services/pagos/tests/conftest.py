@@ -1,4 +1,5 @@
 import pytest
+from app.pagos.indemnizaciones import ServicioIndemnizaciones
 from app.pagos.repositorio import crear_engine, crear_tablas_locales
 from app.pagos.servicio import ServicioCobros
 from sqlalchemy.orm import sessionmaker
@@ -28,6 +29,23 @@ def armar(fabrica, reloj):
             fabrica=fabrica,
             pasarela=pasarela if pasarela is not None else PasarelaFalsa(),
             periodo_gracia_dias=opciones.pop("periodo_gracia_dias", 3),
+            timeout_pasarela_s=opciones.pop("timeout_pasarela_s", 0.2),
+            reintento_base_s=opciones.pop("reintento_base_s", 5),
+            reloj=reloj,
+            **opciones,
+        )
+
+    return _armar
+
+
+@pytest.fixture
+def armar_indemnizaciones(fabrica, reloj):
+    """Fábrica del servicio de indemnizaciones con una pasarela falsa."""
+
+    def _armar(pasarela=None, **opciones):
+        return ServicioIndemnizaciones(
+            fabrica=fabrica,
+            pasarela=pasarela if pasarela is not None else PasarelaFalsa(),
             timeout_pasarela_s=opciones.pop("timeout_pasarela_s", 0.2),
             reintento_base_s=opciones.pop("reintento_base_s", 5),
             reloj=reloj,

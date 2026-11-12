@@ -18,20 +18,27 @@ from app.eventos import RegistroEventos
 from app.pagos import repositorio as repo
 from app.pagos.acceso import Gestor
 from app.pagos.gestion import ServicioGestion
+from app.pagos.indemnizaciones import ServicioIndemnizaciones
 from app.pagos.modelos_db import SCHEMA, TABLA_EVENTOS_PROCESADOS, BasePagos
 from app.pagos.servicio import ComandoCobro, ServicioCobros
 from app.pagos.simulador import ModoSimulador, PasarelaSimulada
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
-from tests.dobles import Reloj, comando, evento
+from tests.dobles import (
+    Reloj,
+    comando,
+    comando_indemnizacion,
+    evento,
+    evento_indemnizacion,
+)
 
 pytestmark = pytest.mark.contenedores
 
 RAIZ = Path(__file__).parents[1]
 TABLAS = {
     "transacciones", "tokens_tarjeta", "intentos_cobro", "eventos_salida", "eventos_procesados", "simulador_cargos",
-    "cobros_fallidos", "notas_cobro_fallido",
+    "cobros_fallidos", "notas_cobro_fallido", "indemnizaciones", "intentos_pago",
 }
 REPLICAS = 8
 
@@ -212,3 +219,27 @@ def test_varias_replicas_reintentando_el_mismo_caso_crean_un_solo_reintento_y_un
         assert s.execute(text(f"SELECT count(*) FROM {SCHEMA}.transacciones WHERE origen = 'gestion'")).scalar() == 1
         assert repo.caso(s, tx.id).estado == "RECUPERADO"
     assert _contar(fabrica_pg, "simulador_cargos") == 2  # el rechazo original y un solo reintento aprobado
+
+
+def test_el_mismo_comando_de_indemnizacion_en_varias_replicas_deja_un_solo_pago(fabrica_pg):
+    registro = RegistroEventos(TABLA_EVENTOS_PROCESADOS)
+
+    async def replica(i):
+        servicio = ServicioIndemnizaciones(
+            fabrica=fabrica_pg, pasarela=PasarelaSimulada(fabrica_pg, modo=ModoSimulador.APROBAR), timeout_pasarela_s=2, reloj=Reloj()
+        )
+        # Eventos distintos (reentrega del bus) con la misma idempotency_key, procesados a la vez (EC-D1.1).
+        with fabrica_pg() as s, s.begin():
+            assert registro.reservar(s, "solventa-pagos.indemnizaciones", f"evento-{i}")
+            await servicio.manejar_evento(evento_indemnizacion(comando_indemnizacion("evt-carrera")), s)
+        return await servicio.procesar_pendientes()
+
+    resultados = _en_paralelo(REPLICAS, replica)
+
+    assert not [r for r in resultados if isinstance(r, Exception)], resultados
+    assert _contar(fabrica_pg, "indemnizaciones") == 1
+    assert _contar(fabrica_pg, "intentos_pago") == 1
+    assert PasarelaSimulada(fabrica_pg).pagos() == 1
+    with fabrica_pg() as s:
+        estado, reentregas = s.execute(text(f"SELECT estado, reentregas FROM {SCHEMA}.indemnizaciones")).one()
+    assert estado == "PAGADA" and reentregas == REPLICAS - 1

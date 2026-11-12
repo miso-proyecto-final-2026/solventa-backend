@@ -35,6 +35,7 @@ from app.pagos.dominio import (
     PasarelaSinRespuesta,
     ResultadoCobro,
     SolicitudCobro,
+    SolicitudPago,
     TokenDesconocido,
 )
 from app.pagos.modelos_db import CargoSimuladoDB
@@ -57,9 +58,18 @@ _PREFIJOS = {
     "tok_sim_caida_": ModoSimulador.NO_DISPONIBLE,
 }
 _TOKEN_VALIDO = re.compile(r"^tok_[A-Za-z0-9_-]{1,190}$")
+# La cuenta de destino de una indemnización también es un token. `cta_sim_<modo>_…` fuerza un modo para probar en staging.
+_CUENTA_VALIDA = re.compile(r"^cta_[A-Za-z0-9_-]{1,190}$")
+_PREFIJOS_CUENTA = {
+    "cta_sim_rechazar_": ModoSimulador.RECHAZAR,
+    "cta_sim_tardar_": ModoSimulador.TARDAR,
+    "cta_sim_perder_": ModoSimulador.PERDER_RESPUESTA,
+    "cta_sim_caida_": ModoSimulador.NO_DISPONIBLE,
+}
 _MARCAS = ("VISA", "MASTERCARD", "AMEX")
 TIPO_COBRO = "COBRO"
 TIPO_REEMBOLSO = "REEMBOLSO"
+TIPO_PAGO = "PAGO"  # indemnización (HU29)
 RECHAZO = ("FONDOS_INSUFICIENTES", "La tarjeta no tiene fondos suficientes.")
 
 
@@ -108,6 +118,41 @@ class PasarelaSimulada:
             await asyncio.sleep(self._demora_s)
         return resultado
 
+    def modo_para_cuenta(self, cuenta: str) -> ModoSimulador:
+        for prefijo, modo in _PREFIJOS_CUENTA.items():
+            if cuenta.startswith(prefijo):
+                return modo
+        return self._modo
+
+    async def pagar(self, solicitud: SolicitudPago) -> ResultadoCobro:
+        if not _CUENTA_VALIDA.match(solicitud.cuenta_destino):
+            return ResultadoCobro(aprobado=False, codigo="CUENTA_INVALIDA", motivo="La pasarela no reconoce la cuenta de destino.")
+        modo = self.modo_para_cuenta(solicitud.cuenta_destino)
+        if modo is ModoSimulador.NO_DISPONIBLE:
+            raise PasarelaNoDisponible("simulador: la pasarela no está disponible (no recibió la orden)")
+        cobro = SolicitudCobro(
+            idempotency_key=solicitud.idempotency_key,
+            token=solicitud.cuenta_destino,
+            monto=solicitud.monto,
+            moneda=solicitud.moneda,
+            referencia=solicitud.referencia,
+        )
+        resultado = await asyncio.to_thread(self._registrar, cobro, modo, TIPO_PAGO)
+        if modo is ModoSimulador.PERDER_RESPUESTA:
+            raise PasarelaSinRespuesta("simulador: la respuesta se perdió (el pago sí se hizo)")
+        if modo is ModoSimulador.TARDAR:
+            await asyncio.sleep(self._demora_s)
+        return resultado
+
+    def pagos(self) -> int:
+        """Pagos de indemnización aprobados de verdad: la evidencia de «un solo pago por evento y póliza» (EC-D1.1)."""
+        with self._fabrica() as s:
+            return s.execute(
+                select(func.count())
+                .select_from(CargoSimuladoDB)
+                .where(CargoSimuladoDB.aprobado, CargoSimuladoDB.tipo == TIPO_PAGO)
+            ).scalar_one()
+
     async def reembolsar(self, solicitud: SolicitudCobro) -> ResultadoCobro:
         if self.modo_para(solicitud.token) is ModoSimulador.NO_DISPONIBLE:
             raise PasarelaNoDisponible("simulador: la pasarela no está disponible (no recibió la orden)")
@@ -149,7 +194,7 @@ class PasarelaSimulada:
         codigo, motivo = (None, None) if aprobado else RECHAZO
         nuevo = CargoSimuladoDB(
             idempotency_key=solicitud.idempotency_key,
-            referencia=("simrf_" if tipo == TIPO_REEMBOLSO else "sim_") + hashlib.sha256(solicitud.idempotency_key.encode()).hexdigest()[:20],
+            referencia={TIPO_REEMBOLSO: "simrf_", TIPO_PAGO: "simpg_"}.get(tipo, "sim_") + hashlib.sha256(solicitud.idempotency_key.encode()).hexdigest()[:20],
             monto=solicitud.monto,
             moneda=solicitud.moneda,
             aprobado=aprobado,

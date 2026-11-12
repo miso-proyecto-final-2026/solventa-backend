@@ -23,9 +23,17 @@ from app.eventos import (
     brokers_desde_entorno,
     parametros_seguridad,
 )
-from app.pagos.config import GRUPO_COBROS, SQLITE_LOCAL, TOPIC_COMANDOS, ConfigPagos
+from app.pagos.config import (
+    GRUPO_COBROS,
+    GRUPO_INDEMNIZACIONES,
+    SQLITE_LOCAL,
+    TOPIC_COMANDOS,
+    TOPIC_COMANDOS_SINIESTROS,
+    ConfigPagos,
+)
 from app.pagos.dominio import PasarelaPago
 from app.pagos.gestion import ServicioGestion
+from app.pagos.indemnizaciones import ServicioIndemnizaciones
 from app.pagos.modelos_db import TABLA_EVENTOS_PROCESADOS
 from app.pagos.relay import RelayEventos
 from app.pagos.repositorio import crear_engine, crear_tablas_locales
@@ -50,6 +58,8 @@ class Ensamblado:
     relay: RelayEventos
     # None solo en desarrollo sin Kafka: el publicador es en memoria y nadie consume.
     consumidor: ConsumidorEventos | None = None
+    indemnizaciones: ServicioIndemnizaciones | None = None
+    consumidor_indemnizaciones: ConsumidorEventos | None = None
     detector_intervalo_s: float = 60.0
     _tareas: list[asyncio.Task[None]] = field(default_factory=list, init=False)
 
@@ -59,6 +69,11 @@ class Ensamblado:
         if self.consumidor is not None:
             await self.consumidor.iniciar()
             self._tareas.append(asyncio.create_task(self.consumidor.ejecutar()))
+        if self.consumidor_indemnizaciones is not None:
+            await self.consumidor_indemnizaciones.iniciar()
+            self._tareas.append(asyncio.create_task(self.consumidor_indemnizaciones.ejecutar()))
+        if self.indemnizaciones is not None:
+            self._tareas.append(asyncio.create_task(self.indemnizaciones.ejecutar()))
         self._tareas += [
             asyncio.create_task(self.relay.ejecutar()),
             asyncio.create_task(self.servicio.ejecutar()),
@@ -68,6 +83,8 @@ class Ensamblado:
     async def detener(self) -> None:
         if self.consumidor is not None:
             await self.consumidor.detener()
+        if self.consumidor_indemnizaciones is not None:
+            await self.consumidor_indemnizaciones.detener()
         for tarea in self._tareas:
             tarea.cancel()
         for tarea in self._tareas:
@@ -88,22 +105,37 @@ def construir_ensamblado(config: ConfigPagos | None = None) -> Ensamblado:
     if engine.dialect.name == "sqlite":
         crear_tablas_locales(engine)  # en PostgreSQL el esquema lo crea Alembic
     fabrica = sessionmaker(bind=engine, expire_on_commit=False)
+    pasarela = construir_pasarela(config, fabrica)  # una sola pasarela para cobros e indemnizaciones
     servicio = ServicioCobros(
         fabrica=fabrica,
-        pasarela=construir_pasarela(config, fabrica),
+        pasarela=pasarela,
         periodo_gracia_dias=config.periodo_gracia_dias,
         timeout_pasarela_s=config.pasarela_timeout_s,
         reintento_base_s=config.reintento_base_s,
         reintento_maximo_s=config.reintento_maximo_s,
     )
     gestion = ServicioGestion(fabrica=fabrica, cobros=servicio, horas_por_vencer=config.horas_por_vencer)
+    indemnizaciones = ServicioIndemnizaciones(
+        fabrica=fabrica,
+        pasarela=pasarela,
+        timeout_pasarela_s=config.pasarela_timeout_s,
+        reintento_base_s=config.reintento_base_s,
+        reintento_maximo_s=config.reintento_maximo_s,
+        max_intentos=config.indemnizacion_max_intentos,
+    )
     intervalo = config.detector_gracia_intervalo_s
 
     if config.kafka_brokers is None:
         permitir_sustituto_local("KAFKA_BOOTSTRAP_SERVERS", "un publicador en memoria sin consumidor (no hay Kafka)")
         publicador: PublicadorEventos = PublicadorMemoria()
         return Ensamblado(
-            servicio, gestion, engine, publicador, RelayEventos(fabrica, publicador), detector_intervalo_s=intervalo
+            servicio,
+            gestion,
+            engine,
+            publicador,
+            RelayEventos(fabrica, publicador),
+            indemnizaciones=indemnizaciones,
+            detector_intervalo_s=intervalo,
         )
 
     brokers = brokers_desde_entorno()
@@ -119,6 +151,24 @@ def construir_ensamblado(config: ConfigPagos | None = None) -> Ensamblado:
         registro=RegistroEventos(TABLA_EVENTOS_PROCESADOS),
         publicador=publicador,
     )
+    consumidor_indemnizaciones = ConsumidorEventos(
+        brokers=brokers,
+        seguridad=seguridad,
+        topic=TOPIC_COMANDOS_SINIESTROS,
+        grupo=GRUPO_INDEMNIZACIONES,
+        manejador=indemnizaciones.manejar_evento,
+        fabrica_sesiones=fabrica,
+        registro=RegistroEventos(TABLA_EVENTOS_PROCESADOS),
+        publicador=publicador,
+    )
     return Ensamblado(
-        servicio, gestion, engine, publicador, RelayEventos(fabrica, publicador), consumidor, detector_intervalo_s=intervalo
+        servicio,
+        gestion,
+        engine,
+        publicador,
+        RelayEventos(fabrica, publicador),
+        consumidor,
+        indemnizaciones,
+        consumidor_indemnizaciones,
+        detector_intervalo_s=intervalo,
     )

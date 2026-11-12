@@ -3,7 +3,9 @@
 Cobro de la prima (HU18) con una pasarela de pago detrás de un puerto del dominio. Registra transacciones e intentos,
 cobra una sola vez por `idempotency_key` y concilia cuando la respuesta de la pasarela no llega. Decisión completa en el
 [ADR-0014](../../docs/adr/0014-ms-pagos-cobro-idempotente-y-conciliacion.md). También expone a la consola web la
-gestión de cobros fallidos (HU19, enmienda del ADR-0014). Fuera de alcance: indemnizaciones (HU29/HU30).
+gestión de cobros fallidos (HU19, enmienda del ADR-0014) y paga de forma automática las indemnizaciones paramétricas
+(HU29, [ADR-0022](../../docs/adr/0022-ms-pagos-pago-automatico-de-indemnizacion.md)). Fuera de alcance: avisar al cliente (HU30)
+y conciliar (HU31).
 
 ## Cómo fluye un cobro
 
@@ -30,6 +32,29 @@ Contrato en [`docs/api/openapi.json`](docs/api/openapi.json); colección en `pos
 | `POST /v1/pagos/tokenizar` | Registra un **token de la pasarela** con su marca y últimos 4 (`tokens_tarjeta`). Rechaza con 422 `DATO_DE_TARJETA_NO_PERMITIDO` cualquier texto con forma de número de tarjeta (SAQ-A: el PAN solo lo ve la pasarela). |
 | `POST /v1/pagos/cobros` | Cobra la prima. 201 con el resultado, 202 si queda `PENDIENTE` (sin respuesta de la pasarela), 200 + `Idempotent-Replay: true` al repetir la clave, 409 si la clave ya se usó con otro monto o suscripción. |
 | `GET /v1/pagos/transacciones/{id}` | Estado de la transacción: `PENDIENTE`, `APROBADA` o `RECHAZADA` (con código, motivo y `gracia_hasta`). Nunca devuelve el token. |
+
+## Indemnizaciones paramétricas (HU29)
+
+```
+MS Siniestros ──indemnizacion_solicitada──▶ solventa.siniestros.comandos ──▶ consumidor (solventa-pagos.indemnizaciones)
+                                                                               │ 1. registra la indemnización PENDIENTE
+                                                                               ▼    (idempotency_key y par evento–póliza únicos)
+                                                         procesador ──▶ pasarela (puerto `pagar`)
+                                                           │ 2. anota el intento y paga con la misma clave
+                                                           │ 3. sin respuesta: consulta la clave y reintenta con retroceso
+                                                           ▼
+MS Siniestros ◀──indemnizacion_pagada / fallida── solventa.pagos.indemnizaciones ◀── cola de salida (outbox)
+```
+
+- **Un solo pago.** Dos entregas del mismo comando (o dos claves para el mismo par evento–póliza) producen un pago, y la
+  segunda respuesta repite la primera (`repeticion: true`).
+- **Fallos.** Sin respuesta de la pasarela se reintenta con retroceso exponencial hasta `PAGOS_INDEMNIZACION_MAX_INTENTOS`
+  (5); agotados, o ante un rechazo, queda `FALLIDA` en `pagos.indemnizaciones` y se publica `indemnizacion_fallida`.
+  Cada intento queda en `pagos.intentos_pago`.
+- **Cuenta de destino.** Es un token (`cta_…`) y nunca sale en eventos ni logs. **Provisional (S5):** ninguna historia captura
+  la cuenta del cliente, así que, si el comando no trae `cuenta_destino`, se usa una cuenta simulada opaca derivada de la póliza.
+- **Simulador.** El prefijo de la cuenta fuerza el modo: `cta_sim_rechazar_`, `cta_sim_perder_`, `cta_sim_tardar_`,
+  `cta_sim_caida_`. Es el mismo adaptador del cobro, elegido por `PASARELA_PROVEEDOR`.
 
 ## Cobros fallidos (HU19, publicado en el borde)
 

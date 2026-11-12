@@ -5,7 +5,12 @@ from pathlib import Path
 
 import pytest
 from app.pagos.config import ConfigPagos
-from app.pagos.dominio import PasarelaNoDisponible, PasarelaSinRespuesta, SolicitudCobro
+from app.pagos.dominio import (
+    PasarelaNoDisponible,
+    PasarelaSinRespuesta,
+    SolicitudCobro,
+    SolicitudPago,
+)
 from app.pagos.simulador import ModoSimulador, PasarelaSimulada, modo_desde_texto
 from app.pagos.wiring import construir_pasarela
 
@@ -113,3 +118,60 @@ def test_el_nucleo_no_importa_ningun_adaptador(archivo):
 def test_solo_el_ensamblado_importa_el_simulador():
     quienes = {p.name for p in RAIZ.glob("*.py") if "app.pagos.simulador" in _importa(p)}
     assert quienes == {"wiring.py"}
+
+
+# --- pago de indemnizaciones (HU29) -----------------------------------------------------------------------------
+
+
+def _pago(cuenta="cta_sim_prueba01", clave="evt-1:pol-1"):
+    return SolicitudPago(idempotency_key=clave, cuenta_destino=cuenta, monto=_solicitud().monto, moneda="COP", referencia="evt-1")
+
+
+async def test_pagar_es_idempotente_por_clave_y_se_cuenta_una_vez(fabrica):
+    pasarela = PasarelaSimulada(fabrica)
+    primero = await pasarela.pagar(_pago())
+    for _ in range(5):
+        assert await pasarela.pagar(_pago()) == primero
+    assert primero.aprobado and primero.referencia_pasarela.startswith("simpg_")
+    assert pasarela.pagos() == 1 and pasarela.cargos() == 0  # un pago no es un cobro
+    assert (await pasarela.consultar("evt-1:pol-1")) == primero
+
+
+@pytest.mark.parametrize(
+    "cuenta, modo",
+    [
+        ("cta_sim_rechazar_1", ModoSimulador.RECHAZAR),
+        ("cta_sim_perder_1", ModoSimulador.PERDER_RESPUESTA),
+        ("cta_sim_caida_1", ModoSimulador.NO_DISPONIBLE),
+        ("cta_sim_otra", ModoSimulador.APROBAR),
+    ],
+)
+def test_el_prefijo_de_la_cuenta_elige_el_modo(fabrica, cuenta, modo):
+    assert PasarelaSimulada(fabrica).modo_para_cuenta(cuenta) is modo
+
+
+async def test_pagar_rechazado_no_cuenta_como_pago(fabrica):
+    resultado = await PasarelaSimulada(fabrica).pagar(_pago("cta_sim_rechazar_1"))
+    assert not resultado.aprobado and resultado.codigo == "FONDOS_INSUFICIENTES"
+    assert PasarelaSimulada(fabrica).pagos() == 0
+
+
+async def test_pagar_perder_respuesta_paga_una_vez_aunque_se_repita_la_orden(fabrica):
+    pasarela = PasarelaSimulada(fabrica)
+    for _ in range(3):
+        with pytest.raises(PasarelaSinRespuesta):
+            await pasarela.pagar(_pago("cta_sim_perder_1"))
+    assert pasarela.pagos() == 1
+
+
+async def test_pagar_no_disponible_no_recibe_la_orden(fabrica):
+    pasarela = PasarelaSimulada(fabrica)
+    with pytest.raises(PasarelaNoDisponible):
+        await pasarela.pagar(_pago("cta_sim_caida_1"))
+    assert await pasarela.consultar("evt-1:pol-1") is None and pasarela.pagos() == 0
+
+
+async def test_pagar_a_una_cuenta_mal_formada_se_rechaza_sin_pagar(fabrica):
+    pasarela = PasarelaSimulada(fabrica)
+    resultado = await pasarela.pagar(_pago("4111111111111111"))
+    assert not resultado.aprobado and resultado.codigo == "CUENTA_INVALIDA" and pasarela.pagos() == 0

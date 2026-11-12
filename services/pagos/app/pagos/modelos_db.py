@@ -209,5 +209,70 @@ class CargoSimuladoDB(BasePagos):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class IndemnizacionDB(BasePagos):
+    """Pago automático de una indemnización paramétrica (HU29). Un registro por par evento–póliza.
+
+    `evento_id` y `poliza_id` son referencias por id a Siniestros (ADR-0001). La cuenta de destino es un token: nunca los
+    datos de la cuenta. Lo que se publica a Kafka pasa por `eventos_salida` (outbox), igual que los cobros.
+    """
+
+    __tablename__ = "indemnizaciones"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    # Criterio 3 y 8: una clave, un pago. La restricción también vale entre réplicas.
+    idempotency_key: Mapped[str] = mapped_column(String(100), unique=True)
+    evento_id: Mapped[str] = mapped_column(String(64))
+    poliza_id: Mapped[str] = mapped_column(String(64))
+    cliente_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    producto: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    regla: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    version_reglas: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    monto: Mapped[Decimal] = mapped_column(Numeric(15, 2))
+    moneda: Mapped[str] = mapped_column(String(3))
+    cuenta_destino: Mapped[str] = mapped_column(String(200))
+    estado: Mapped[str] = mapped_column(String(20), default="PENDIENTE")
+    referencia_pasarela: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    codigo_fallo: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    motivo_fallo: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    intentos: Mapped[int] = mapped_column(Integer, default=0)
+    # Mientras está PENDIENTE: cuándo puede tomarla el procesador (también sirve de «préstamo» mientras una réplica paga).
+    proximo_intento_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reentregas: Mapped[int] = mapped_column(Integer, default=0)
+    correlacion_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    traza_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    resuelta_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("evento_id", "poliza_id", name="uq_indemnizacion_evento_poliza"),
+        Index(
+            "ix_indemnizaciones_pendientes",
+            "proximo_intento_en",
+            postgresql_where=text("estado = 'PENDIENTE'"),
+            sqlite_where=text("estado = 'PENDIENTE'"),
+        ),
+    )
+
+
+class IntentoPagoDB(BasePagos):
+    """Cada llamada (o consulta) a la pasarela por una indemnización: el rastro de los estados por los que pasó (criterio 9)."""
+
+    __tablename__ = "intentos_pago"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    indemnizacion_id: Mapped[str] = mapped_column(String(36), ForeignKey(f"{SCHEMA}.indemnizaciones.id"))
+    numero: Mapped[int] = mapped_column(Integer)
+    resultado: Mapped[str] = mapped_column(String(20))
+    codigo: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    motivo: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    referencia_pasarela: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    duracion_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (UniqueConstraint("indemnizacion_id", "numero", name="uq_intento_pago_numero"),)
+
+
 # Idempotencia de los consumidores (la plantilla de eventos), en el esquema del servicio.
 TABLA_EVENTOS_PROCESADOS = tabla_eventos_procesados(BasePagos.metadata)

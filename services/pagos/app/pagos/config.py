@@ -12,8 +12,13 @@ SQLITE_LOCAL = "sqlite:///./pagos.db"
 TOPIC_COMANDOS = "solventa.suscripcion.comandos"   # MS Suscripción -> MS Pagos: cobro_prima_solicitado
 TOPIC_RESULTADOS = "solventa.pagos.resultados"     # MS Pagos -> MS Suscripción (clave de partición: suscripcion_id)
 TOPIC_NOTIFICACIONES = "solventa.notificaciones"   # MS Pagos -> notificaciones: aviso al operador por gracia vencida (HU19)
+TOPIC_COMANDOS_SINIESTROS = "solventa.siniestros.comandos"      # MS Siniestros -> MS Pagos: indemnizacion_solicitada (HU29)
+TOPIC_INDEMNIZACIONES = "solventa.pagos.indemnizaciones"        # MS Pagos -> MS Siniestros (clave de partición: evento_id)
 # El grupo de consumo debe empezar por el nombre del servicio: es lo único que permite su política de IAM.
 GRUPO_COBROS = "solventa-pagos.cobros"
+GRUPO_INDEMNIZACIONES = "solventa-pagos.indemnizaciones"
+# Intentos de pagar una indemnización antes de dejarla FALLIDA y visible (criterio 6 de HU29).
+INDEMNIZACION_MAX_INTENTOS = 5
 MONEDA = "COP"
 # PROVISIONAL: la historia no fija la duración del período de gracia. Validar con negocio (la gestión es de HU19).
 PERIODO_GRACIA_DIAS_PROVISIONAL = 3
@@ -55,6 +60,7 @@ class ConfigPagos:
     # Espera antes de volver a intentar (o conciliar) un cobro sin respuesta; se duplica en cada intento.
     reintento_base_s: float = 5.0
     reintento_maximo_s: float = 300.0
+    indemnizacion_max_intentos: int = INDEMNIZACION_MAX_INTENTOS
     # JWT del asesor u operador emitido por Identidad (ADR-0008); solo lo usa la gestión de cobros fallidos (HU19).
     asesor_jwt_secreto: str | None = None
     asesor_jwt_emisor: str = "solventa-identidad"
@@ -76,6 +82,7 @@ class ConfigPagos:
             periodo_gracia_dias=int(e.get("PERIODO_GRACIA_DIAS", str(PERIODO_GRACIA_DIAS_PROVISIONAL))),
             reintento_base_s=float(e.get("PAGOS_REINTENTO_BASE_S", "5")),
             reintento_maximo_s=float(e.get("PAGOS_REINTENTO_MAXIMO_S", "300")),
+            indemnizacion_max_intentos=int(e.get("PAGOS_INDEMNIZACION_MAX_INTENTOS", str(INDEMNIZACION_MAX_INTENTOS))),
             asesor_jwt_secreto=e.get("ASESOR_JWT_SECRETO") or None,
             asesor_jwt_emisor=e.get("ASESOR_JWT_EMISOR", cls.asesor_jwt_emisor),
             horas_por_vencer=int(e.get("PAGOS_HORAS_POR_VENCER", str(HORAS_POR_VENCER))),
