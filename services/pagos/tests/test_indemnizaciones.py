@@ -269,6 +269,11 @@ def test_la_cuenta_de_destino_con_forma_de_tarjeta_se_rechaza_sin_copiarla():
     assert pan not in str(error.value.detalles) and error.value.detalles[0]["campo"] == "cuenta_destino"
 
 
+def test_la_cuenta_simulada_nunca_parece_una_tarjeta_aunque_el_hash_traiga_muchos_digitos():
+    """Regresión (hallada por HA08): un hash hexadecimal puede tener 13+ dígitos seguidos y el comando se rechazaba."""
+    assert not any(identificador_parece_pan(cuenta_por_defecto(f"pol-{i:05d}")) for i in range(20_000))
+
+
 def test_sin_cuenta_en_el_comando_se_usa_una_cuenta_simulada_opaca_por_poliza():
     comando = ComandoIndemnizacion.desde_evento(comando_indemnizacion())
     assert comando.cuenta_destino == cuenta_por_defecto("pol-1") and comando.cuenta_destino.startswith("cta_sim_")

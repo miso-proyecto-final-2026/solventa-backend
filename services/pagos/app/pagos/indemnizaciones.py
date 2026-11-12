@@ -64,8 +64,12 @@ def _ahora() -> datetime:
 
 def cuenta_por_defecto(poliza_id: str) -> str:
     """PROVISIONAL (S5): ninguna historia captura la cuenta del cliente. Hasta que exista, el pago va a una cuenta
-    simulada opaca derivada de la póliza (no contiene datos de nadie)."""
-    return "cta_sim_" + hashlib.sha256(poliza_id.encode()).hexdigest()[:20]
+    simulada opaca derivada de la póliza (no contiene datos de nadie).
+
+    El hash se parte con una letra cada 6 caracteres: un hexadecimal puede traer 13 o más dígitos seguidos, y eso tiene
+    forma de tarjeta (`identificador_parece_pan`), así que el propio comando se rechazaría y el pago se perdería."""
+    huella = hashlib.sha256(poliza_id.encode()).hexdigest()[:24]
+    return "cta_sim_" + "x".join(huella[i : i + 6] for i in range(0, 24, 6))
 
 
 @dataclass(frozen=True)
