@@ -68,6 +68,14 @@ class EstadoIndemnizacion(StrEnum):
     FALLIDA = "FALLIDA"
 
 
+class EstadoConciliacion(StrEnum):
+    """Conciliación de un desembolso contra el extracto de la pasarela (HU31)."""
+
+    PENDIENTE = "PENDIENTE"
+    CONCILIADO = "CONCILIADO"
+    CON_DIFERENCIA = "CON_DIFERENCIA"
+
+
 ESTADOS_FINALES_INDEMNIZACION = (EstadoIndemnizacion.PAGADA.value, EstadoIndemnizacion.FALLIDA.value)
 
 
@@ -114,6 +122,17 @@ class SolicitudPago:
 
 
 @dataclass(frozen=True)
+class LineaExtracto:
+    """Lo que la pasarela dice haber pagado por una clave: contra esto se concilia un desembolso (HU31)."""
+
+    idempotency_key: str
+    monto: Decimal
+    moneda: str
+    referencia: str
+    ordenes_recibidas: int  # más de 1 prueba que la idempotencia de la pasarela evitó un pago doble
+
+
+@dataclass(frozen=True)
 class ResultadoCobro:
     aprobado: bool
     referencia_pasarela: str | None = None
@@ -154,6 +173,10 @@ class PasarelaPago(Protocol):
 
     async def pagar(self, solicitud: SolicitudPago) -> ResultadoCobro:
         """Paga una indemnización una sola vez por `idempotency_key`: repetirla devuelve el resultado del primer pago."""
+        ...
+
+    async def extracto(self, idempotency_key: str) -> LineaExtracto | None:
+        """La línea del extracto del pago hecho con esa clave, o None si la pasarela no lo tiene (HU31)."""
         ...
 
     async def describir_token(self, token: str) -> DatosToken:

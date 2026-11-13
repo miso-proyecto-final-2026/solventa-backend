@@ -37,6 +37,7 @@ from app.pagos import repositorio as repo
 from app.pagos.config import MONEDA, TOPIC_INDEMNIZACIONES
 from app.pagos.dominio import (
     ESTADOS_FINALES_INDEMNIZACION,
+    EstadoConciliacion,
     EstadoIndemnizacion,
     PasarelaNoDisponible,
     PasarelaPago,
@@ -84,6 +85,11 @@ class ComandoIndemnizacion:
     producto: str | None = None
     regla: str | None = None
     version_reglas: str | None = None
+    # HU31: copia de lo que Siniestros envía con el comando (evento, póliza y validación). Todo opcional: un comando
+    # anterior a HU31 se sigue pagando, solo que su registro queda sin esos datos.
+    evento: dict[str, Any] | None = None
+    poliza: dict[str, Any] | None = None
+    validacion: dict[str, Any] | None = None
 
     @classmethod
     def desde_evento(cls, payload: dict[str, Any]) -> ComandoIndemnizacion:
@@ -106,6 +112,9 @@ class ComandoIndemnizacion:
             producto=_opcional(payload.get("producto")),
             regla=_opcional(payload.get("regla")),
             version_reglas=_opcional(payload.get("version_reglas")),
+            evento=_objeto(payload.get("evento")),
+            poliza=_objeto(payload.get("poliza")),
+            validacion=_objeto(payload.get("validacion")),
         )
 
     @classmethod
@@ -127,6 +136,19 @@ class ComandoIndemnizacion:
         if defectos:
             raise SolicitudInvalida(detalles=defectos)
         return cls(monto=valor, **resto)
+
+
+def _objeto(valor: Any) -> dict[str, Any] | None:
+    """Un objeto JSON opcional; cualquier otra cosa se ignora en lugar de rechazar un pago por un dato informativo."""
+    return valor if isinstance(valor, dict) and valor else None
+
+
+def _fecha(valor: Any) -> datetime | None:
+    try:
+        fecha = datetime.fromisoformat(str(valor))
+    except ValueError:
+        return None
+    return fecha if fecha.tzinfo else fecha.replace(tzinfo=UTC)
 
 
 def _opcional(valor: Any) -> str | None:
@@ -186,6 +208,13 @@ class ServicioIndemnizaciones:
                 moneda=comando.moneda,
                 cuenta_destino=comando.cuenta_destino,
                 estado=EstadoIndemnizacion.PENDIENTE.value,
+                tipo_evento=_opcional((comando.evento or {}).get("tipo")),
+                evento_ocurrido_en=_fecha((comando.evento or {}).get("ocurrido_en")),
+                ubicacion=_opcional((comando.evento or {}).get("ubicacion")),
+                datos_evento=comando.evento,
+                datos_poliza=comando.poliza,
+                validacion=comando.validacion,
+                estado_conciliacion=EstadoConciliacion.PENDIENTE.value,
                 intentos=0,
                 proximo_intento_en=ahora,
                 reentregas=0,

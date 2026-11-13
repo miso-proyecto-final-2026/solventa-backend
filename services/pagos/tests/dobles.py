@@ -12,6 +12,7 @@ from decimal import Decimal
 from app.eventos import Evento
 from app.pagos.dominio import (
     DatosToken,
+    LineaExtracto,
     PasarelaNoDisponible,
     PasarelaSinRespuesta,
     ResultadoCobro,
@@ -49,6 +50,7 @@ class PasarelaFalsa:
         self.ordenes_reembolso: list[SolicitudCobro] = []
         self.reembolso_caido = False
         self.ordenes_pago: list[SolicitudPago] = []
+        self.montos_pagados: dict[str, Decimal] = {}  # lo que el extracto dice haber pagado, por clave
 
     @property
     def cargos(self) -> int:
@@ -85,6 +87,8 @@ class PasarelaFalsa:
         else:
             resultado = ResultadoCobro(aprobado=True, referencia_pasarela=f"pg-{len(self.libro) + 1}")
         self.libro[solicitud.idempotency_key] = resultado
+        if resultado.aprobado:
+            self.montos_pagados[solicitud.idempotency_key] = solicitud.monto
         if paso == "perder":
             raise PasarelaSinRespuesta("respuesta perdida")
         return resultado
@@ -98,6 +102,14 @@ class PasarelaFalsa:
                 aprobado=True, referencia_pasarela=f"rf-{len(self.reembolsos) + 1}"
             )
         return self.reembolsos[solicitud.idempotency_key]
+
+    async def extracto(self, idempotency_key: str) -> LineaExtracto | None:
+        resultado = self.libro.get(idempotency_key)
+        if resultado is None or not resultado.aprobado or idempotency_key not in self.montos_pagados:
+            return None
+        return LineaExtracto(
+            idempotency_key, self.montos_pagados[idempotency_key], "COP", resultado.referencia_pasarela or "", 1
+        )
 
     async def consultar(self, idempotency_key: str) -> ResultadoCobro | None:
         self.consultas.append(idempotency_key)

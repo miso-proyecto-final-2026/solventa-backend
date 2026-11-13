@@ -73,6 +73,24 @@ class CasoYaRecuperado(ErrorPagos):
     status, code, mensaje = 409, "CASO_YA_RECUPERADO", "El cobro ya se recuperó; no se puede reintentar."
 
 
+# --- conciliación de indemnizaciones (HU31) -------------------------------------------------------------------------
+
+class DesembolsoNoEncontrado(ErrorPagos):
+    status, code, mensaje = 404, "DESEMBOLSO_NO_ENCONTRADO", "El desembolso no existe."
+
+
+class DesembolsoNoConciliable(ErrorPagos):
+    status, code, mensaje = 409, "DESEMBOLSO_NO_CONCILIABLE", "Solo se concilian los desembolsos pagados."
+
+
+class ExtractoSinPago(ErrorPagos):
+    status, code, mensaje = 409, "EXTRACTO_SIN_PAGO", "La pasarela no tiene un pago con la clave de este desembolso."
+
+
+class DesembolsoSinDiferencia(ErrorPagos):
+    status, code, mensaje = 409, "DESEMBOLSO_SIN_DIFERENCIA", "Solo se escalan los desembolsos con diferencia."
+
+
 def cuerpo_error(code: str, message: str, detalles: list[dict[str, str]] | None = None, trace_id: str | None = None) -> dict[str, Any]:
     traza = trace_id or traza_id.get() or str(uuid.uuid4())
     return {"error": {"code": code, "message": message, "details": detalles or [], "trace_id": traza}}

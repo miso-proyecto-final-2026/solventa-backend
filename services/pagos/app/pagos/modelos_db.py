@@ -243,9 +243,25 @@ class IndemnizacionDB(BasePagos):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     resuelta_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # --- HU31: copia de lo que viajó en el comando (Pagos no une tablas con Siniestros, ADR-0001) y conciliación ---
+    tipo_evento: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    evento_ocurrido_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ubicacion: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    datos_evento: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)   # magnitud y lo demás del evento
+    datos_poliza: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)   # producto, zona (y número, monto asegurado: a confirmar)
+    validacion: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)     # resultado, motivo, regla y versión
+    estado_conciliacion: Mapped[str] = mapped_column(String(20), default="PENDIENTE", server_default="PENDIENTE")
+    conciliado_por: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    conciliado_por_nombre: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    conciliado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    diferencia: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)     # lo que dijo el extracto cuando no coincidió
+    escalada_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    escalada_por: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    nota_escalamiento: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("evento_id", "poliza_id", name="uq_indemnizacion_evento_poliza"),
+        Index("ix_indemnizaciones_conciliacion", "estado_conciliacion", "tipo_evento"),
         Index(
             "ix_indemnizaciones_pendientes",
             "proximo_intento_en",

@@ -185,6 +185,20 @@ class Evaluador:
                     "moneda": "COP",
                     "regla": regla.id,
                     "version_reglas": self._reglas.version,
+                    # Copia para la conciliación de Pagos (HU31): Pagos no une tablas con Siniestros (ADR-0001).
+                    "evento": {
+                        "tipo": regla.tipo_evento,
+                        "ocurrido_en": ocurrido_en.isoformat(),
+                        "ubicacion": zona_evento,
+                        "magnitud": decision.valores,
+                    },
+                    "poliza": {"producto": poliza.producto, "zona": poliza.zona},
+                    "validacion": {
+                        "resultado": decision.resultado,
+                        "motivo": decision.motivo,
+                        "regla": regla.id,
+                        "version_reglas": self._reglas.version,
+                    },
                 },
             ),
             clave=evento_uuid,
