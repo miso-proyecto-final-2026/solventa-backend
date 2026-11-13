@@ -162,6 +162,21 @@ async def test_condicion_cumplida_emite_el_comando_de_indemnizacion_con_clave_de
     assert clave == evaluacion.evento_uuid  # el contrato de infra particiona los comandos por evento
 
 
+async def test_el_comando_lleva_la_copia_del_evento_la_poliza_y_la_validacion_para_la_conciliacion(esc):
+    """HU31: Pagos no une tablas con Siniestros (ADR-0001), así que el comando viaja con lo que necesita guardar."""
+    await esc.alta(emitida("pol-1"))
+
+    await esc.recibir_y_evaluar(sismo())
+
+    [comando] = esc.comandos()
+    evento, poliza, validacion = (comando.payload[k] for k in ("evento", "poliza", "validacion"))
+    assert evento["tipo"] == "sismo" and evento["ocurrido_en"] and "magnitud" in evento and "ubicacion" in evento
+    assert evento["magnitud"], "la magnitud es lo que se comparó contra el umbral"
+    assert poliza["producto"] and set(poliza) == {"producto", "zona"}
+    assert validacion["resultado"] == "CORRESPONDE_PAGO" and validacion["regla"] == comando.payload["regla"]
+    assert validacion["version_reglas"] == "v1"
+
+
 async def test_condicion_no_cumplida_registra_el_motivo_y_no_emite_comando(esc):
     await esc.alta(emitida("pol-1"))
 

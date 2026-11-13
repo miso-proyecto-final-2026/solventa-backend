@@ -91,3 +91,13 @@ def exigir_gestor(
 
 
 GestorActual = Annotated[Gestor, Depends(exigir_gestor)]
+
+
+def exigir_operador(gestor: GestorActual) -> Gestor:
+    """La conciliación de desembolsos es de operaciones (HU31): un asesor autenticado no entra."""
+    if gestor.rol != ROL_OPERADOR:
+        raise SinPermiso("Se requiere el rol de operador.")
+    return gestor
+
+
+OperadorActual = Annotated[Gestor, Depends(exigir_operador)]

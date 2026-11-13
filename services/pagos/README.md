@@ -56,6 +56,25 @@ MS Siniestros ◀──indemnizacion_pagada / fallida── solventa.pagos.indem
 - **Simulador.** El prefijo de la cuenta fuerza el modo: `cta_sim_rechazar_`, `cta_sim_perder_`, `cta_sim_tardar_`,
   `cta_sim_caida_`. Es el mismo adaptador del cobro, elegido por `PASARELA_PROVEEDOR`.
 
+## Conciliación de desembolsos (HU31)
+
+Cada indemnización guarda, además del pago, la **copia** del evento (tipo, magnitud, ubicación, fecha), de la póliza y de la
+validación que Siniestros envía con el comando (Pagos no une tablas con Siniestros, ADR-0001). Operaciones las consulta y
+concilia en `/v1/pagos/conciliacion/desembolsos` con el JWT de un **OPERADOR** (un asesor recibe 403):
+
+| Método y ruta | Qué hace |
+|---|---|
+| `GET /` | Lista con filtros `desde`, `hasta`, `tipo_evento`, `estado_conciliacion`, `estado` y paginación |
+| `GET /resumen` | Totales y comprobación de duplicados: `claves_con_mas_de_un_pago` debe ser 0 |
+| `GET /exportar?formato=csv\|pdf` | El reporte con los mismos filtros (CSV con BOM y fórmulas neutralizadas) |
+| `GET /{id}` | Un desembolso con los intentos de pago |
+| `POST /{id}/conciliar` | Compara con el extracto de la pasarela: `CONCILIADO` (monto, moneda y referencia iguales), `CON_DIFERENCIA`, o 409 si la pasarela no tiene el pago |
+| `POST /{id}/escalar` | Solo con diferencia: exige una `nota` y deja quién y cuándo |
+
+El cliente sale enmascarado (`cli***78`) y nunca la cuenta de destino. El extracto es **simulado** (el libro del simulador, a
+confirmar) y los datos de póliza `numero` y `monto_asegurado` quedan vacíos hasta que el contrato los incluya
+([ADR-0023](../../docs/adr/0023-ms-pagos-conciliacion-de-desembolsos.md)).
+
 ## Cobros fallidos (HU19, publicado en el borde)
 
 Único prefijo de Pagos publicado en el borde. Exige `Authorization: Bearer <JWT>` emitido por Identidad con rol

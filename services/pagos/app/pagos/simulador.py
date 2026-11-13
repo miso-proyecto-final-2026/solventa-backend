@@ -23,6 +23,7 @@ import hashlib
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
+from decimal import Decimal
 from enum import StrEnum
 
 from sqlalchemy import func, select
@@ -31,6 +32,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.pagos.dominio import (
     DatosToken,
+    LineaExtracto,
     PasarelaNoDisponible,
     PasarelaSinRespuesta,
     ResultadoCobro,
@@ -143,6 +145,24 @@ class PasarelaSimulada:
         if modo is ModoSimulador.TARDAR:
             await asyncio.sleep(self._demora_s)
         return resultado
+
+    async def extracto(self, idempotency_key: str) -> LineaExtracto | None:
+        """Extracto simulado (a confirmar con HU31): sale del mismo libro en el que la pasarela anota sus pagos."""
+
+        def leer() -> LineaExtracto | None:
+            with self._fabrica() as s:
+                cargo = s.get(CargoSimuladoDB, idempotency_key)
+                if cargo is None or not cargo.aprobado or cargo.tipo != TIPO_PAGO:
+                    return None
+                return LineaExtracto(
+                    idempotency_key=cargo.idempotency_key,
+                    monto=Decimal(cargo.monto),
+                    moneda=cargo.moneda,
+                    referencia=cargo.referencia,
+                    ordenes_recibidas=cargo.solicitudes,
+                )
+
+        return await asyncio.to_thread(leer)
 
     def pagos(self) -> int:
         """Pagos de indemnización aprobados de verdad: la evidencia de «un solo pago por evento y póliza» (EC-D1.1)."""

@@ -17,6 +17,7 @@ from alembic.migration import MigrationContext
 from app.eventos import RegistroEventos
 from app.pagos import repositorio as repo
 from app.pagos.acceso import Gestor
+from app.pagos.conciliacion import Filtros, ServicioConciliacion
 from app.pagos.gestion import ServicioGestion
 from app.pagos.indemnizaciones import ServicioIndemnizaciones
 from app.pagos.modelos_db import SCHEMA, TABLA_EVENTOS_PROCESADOS, BasePagos
@@ -243,3 +244,44 @@ def test_el_mismo_comando_de_indemnizacion_en_varias_replicas_deja_un_solo_pago(
     with fabrica_pg() as s:
         estado, reentregas = s.execute(text(f"SELECT estado, reentregas FROM {SCHEMA}.indemnizaciones")).one()
     assert estado == "PAGADA" and reentregas == REPLICAS - 1
+
+
+async def _desembolso_pg(fabrica_pg, pasarela, i=1):
+    servicio = ServicioIndemnizaciones(fabrica=fabrica_pg, pasarela=pasarela, timeout_pasarela_s=2, reloj=Reloj())
+    comando = comando_indemnizacion(
+        f"evt-{i}", f"pol-{i}", cliente_id=f"cli-{i:08d}",
+        evento={"tipo": "sismo", "ocurrido_en": "2026-11-10T08:30:00+00:00", "ubicacion": "bogota", "magnitud": {"magnitud": 6.4}},
+        poliza={"producto": "parametrico_clima", "zona": "bogota"},
+        validacion={"resultado": "CORRESPONDE_PAGO", "regla": "sismo", "version_reglas": "v1"},
+    )
+    with fabrica_pg() as s, s.begin():
+        await servicio.manejar_evento(evento_indemnizacion(comando), s)
+    await servicio.procesar_pendientes()
+
+
+def test_pago_registro_y_conciliacion_de_punta_a_punta_en_postgres(fabrica_pg):
+    """HU31: el pago del simulador queda registrado con sus datos y el operador lo concilia contra el libro de la pasarela."""
+    operador = Gestor("op-1", "Olga Operadora", "OPERADOR")
+    pasarela = PasarelaSimulada(fabrica_pg, modo=ModoSimulador.APROBAR)
+    conciliacion = ServicioConciliacion(fabrica=fabrica_pg, pasarela=pasarela, timeout_pasarela_s=2)
+
+    async def escenario():
+        await _desembolso_pg(fabrica_pg, pasarela, 1)
+        await _desembolso_pg(fabrica_pg, pasarela, 2)
+        [primero, segundo] = sorted(conciliacion.listar(Filtros())[0], key=lambda d: d.evento_id)
+        assert (primero.tipo_evento, primero.estado, primero.estado_conciliacion) == ("sismo", "PAGADA", "PENDIENTE")
+
+        assert (await conciliacion.conciliar(primero.id, operador)).estado_conciliacion == "CONCILIADO"
+
+        # El extracto de la pasarela cambia el monto de un pago: el operador lo ve como diferencia y lo escala.
+        with fabrica_pg() as s, s.begin():
+            s.execute(text(f"UPDATE {SCHEMA}.simulador_cargos SET monto = 1 WHERE idempotency_key = 'evt-2:pol-2'"))
+        con_diferencia = await conciliacion.conciliar(segundo.id, operador)
+        assert con_diferencia.estado_conciliacion == "CON_DIFERENCIA" and con_diferencia.diferencia["monto_pasarela"] == "1.00"
+        assert conciliacion.escalar(segundo.id, operador, "El extracto dice 1,00").nota_escalamiento == "El extracto dice 1,00"
+
+    asyncio.run(escenario())
+    resumen = conciliacion.resumen(Filtros())
+    assert (resumen.desembolsos, resumen.claves_con_mas_de_un_pago) == (2, 0)
+    assert resumen.por_estado_conciliacion == {"PENDIENTE": 0, "CONCILIADO": 1, "CON_DIFERENCIA": 1}
+    assert len(conciliacion.listar(Filtros(estado_conciliacion="CON_DIFERENCIA"))[0]) == 1

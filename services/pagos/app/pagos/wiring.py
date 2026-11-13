@@ -23,6 +23,7 @@ from app.eventos import (
     brokers_desde_entorno,
     parametros_seguridad,
 )
+from app.pagos.conciliacion import ServicioConciliacion
 from app.pagos.config import (
     GRUPO_COBROS,
     GRUPO_INDEMNIZACIONES,
@@ -59,6 +60,7 @@ class Ensamblado:
     # None solo en desarrollo sin Kafka: el publicador es en memoria y nadie consume.
     consumidor: ConsumidorEventos | None = None
     indemnizaciones: ServicioIndemnizaciones | None = None
+    conciliacion: ServicioConciliacion | None = None
     consumidor_indemnizaciones: ConsumidorEventos | None = None
     detector_intervalo_s: float = 60.0
     _tareas: list[asyncio.Task[None]] = field(default_factory=list, init=False)
@@ -123,6 +125,7 @@ def construir_ensamblado(config: ConfigPagos | None = None) -> Ensamblado:
         reintento_maximo_s=config.reintento_maximo_s,
         max_intentos=config.indemnizacion_max_intentos,
     )
+    conciliacion = ServicioConciliacion(fabrica=fabrica, pasarela=pasarela, timeout_pasarela_s=config.pasarela_timeout_s)
     intervalo = config.detector_gracia_intervalo_s
 
     if config.kafka_brokers is None:
@@ -135,6 +138,7 @@ def construir_ensamblado(config: ConfigPagos | None = None) -> Ensamblado:
             publicador,
             RelayEventos(fabrica, publicador),
             indemnizaciones=indemnizaciones,
+            conciliacion=conciliacion,
             detector_intervalo_s=intervalo,
         )
 
@@ -169,6 +173,7 @@ def construir_ensamblado(config: ConfigPagos | None = None) -> Ensamblado:
         RelayEventos(fabrica, publicador),
         consumidor,
         indemnizaciones,
+        conciliacion,
         consumidor_indemnizaciones,
         detector_intervalo_s=intervalo,
     )
