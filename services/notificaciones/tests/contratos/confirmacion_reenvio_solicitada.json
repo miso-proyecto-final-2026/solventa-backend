@@ -12,6 +12,7 @@
     "cliente_id": "cli-1",
     "numero_poliza": "5GXX27E6D3TK6J73DWWS",
     "producto": "microseguro_vida",
+    "monto_asegurado": 50000000,
     "vigencia_desde": "2026-10-25T12:00:05+00:00",
     "fecha_vencimiento": "2027-10-25T12:00:05+00:00",
     "fecha_emision": "2026-10-23T12:00:00+00:00"

@@ -72,8 +72,8 @@ concilia en `/v1/pagos/conciliacion/desembolsos` con el JWT de un **OPERADOR** (
 | `POST /{id}/escalar` | Solo con diferencia: exige una `nota` y deja quién y cuándo |
 
 El cliente sale enmascarado (`cli***78`) y nunca la cuenta de destino. El extracto es **simulado** (el libro del simulador, a
-confirmar) y los datos de póliza `numero` y `monto_asegurado` quedan vacíos hasta que el contrato los incluya
-([ADR-0023](../../docs/adr/0023-ms-pagos-conciliacion-de-desembolsos.md)).
+confirmar). El número de póliza, el cliente y el monto asegurado salen de `poliza_emitida` por Siniestros y quedan vacíos en las pólizas
+anteriores a HU31 ([ADR-0023](../../docs/adr/0023-ms-pagos-conciliacion-de-desembolsos.md)).
 
 ## Cobros fallidos (HU19, publicado en el borde)
 

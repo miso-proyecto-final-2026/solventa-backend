@@ -170,6 +170,10 @@ class PolizaDemoIn(BaseModel):
     poliza_id: str = Field(pattern=r"^pol-demo-[A-Za-z0-9_-]{1,50}$", description="Debe empezar por `pol-demo-`")
     producto: str
     zona: str | None = Field(default=None, max_length=64)
+    # HU31: opcionales; con ellos la conciliación de Pagos muestra la póliza completa en las pruebas.
+    cliente_id: str | None = Field(default=None, max_length=64)
+    numero_poliza: str | None = Field(default=None, max_length=40)
+    monto_asegurado: int | None = Field(default=None, gt=0)
     vigencia_desde: datetime
     fecha_vencimiento: datetime
 

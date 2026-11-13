@@ -192,7 +192,13 @@ class Evaluador:
                         "ubicacion": zona_evento,
                         "magnitud": decision.valores,
                     },
-                    "poliza": {"producto": poliza.producto, "zona": poliza.zona},
+                    "cliente_id": poliza.cliente_id,
+                    "poliza": {
+                        "producto": poliza.producto,
+                        "zona": poliza.zona,
+                        "numero": poliza.numero_poliza,
+                        "monto_asegurado": poliza.monto_asegurado,
+                    },
                     "validacion": {
                         "resultado": decision.resultado,
                         "motivo": decision.motivo,
@@ -259,6 +265,10 @@ class RegistroPolizas:
         if not isinstance(poliza_id, str) or desde is None or hasta is None:
             raise ValueError("poliza_emitida sin poliza_id o vigencia")
         zona = p.get("zona") if isinstance(p.get("zona"), str) else None
+        cliente = p.get("cliente_id") if isinstance(p.get("cliente_id"), str) else None
+        numero = p.get("numero_poliza") if isinstance(p.get("numero_poliza"), str) else None
+        # `bool` es un `int` en Python: un `true` no es un monto.
+        monto = p.get("monto_asegurado") if isinstance(p.get("monto_asegurado"), int) and not isinstance(p.get("monto_asegurado"), bool) else None
         existente = sesion.get(PolizaParametricaDB, poliza_id)
         if existente is None:
             sesion.add(
@@ -266,6 +276,9 @@ class RegistroPolizas:
                     poliza_id=poliza_id,
                     producto=producto,
                     zona=zona,
+                    cliente_id=cliente,
+                    numero_poliza=numero,
+                    monto_asegurado=monto,
                     vigencia_desde=desde,
                     fecha_vencimiento=hasta,
                     actualizada_en=self._reloj(),
@@ -273,6 +286,7 @@ class RegistroPolizas:
             )
         else:
             existente.producto, existente.zona = producto, zona
+            existente.cliente_id, existente.numero_poliza, existente.monto_asegurado = cliente, numero, monto
             existente.vigencia_desde, existente.fecha_vencimiento = desde, hasta
             existente.actualizada_en = self._reloj()
 
