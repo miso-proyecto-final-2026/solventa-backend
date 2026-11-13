@@ -22,6 +22,7 @@ define el área de suscripción o actuaría.
 3. **Cuatro resultados:** `APROBADA` (la saga avanza al cobro), `RECHAZADA` (termina sin cobrar), `AJUSTADA` (se guarda el ajuste; la
    saga espera la aceptación explícita del cliente, que es de HU17) y `DERIVADA` (se registra una revisión asistida y la saga
    espera). Si faltan datos, no hay consentimiento o Perfilamiento no responde, se deriva: nunca se aprueba ni se rechaza a ciegas.
+   *(HU16, [ADR-0022](0022-ms-suscripcion-revision-asistida.md): un asesor resuelve la derivación desde la bandeja de revisión asistida y la saga continúa o se cierra sin cobro.)*
 4. **Cola de salida (outbox).** El evento se guarda en `eventos_salida` en la misma transacción que el cambio de la saga y un relevo
    lo publica en MSK. Así no se pierde un evento si el proceso cae entre confirmar la base y publicar; los consumidores son
    idempotentes (ADR-0010), de modo que un duplicado no daña. El token del medio de pago viaja en el evento y se **redacta** al

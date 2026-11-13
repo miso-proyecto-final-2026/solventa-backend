@@ -42,6 +42,9 @@ class ConfigSuscripcion:
     # Certificado de cobertura (HU22). Sin clave de enlaces, la descarga por enlace responde 503 y el resto sigue.
     certificados_clave_enlaces: str | None = None
     certificados_vigencia_enlace_h: int = 24  # provisional: ningún documento define el plazo
+    # Prioridad de la bandeja de revisión asistida (HU16), por antigüedad del caso. Provisional: a validar con el negocio.
+    revision_prioridad_alta_horas: int = 24
+    revision_prioridad_media_horas: int = 4
     # Claves de los servicios que llaman a las rutas internas (Notificaciones), separadas por coma.
     claves_de_servicio: tuple[str, ...] = ()
 
@@ -69,5 +72,7 @@ class ConfigSuscripcion:
             firma_barrido_s=float(e.get("FIRMA_BARRIDO_S", "30")),
             certificados_clave_enlaces=e.get("CERTIFICADOS_CLAVE_ENLACES") or None,
             certificados_vigencia_enlace_h=int(e.get("CERTIFICADOS_VIGENCIA_ENLACE_H", "24")),
+            revision_prioridad_alta_horas=int(e.get("REVISION_PRIORIDAD_ALTA_HORAS", "24")),
+            revision_prioridad_media_horas=int(e.get("REVISION_PRIORIDAD_MEDIA_HORAS", "4")),
             claves_de_servicio=tuple(c.strip() for c in e.get("SUSCRIPCION_SERVICE_KEYS", "").split(",") if c.strip()),
         )
