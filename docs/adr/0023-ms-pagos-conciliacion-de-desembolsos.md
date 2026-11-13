@@ -27,8 +27,9 @@ verificarlo contra la pasarela. Pagos no puede unir tablas con Siniestros.
 
 ## A confirmar y límites
 
-- **Número de póliza, cliente y monto asegurado.** Siniestros no los tiene (referencia pólizas por id). El comando propaga `cliente_id` si llega;
-  `numero` y `monto_asegurado` se leen de `poliza` si algún día vienen. Hasta entonces la vista los muestra vacíos.
+- **Número de póliza, cliente y monto asegurado.** Suscripción agrega `monto_asegurado` al evento `poliza_emitida` (que ya traía `cliente_id` y
+  `numero_poliza`); Siniestros los guarda en su copia de la póliza (migración `0003`) y los reenvía en el comando como `cliente_id` y
+  `poliza.numero` / `poliza.monto_asegurado`. Las pólizas copiadas antes de HU31 los tienen vacíos y la vista los muestra con «—».
 - **Extracto simulado.** Con una pasarela real habrá que implementar `extracto` contra su API o su archivo de conciliación.
 - **Enmascarado del cliente** (`cli***78`) está a confirmar con negocio.
 - **Borde público.** El prefijo `/v1/pagos/conciliacion` aún no se publica; se abre en `solventa-infra` cuando la consola lo consuma. La pantalla

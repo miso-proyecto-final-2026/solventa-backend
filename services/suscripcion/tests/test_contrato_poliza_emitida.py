@@ -18,13 +18,14 @@ CONTRATOS = Path(__file__).parent / "contratos"
 ESQUEMA_PAYLOAD = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["poliza_id", "suscripcion_id", "cliente_id", "numero_poliza", "producto", "vigencia_desde", "fecha_vencimiento", "fecha_emision"],
+    "required": ["poliza_id", "suscripcion_id", "cliente_id", "numero_poliza", "producto", "monto_asegurado", "vigencia_desde", "fecha_vencimiento", "fecha_emision"],
     "properties": {
         "poliza_id": {"type": "string"},
         "suscripcion_id": {"type": "string"},
         "cliente_id": {"type": "string"},
         "numero_poliza": {"type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{20}$"},
         "producto": {"type": "string"},
+        "monto_asegurado": {"type": "integer", "minimum": 1},
         "vigencia_desde": {"type": "string", "format": "date-time"},
         "fecha_vencimiento": {"type": "string", "format": "date-time"},
         "fecha_emision": {"type": "string", "format": "date-time"},

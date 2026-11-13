@@ -37,7 +37,8 @@ def sismo(**cambios):
     return evento(**{"datos": {"magnitud": 6.4, "zona": "bogota"}, **cambios})
 
 
-def emitida(poliza_id="pol-1", producto="parametrico_clima", zona="bogota", desde=DESDE, hasta=HASTA) -> Evento:
+def emitida(poliza_id="pol-1", producto="parametrico_clima", zona="bogota", desde=DESDE, hasta=HASTA, **extra) -> Evento:
+    """`extra`: lo que Suscripción agrega desde HU31 (`cliente_id`, `numero_poliza`, `monto_asegurado`)."""
     return Evento(
         event_type="poliza_emitida",
         source="ms-suscripcion",
@@ -48,6 +49,7 @@ def emitida(poliza_id="pol-1", producto="parametrico_clima", zona="bogota", desd
             "zona": zona,
             "vigencia_desde": desde.isoformat(),
             "fecha_vencimiento": hasta.isoformat(),
+            **extra,
         },
     )
 
@@ -172,9 +174,42 @@ async def test_el_comando_lleva_la_copia_del_evento_la_poliza_y_la_validacion_pa
     evento, poliza, validacion = (comando.payload[k] for k in ("evento", "poliza", "validacion"))
     assert evento["tipo"] == "sismo" and evento["ocurrido_en"] and "magnitud" in evento and "ubicacion" in evento
     assert evento["magnitud"], "la magnitud es lo que se comparó contra el umbral"
-    assert poliza["producto"] and set(poliza) == {"producto", "zona"}
+    assert poliza["producto"] and set(poliza) == {"producto", "zona", "numero", "monto_asegurado"}
     assert validacion["resultado"] == "CORRESPONDE_PAGO" and validacion["regla"] == comando.payload["regla"]
     assert validacion["version_reglas"] == "v1"
+
+
+async def test_el_comando_lleva_el_cliente_el_numero_y_el_monto_asegurado_de_la_poliza_emitida(esc):
+    """HU31: la conciliación de Pagos muestra la póliza completa; los datos viajan desde `poliza_emitida`."""
+    await esc.alta(emitida("pol-1", cliente_id="cli-77", numero_poliza="5GXX27E6D3TK6J73DWWS", monto_asegurado=50_000_000))
+
+    await esc.recibir_y_evaluar(sismo())
+
+    [comando] = esc.comandos()
+    assert comando.payload["cliente_id"] == "cli-77"
+    assert comando.payload["poliza"]["numero"] == "5GXX27E6D3TK6J73DWWS"
+    assert comando.payload["poliza"]["monto_asegurado"] == 50_000_000
+
+
+async def test_una_poliza_anterior_a_hu31_sigue_pagando_y_el_comando_lleva_esos_datos_vacios(esc):
+    await esc.alta(emitida("pol-1"))
+
+    await esc.recibir_y_evaluar(sismo())
+
+    [comando] = esc.comandos()
+    assert comando.payload["cliente_id"] is None
+    assert comando.payload["poliza"]["numero"] is None and comando.payload["poliza"]["monto_asegurado"] is None
+    assert comando.payload["monto_indemnizacion"] == 5_000_000
+
+
+async def test_reemitir_la_poliza_actualiza_los_datos_y_un_monto_que_no_es_numero_se_ignora(esc):
+    await esc.alta(emitida("pol-1", numero_poliza="VIEJO", monto_asegurado=1))
+    await esc.alta(emitida("pol-1", numero_poliza="NUEVO", monto_asegurado=True))  # un booleano no es un monto
+
+    await esc.recibir_y_evaluar(sismo())
+
+    [comando] = esc.comandos()
+    assert comando.payload["poliza"]["numero"] == "NUEVO" and comando.payload["poliza"]["monto_asegurado"] is None
 
 
 async def test_condicion_no_cumplida_registra_el_motivo_y_no_emite_comando(esc):
@@ -401,6 +436,23 @@ async def test_las_polizas_sembradas_se_evaluan_como_las_que_llegan_por_el_bus(e
     [evaluacion] = esc.evaluaciones()
     assert evaluacion.poliza_id == "pol-demo-001" and evaluacion.resultado == "CORRESPONDE_PAGO"
     assert len(esc.comandos()) == 1
+
+
+async def test_la_siembra_acepta_cliente_numero_y_monto_asegurado_y_el_comando_los_lleva(esc):
+    """HU31: así se prueba en staging la conciliación de Pagos con la póliza completa."""
+    r = sembrar(esc, poliza_demo(cliente_id="cli-demo-1", numero_poliza="POL-DEMO-0001", monto_asegurado=40_000_000))
+    assert r.status_code == 200
+
+    await esc.recibir_y_evaluar(sismo(evento_id="evt-completo", poliza_id="pol-demo-001"))
+
+    [comando] = esc.comandos()
+    assert comando.payload["cliente_id"] == "cli-demo-1"
+    assert (comando.payload["poliza"]["numero"], comando.payload["poliza"]["monto_asegurado"]) == ("POL-DEMO-0001", 40_000_000)
+
+
+@pytest.mark.parametrize("cambios", [{"monto_asegurado": 0}, {"monto_asegurado": -5}, {"cliente_id": "x" * 65}, {"numero_poliza": "x" * 41}])
+def test_la_siembra_rechaza_datos_de_poliza_fuera_de_rango(esc, cambios):
+    assert sembrar(esc, poliza_demo(**cambios)).status_code == 422
 
 
 def test_sembrar_dos_veces_la_misma_poliza_la_actualiza_sin_duplicarla(esc):
