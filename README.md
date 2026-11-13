@@ -9,7 +9,7 @@ services/
   identidad/     MS Identidad    HU01–HU08 (registro, KYC, consentimiento)
   cotizacion/    MS Cotización   HU09–HU14, HU37–HU38 (proveedores de datos, perfil, motor de rating)
   perfilamiento/ MS Perfilamiento HU23 (enriquecimiento del perfil de riesgo, linaje)
-  suscripcion/   MS Suscripción   HU15 y HU18 (saga de suscripción: decisión automática, paso de cobro y documento de la póliza con HU20; la firma y la emisión llegan con HU21; la venta asistida del asesor, con HU39)
+  suscripcion/   MS Suscripción   HU15 y HU18 (saga de suscripción: decisión automática, paso de cobro y documento de la póliza con HU20; la firma y la emisión llegan con HU21; la venta asistida del asesor, con HU39; la revisión asistida de los casos derivados, con HU16)
   siniestros/    MS Siniestros   HU27 (recepción de eventos paramétricos; HU28 validará la condición)
   pagos/         MS Pagos        HU18 (cobro de la prima con pasarela simulada, idempotencia y conciliación)
 docs/adr/        decisiones de arquitectura (compartidas)
@@ -70,6 +70,7 @@ El CI corre `test` y `build` en matriz por servicio.
 | `POLIZAS_DOCUMENTOS_DIR` | suscripcion | Carpeta local de los PDF cuando no hay bucket (solo desarrollo; por defecto `./polizas-local`). |
 | `POLIZAS_VIGENCIA_MESES`, `POLIZAS_MAX_INTENTOS`, `POLIZAS_REINTENTO_BASE_S`, `POLIZAS_REINTENTO_MAXIMO_S` | suscripcion | Vigencia de la póliza desde el cobro (12 meses, provisional), intentos de generar el documento antes de `FALLIDO` (5) y espera inicial y máxima entre intentos (5 s y 300 s). |
 | `SUSCRIPCION_ESPERA_BARRIDO_S`, `SUSCRIPCION_TIMEOUT_S` | suscripcion | Segundos tras los que el barrido retoma una saga sin decidir (30) y timeout de las llamadas a servicios vecinos (2). |
+| `REVISION_PRIORIDAD_ALTA_HORAS`, `REVISION_PRIORIDAD_MEDIA_HORAS` | suscripcion | Horas en la bandeja de revisión asistida (HU16) desde las que un caso es de prioridad ALTA (24) o MEDIA (4). Provisionales: a validar con el negocio. |
 | `SINIESTROS_DATABASE_URL` | siniestros | Base de datos PostgreSQL (esquema `siniestros`, Alembic). Obligatoria fuera de desarrollo; admite `DATABASE_URL`. |
 | `SINIESTROS_API_KEYS` | siniestros | Llaves de los proveedores de eventos en `X-Service-Key`, como pares `fuente=clave` separados por coma; el evento debe traer esa misma `fuente`. Una clave sin nombre (la que entrega la plataforma en staging) es de la fuente `proveedor-simulado`. Vacía = nadie accede. Debe venir de un secreto. |
 | `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SEGURIDAD` | siniestros | Brokers de MSK (los inyecta la plataforma a los servicios con `eventos`) y `IAM` (por defecto) o `PLAINTEXT` (solo local). Obligatorias fuera de desarrollo; sin ellas, en desarrollo se publica en memoria y no hay consumidor. Ver ADR-0010 y ADR-0011. |

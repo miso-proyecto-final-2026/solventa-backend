@@ -62,6 +62,46 @@ def clave_cobro(suscripcion_id: str) -> str:
     return f"cobro_prima:{suscripcion_id}"
 
 
+def encolar(s: Session, susc: SuscripcionDB, tipo: str, topic: str, ahora: datetime, extra: dict[str, Any]) -> None:
+    """Deja el evento en el outbox, en la misma transacción que el cambio de la saga."""
+    evento = Evento(
+        event_type=tipo,
+        source=FUENTE,
+        timestamp=ahora,
+        correlation_id=susc.correlacion_id or susc.id,
+        payload={
+            "suscripcion_id": susc.id,
+            "cotizacion_id": susc.cotizacion_id,
+            "cliente_id": susc.cliente_id,
+            "decision": susc.decision,
+            **extra,
+        },
+    )
+    repo.encolar_evento(
+        s, event_id=evento.event_id, topic=topic, clave=susc.id,
+        payload=evento.model_dump(mode="json"), ahora=ahora,
+    )
+
+
+def encolar_cobro(s: Session, susc: SuscripcionDB, ahora: datetime) -> None:
+    """El comando `cobro_prima_solicitado` (HU15, HU16 y HU18) y el borrado del token, que solo viaja en el evento."""
+    encolar(
+        s, susc, "cobro_prima_solicitado", TOPIC_COMANDOS, ahora,
+        {
+            "moneda": susc.moneda,
+            # Se conservan las dos primas por compatibilidad con consumidores de HU15.
+            "prima_mensual": int(susc.prima_mensual),
+            "prima_anual": int(susc.prima_anual),
+            # HU18: lo que se cobra (el primer período de la periodicidad elegida) y la clave del cobro.
+            "periodicidad_pago": susc.periodicidad_pago,
+            "monto": f"{monto_a_cobrar(susc):.2f}",
+            "idempotency_key": clave_cobro(susc.id),
+            "metodo_pago": susc.metodo_pago_token,
+        },
+    )
+    susc.metodo_pago_token = None  # el token solo viaja en el evento y se redacta al publicarlo
+
+
 def redactar(sobre: dict[str, Any]) -> dict[str, Any]:
     """Copia del evento sin el token de pago, para conservarlo como evidencia una vez publicado."""
     copia = {**sobre, "payload": {**sobre["payload"]}}
@@ -231,6 +271,7 @@ class ServicioSuscripcion:
                 coberturas=[{"tipo": x.tipo, "monto": x.monto, "deducible": x.deducible} for x in c.coberturas] or None,
                 cotizacion_version_reglas=c.version_reglas,
                 asesor_id=c.asesor_id,
+                cotizacion_vigente_hasta=c.vigente_hasta,
             )
 
     # --- consultar ----------------------------------------------------------------------------------------------
@@ -338,21 +379,7 @@ class ServicioSuscripcion:
                 ahora=ahora,
             )
             if resultado.decision is Decision.APROBADA:
-                self._encolar(
-                    s, susc, "cobro_prima_solicitado", TOPIC_COMANDOS, ahora,
-                    {
-                        "moneda": susc.moneda,
-                        # Se conservan las dos primas por compatibilidad con consumidores de HU15.
-                        "prima_mensual": int(susc.prima_mensual),
-                        "prima_anual": int(susc.prima_anual),
-                        # HU18: lo que se cobra (el primer período de la periodicidad elegida) y la clave del cobro.
-                        "periodicidad_pago": susc.periodicidad_pago,
-                        "monto": f"{monto_a_cobrar(susc):.2f}",
-                        "idempotency_key": clave_cobro(susc.id),
-                        "metodo_pago": susc.metodo_pago_token,
-                    },
-                )
-                susc.metodo_pago_token = None  # el token solo viaja en el evento y se redacta al publicarlo
+                encolar_cobro(s, susc, ahora)
             elif resultado.decision is Decision.RECHAZADA:
                 susc.metodo_pago_token = None
             elif resultado.decision is Decision.DERIVADA:
@@ -368,23 +395,7 @@ class ServicioSuscripcion:
 
     @staticmethod
     def _encolar(s: Session, susc: SuscripcionDB, tipo: str, topic: str, ahora: datetime, extra: dict[str, Any]) -> None:
-        evento = Evento(
-            event_type=tipo,
-            source=FUENTE,
-            timestamp=ahora,
-            correlation_id=susc.correlacion_id or susc.id,
-            payload={
-                "suscripcion_id": susc.id,
-                "cotizacion_id": susc.cotizacion_id,
-                "cliente_id": susc.cliente_id,
-                "decision": susc.decision,
-                **extra,
-            },
-        )
-        repo.encolar_evento(
-            s, event_id=evento.event_id, topic=topic, clave=susc.id,
-            payload=evento.model_dump(mode="json"), ahora=ahora,
-        )
+        encolar(s, susc, tipo, topic, ahora, extra)
 
     # --- barrido ------------------------------------------------------------------------------------------------
 

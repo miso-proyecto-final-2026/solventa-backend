@@ -1,0 +1,26 @@
+{
+  "event_id": "8d0c5a52-1f0e-4d73-9d6b-3a5f7a1e2c44",
+  "event_type": "revision_asistida_resuelta",
+  "source": "ms-suscripcion",
+  "timestamp": "2026-10-23T12:00:00Z",
+  "correlation_id": "20b35e50-c0ac-4576-8a58-44fe60dc339f",
+  "trace_id": "5b6c1c0e-77a4-4a43-a0f4-0f4c8e3f1d90",
+  "version": "1.0",
+  "payload": {
+    "suscripcion_id": "20b35e50-c0ac-4576-8a58-44fe60dc339f",
+    "cotizacion_id": "cot-1",
+    "cliente_id": "cli-1",
+    "decision": "AJUSTADA",
+    "asesor_id": "ase-1",
+    "decision_origen": "DERIVADA",
+    "ajuste": {
+      "factor": 0.75,
+      "monto_original": 40000000,
+      "monto_asegurado": 30000000,
+      "prima_mensual_original": 14583,
+      "prima_mensual": 10937,
+      "prima_anual_original": 175000,
+      "prima_anual": 131250
+    }
+  }
+}

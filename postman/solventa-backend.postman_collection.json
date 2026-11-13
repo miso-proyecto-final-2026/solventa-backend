@@ -7687,6 +7687,475 @@
       ]
     },
     {
+      "name": "MS Suscripción — revisión asistida (HU16)",
+      "item": [
+        {
+          "name": "1. Crear una suscripción derivada (cliente sin perfil enriquecido)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_suscripcion', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 202', () => pm.response.to.have.status(202));",
+                  "pm.collectionVariables.set('revision_suscripcion_id', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_suscripcion}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones"
+              ]
+            },
+            "description": "Requiere el cliente y la cotización de las carpetas de Identidad y Cotización, y que el cliente NO tenga el perfil enriquecido: así la decisión automática lo deriva (HU15). Espere un par de segundos a que se decida.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cotizacion_id\": \"{{cotizacion_id}}\",\n  \"metodo_pago\": \"tok_prueba_{{$randomInt}}\",\n  \"acepta_terminos\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "2. Bandeja de revisión asistida",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// La decisión automática corre en segundo plano tras el 202: se espera a que el caso quede derivado.",
+                  "setTimeout(() => {}, 2500);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const p = pm.response.json();",
+                  "pm.test('página con total y conteo de vencidas', () => pm.expect(p).to.include.keys('items','total','total_vencidas','pagina','tamano'));",
+                  "pm.test('la suscripción derivada está pendiente, con prioridad y categoría', () => {",
+                  "  const f = p.items.find(i => i.id === pm.collectionVariables.get('revision_suscripcion_id'));",
+                  "  pm.expect(f).to.be.an('object');",
+                  "  pm.expect(f.estado).to.eql('PENDIENTE');",
+                  "  pm.expect(['ALTA','MEDIA','BAJA']).to.include(f.prioridad);",
+                  "  pm.expect(f.categorias).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{asesor_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/revisiones",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "revisiones"
+              ]
+            },
+            "description": "Espera 2,5 s antes de consultar: la derivación ocurre en segundo plano."
+          }
+        },
+        {
+          "name": "3. Detalle del caso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('se puede decidir', () => { pm.expect(d.puede_decidir).to.eql(true); pm.expect(d.decisiones_permitidas).to.include('APROBADA'); });",
+                  "pm.test('trae cotización, motivos y el id del cliente', () => { pm.expect(d.cotizacion.coberturas).to.be.an('array'); pm.expect(d.decision_automatica.motivos).to.not.be.empty; pm.expect(d.cliente_id).to.be.a('string'); });",
+                  "pm.test('el apellido no viaja completo', () => { if (d.cliente) pm.expect(d.cliente.inicial_apellido).to.have.length(1); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{asesor_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/revisiones/{{revision_suscripcion_id}}",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "revisiones",
+                "{{revision_suscripcion_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "4. Decidir: aprobar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('queda decidida y ya no se puede decidir', () => { pm.expect(d.estado).to.eql('DECIDIDA'); pm.expect(d.puede_decidir).to.eql(false); pm.expect(d.decision_humana.decision).to.eql('APROBADA'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{asesor_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/revisiones/{{revision_suscripcion_id}}/decision",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "revisiones",
+                "{{revision_suscripcion_id}}",
+                "decision"
+              ]
+            },
+            "description": "Si la cotización venció responde 409 COTIZACION_VENCIDA: aprobar y ajustar quedan bloqueados, solo se puede rechazar.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APROBADA\",\n  \"justificacion\": \"Se revisaron los soportes de ingresos del cliente en la consola.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "5. Segunda decisión del mismo caso (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "const e = pm.response.json().error;",
+                  "pm.test('código estándar y quién decidió', () => { pm.expect(e.code).to.eql('REVISION_YA_DECIDIDA'); pm.expect(e.details.map(x => x.campo)).to.include.members(['decision','asesor','decidido_en']); pm.expect(e.trace_id).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{asesor_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/revisiones/{{revision_suscripcion_id}}/decision",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "revisiones",
+                "{{revision_suscripcion_id}}",
+                "decision"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"RECHAZADA\",\n  \"justificacion\": \"Se revisaron los soportes de ingresos del cliente en la consola.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Justificación demasiado corta (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{asesor_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/revisiones/{{revision_suscripcion_id}}/decision",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "revisiones",
+                "{{revision_suscripcion_id}}",
+                "decision"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APROBADA\",\n  \"justificacion\": \"corta\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Caso inexistente (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('código estándar', () => pm.expect(pm.response.json().error.code).to.eql('REVISION_NO_ENCONTRADA'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{asesor_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/revisiones/00000000-0000-4000-8000-000000000000",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "revisiones",
+                "00000000-0000-4000-8000-000000000000"
+              ]
+            }
+          }
+        },
+        {
+          "name": "6. Bandeja con el token del cliente (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/revisiones",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "revisiones"
+              ]
+            }
+          }
+        },
+        {
+          "name": "6. Bandeja sin sesión (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/revisiones",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "revisiones"
+              ]
+            }
+          }
+        },
+        {
+          "name": "6. Bandeja con el rol OPERADOR (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operador_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{suscripcion_url}}/v1/suscripciones/revisiones",
+              "host": [
+                "{{suscripcion_url}}"
+              ],
+              "path": [
+                "v1",
+                "suscripciones",
+                "revisiones"
+              ]
+            },
+            "description": "Requiere iniciar sesión con un usuario de rol OPERADOR y guardar su token en `operador_token`."
+          }
+        }
+      ]
+    },
+    {
       "name": "MS Siniestros (HU27)",
       "item": [
         {
@@ -10429,6 +10898,14 @@
     },
     {
       "key": "hu28_evento_uuid",
+      "value": ""
+    },
+    {
+      "key": "revision_suscripcion_id",
+      "value": ""
+    },
+    {
+      "key": "operador_token",
       "value": ""
     }
   ]
