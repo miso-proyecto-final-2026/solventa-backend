@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from app.correlacion import MiddlewareCorrelacion
 from app.db import DATABASE_URL, Base, engine
 from app.logs import configurar_logs
+from app.routers.biometria import router as biometria_router
 from app.routers.clientes import router as clientes_router
 from app.routers.consentimientos import router as consentimientos_router
 from app.routers.contactos_cliente import router as contactos_cliente_router
@@ -20,6 +21,7 @@ configurar_logs()
 app = FastAPI(title="Solventa — MS Identidad", version="0.1.0")
 app.add_middleware(MiddlewareCorrelacion)
 app.include_router(clientes_router)
+app.include_router(biometria_router)
 app.include_router(consentimientos_router)
 app.include_router(verificaciones_router)
 app.include_router(sesiones_internas_router)
