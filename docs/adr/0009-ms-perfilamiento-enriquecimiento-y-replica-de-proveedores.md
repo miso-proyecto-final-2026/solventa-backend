@@ -30,3 +30,14 @@ HU23 crea MS Perfilamiento, que combina señales de Open Finance y Open Data en 
 - **Duplicación:** la copia del breaker, la caché y el cliente de consentimiento puede divergir de la de Cotización. Las pruebas de cada copia viajan con ella.
 - **Retención:** no se define; las tres tablas crecen sin límite hasta acordar la política de datos.
 - **Pendiente:** los simuladores devuelven valores fijos; la integración con proveedores reales (T4) y la oferta personalizada (HU24–HU26) quedan fuera de esta historia.
+
+## Enmienda HU24 (2026-11-14): linaje completo, consultable por el asesor y auditado
+
+HU24 (#79) pide que el linaje sea completo y reconstruible y que el asesor lo consulte en la consola.
+
+1. **Más campos, sin migrar los existentes.** Cada línea del linaje agrega `tipo_dato` (`FINANCIERO` para Open Finance, `SOCIOECONOMICO` para Open Data: es lo que decide el TTL) y `estado_consentimiento`. Este último es siempre `OTORGADO`, porque sin ese estado no se enriquece (punto 5), así que se deriva en lugar de guardarse. La respuesta agrega `ausentes` (campo → motivo) y `conflictos` (campo, fuente ganadora, descartadas) del perfil guardado: con ellos y las líneas por fuente se explica cada valor del perfil sin mostrarlo.
+2. **Un perfil concreto.** `GET …/linaje?perfil_id=` consulta un perfil anterior del mismo cliente; sin el parámetro sigue siendo el vigente. Un `perfil_id` de otro cliente responde 404.
+3. **Quién consultó.** Nueva tabla `consultas_linaje` (revisión `0002`, solo inserción con el mismo trigger): cliente, perfil, origen (nombre de la clave de servicio), `consultado_por` (cabecera opcional `X-Consultado-Por`, la persona a cuyo nombre consulta el servicio) y resultado (`ENTREGADO` o `SIN_PERFIL`). Se registra también la consulta sin perfil. Si el registro falla, la consulta falla.
+4. **El asesor entra por Cotización.** `GET /v1/asesor/clientes/{cliente_id}/linaje` en MS Cotización valida el JWT del asesor (ADR-0008) y consulta a Perfilamiento con una clave de servicio **propia** (`cotizacion=…` en `PERFILAMIENTO_API_KEYS`), enviando el id del asesor en `X-Consultado-Por`. Así la auditoría distingue a Cotización de Suscripción y sabe qué asesor miró. Se descartó validar el JWT en Perfilamiento: duplicaba el acceso del asesor y obligaba a publicar otra ruta en el borde.
+5. **No exige consentimiento** (se mantiene el punto 8). Es provisional: V-12 (#106) decide el comportamiento tras revocar.
+6. **Alcance del linaje.** Es el del último perfil enriquecido en Perfilamiento, que no siempre es el perfil con que Cotización calculó un precio: Cotización tiene su propia réplica de proveedores (HU09).

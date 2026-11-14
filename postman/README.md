@@ -37,7 +37,7 @@ Cada petición lleva pruebas (`pm.test`) y guarda las variables que necesita la 
 | MS Cotización / Perfiles | `GET /perfiles/{cliente_id}` (exige clave de servicio; 401/403) |
 | MS Identidad / Asesor - login y búsqueda (HU38) | `POST /v1/sesiones-internas`, `GET /v1/clientes/busqueda` (200/401/404/422) |
 | MS Suscripción / venta asistida (HU39) | `GET /v1/suscripciones/asistidas` (200/401, token del cliente 401), `GET …/asistidas/{id}` (404), `POST …/asistidas` (cotización inexistente 404, 401), `GET …/asistidas/{id}/certificado` (404, 401), `POST …/asistidas/{id}/confirmacion/reenvio` (404), `POST …/asistidas/{id}/firma/enlace` (404), `GET …/enlace-firma/documento` (401) |
-| MS Cotización / Cotización asistida (HU38) | `GET /v1/productos` (200/304), `GET /v1/asesor/clientes/{id}/perfil`, `POST /v1/asesor/cotizaciones` (cliente existente, sin cuenta, 401/422) |
+| MS Cotización / Cotización asistida (HU38, HU24) | `GET /v1/productos` (200/304), `GET /v1/asesor/clientes/{id}/perfil`, `GET /v1/asesor/clientes/{id}/linaje` (200 o 404 según haya perfil enriquecido, 401), `POST /v1/asesor/cotizaciones` (cliente existente, sin cuenta, 401/422) |
 
 Cada ruta de ambas apps tiene al menos una petición, y cada código de respuesta que alcanza un cliente tiene un caso que
 lo provoca. Quedan fuera, porque dependen de configuración que la colección no cambia:
