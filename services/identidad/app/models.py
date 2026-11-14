@@ -79,6 +79,24 @@ class Sesion(Base):
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class RegistroBiometria(Base):
+    """Qué método biométrico activó el cliente en su dispositivo (HU04). Nunca guarda datos biométricos.
+
+    La verificación es local (BiometricPrompt + Keystore): el servidor solo sabe qué método, cuándo y si sigue activo.
+    Una fila por cliente; activar de nuevo la reutiliza.
+    """
+
+    __tablename__ = "registro_biometria"
+    __table_args__ = (CheckConstraint("metodo IN ('HUELLA', 'FACIAL')", name="ck_registro_biometria_metodo"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    cliente_id: Mapped[str] = mapped_column(ForeignKey("identidad.clientes.id"), unique=True)
+    metodo: Mapped[str] = mapped_column(String(10))
+    activo: Mapped[bool] = mapped_column(Boolean, default=True)
+    activado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    desactivado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Consentimiento(Base):
     """Estado vigente del consentimiento de un cliente para un tipo (una fila por cliente y tipo)."""
 
