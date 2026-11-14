@@ -176,3 +176,16 @@ def test_tras_revocar_el_linaje_se_sigue_entregando_y_registrando_hasta_que_deci
 
 async def _sin_cache(*_args):
     return None
+
+
+def test_la_clave_propia_de_cotizacion_queda_como_origen_de_la_consulta(entorno):
+    entorno.app.state.api_keys = {**entorno.app.state.api_keys, "clave-cotizacion": "cotizacion"}
+    entorno.enriquecer()
+
+    entorno.cliente.get(
+        f"/v1/perfilamiento/{CLIENTE}/linaje",
+        headers={"X-Service-Key": "clave-cotizacion", "X-Consultado-Por": ASESOR},
+    )
+
+    (consulta,) = entorno.repo.consultas_linaje_de(CLIENTE)
+    assert (consulta.origen, consulta.consultado_por) == ("cotizacion", ASESOR)
