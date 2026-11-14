@@ -9,9 +9,11 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
+from app import acceso as limite
 from app.auth import Acceso, acceso_actual, exigir_cliente
 from app.db import get_db
 from app.models import Cliente, RegistroBiometria
+from app.routers.inicio_sesion import bloqueado
 from app.schemas import BiometriaActivar, BiometriaOut, MetodoBiometrico
 from app.security import verify_password
 
@@ -66,10 +68,19 @@ def activar_biometria(
             status_code=403,
             detail={"codigo": "KYC_NO_APROBADO", "mensaje": "Debes verificar tu identidad para activar el acceso biométrico"},
         )
+    # Misma contraseña que el inicio de sesión, así que el mismo límite: no se puede adivinar probando aquí.
+    clave = limite.clave("activar", cliente_id)
+    faltan = limite.segundos_bloqueado(db, clave)
+    if faltan:
+        raise bloqueado(faltan)
     if not verify_password(payload.contrasena, cliente.password_hash):
+        faltan = limite.registrar_fallo(db, clave)
+        if faltan:
+            raise bloqueado(faltan)
         raise HTTPException(
             status_code=403, detail={"codigo": "CONTRASENA_INCORRECTA", "mensaje": "La contraseña no es correcta"}
         )
+    limite.limpiar(db, clave)
     ahora = datetime.now(UTC)
     registro = _registro(db, cliente_id)
     if registro is None:

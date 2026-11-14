@@ -79,6 +79,21 @@ class Sesion(Base):
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class IntentoAcceso(Base):
+    """Intentos fallidos de una credencial (HU05): inicio de sesión de clientes y confirmación de contraseña de HU04.
+
+    La clave es el hash del ámbito y el identificador (correo o cliente), no el valor en claro: así tampoco se guardan
+    los correos que nadie registró, y el bloqueo es idéntico exista o no la cuenta.
+    """
+
+    __tablename__ = "intentos_acceso"
+
+    clave: Mapped[str] = mapped_column(String(64), primary_key=True)
+    fallidos: Mapped[int] = mapped_column(Integer, default=0)
+    bloqueado_hasta: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class RegistroBiometria(Base):
     """Qué método biométrico activó el cliente en su dispositivo (HU04). Nunca guarda datos biométricos.
 
