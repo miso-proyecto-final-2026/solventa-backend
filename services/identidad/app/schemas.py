@@ -73,6 +73,11 @@ class ClienteOut(BaseModel):
     creado_en: datetime
 
 
+class InicioSesionCreate(BaseModel):
+    email: str
+    password: str
+
+
 class ErrorResponse(BaseModel):
     detail: str
 
