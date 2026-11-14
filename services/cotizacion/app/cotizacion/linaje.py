@@ -18,7 +18,6 @@ from urllib.parse import quote
 
 import httpx
 
-from app.configuracion import permitir_sustituto_local
 from app.contexto import correlacion_id
 from app.cotizacion.errores import LinajeNoDisponible, LinajeNoEncontrado
 from app.logs import ganchos_http
@@ -79,7 +78,7 @@ class LinajeHttp:
 
 
 class LinajeSinConfigurar:
-    """Solo desarrollo, sin MS Perfilamiento: el linaje responde «no disponible»."""
+    """Sin URL o sin clave de Perfilamiento: el linaje responde «no disponible» (503)."""
 
     async def obtener(self, cliente_id: str, asesor_id: str) -> dict[str, Any]:
         raise LinajeNoDisponible
@@ -89,14 +88,25 @@ class LinajeSinConfigurar:
 
 
 def construir_linaje(env: dict[str, str] | None = None) -> LinajePort:
-    """Falla cerrado: sin `PERFILAMIENTO_URL` solo arranca en modo desarrollo."""
+    """El linaje es secundario y Cotización es crítica (HA01): sin configuración arranca igual.
+
+    A diferencia de las demás dependencias, que fallan cerrado, si falta `PERFILAMIENTO_URL` o
+    `PERFILAMIENTO_SERVICE_KEY` Cotización arranca normal, deja una advertencia en el log y el
+    linaje responde 503 `LINAJE_NO_DISPONIBLE`. Así el orden de despliegue entre backend e infra
+    no tumba la cotización.
+    """
     e = os.environ if env is None else env
-    url = e.get("PERFILAMIENTO_URL")
-    if not url:
-        permitir_sustituto_local("PERFILAMIENTO_URL", "un linaje siempre no disponible", e)
+    url = (e.get("PERFILAMIENTO_URL") or "").strip()
+    clave = (e.get("PERFILAMIENTO_SERVICE_KEY") or "").strip()
+    faltantes = [n for n, v in (("PERFILAMIENTO_URL", url), ("PERFILAMIENTO_SERVICE_KEY", clave)) if not v]
+    if faltantes:
+        log.warning(
+            "linaje_sin_configurar faltan=%s: el linaje del asesor responderá 503",
+            ",".join(faltantes),
+        )
         return LinajeSinConfigurar()
     return LinajeHttp(
         base_url=url,
-        api_key=e.get("PERFILAMIENTO_SERVICE_KEY", ""),
+        api_key=clave,
         timeout_s=float(e.get("PERFILAMIENTO_TIMEOUT_S", "1.0")),
     )

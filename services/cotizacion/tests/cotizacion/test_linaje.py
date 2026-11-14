@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import logging
+
 import httpx
 import pytest
 
 from app.acceso import VerificadorJwtHs256
-from app.configuracion import ErrorConfiguracion
 from app.contexto import correlacion_id
 from app.cotizacion.api_asesor import router as router_asesor
 from app.cotizacion.errores import LinajeNoDisponible, LinajeNoEncontrado
@@ -202,17 +203,48 @@ async def test_el_adaptador_traduce_la_red_caida_y_el_cuerpo_invalido_a_no_dispo
 # --- configuración -------------------------------------------------------------
 
 
-def test_sin_url_de_perfilamiento_no_arranca_fuera_de_desarrollo():
-    with pytest.raises(ErrorConfiguracion):
-        construir_linaje({})
-
-
-async def test_sin_url_en_desarrollo_el_linaje_responde_no_disponible():
-    linajes = construir_linaje({"SOLVENTA_MODO_DESARROLLO": "1"})
+@pytest.mark.parametrize(
+    ("env", "falta"),
+    [
+        ({}, "PERFILAMIENTO_URL,PERFILAMIENTO_SERVICE_KEY"),
+        ({"PERFILAMIENTO_URL": "http://solventa-perfilamiento"}, "PERFILAMIENTO_SERVICE_KEY"),
+        ({"PERFILAMIENTO_SERVICE_KEY": "k"}, "PERFILAMIENTO_URL"),
+        ({"PERFILAMIENTO_URL": " ", "PERFILAMIENTO_SERVICE_KEY": " "}, "PERFILAMIENTO_URL,PERFILAMIENTO_SERVICE_KEY"),
+    ],
+)
+async def test_sin_configuracion_arranca_avisa_en_el_log_y_el_linaje_no_esta_disponible(
+    env, falta, caplog
+):
+    # Fuera de modo desarrollo: Cotización es crítica (HA01) y no debe dejar de arrancar por el linaje.
+    with caplog.at_level(logging.WARNING, logger="solventa.linaje"):
+        linajes = construir_linaje(env)
 
     assert isinstance(linajes, LinajeSinConfigurar)
+    assert f"faltan={falta}" in caplog.text
     with pytest.raises(LinajeNoDisponible):
         await linajes.obtener(CLIENTE, ASESOR_ID)
+
+
+def test_sin_configuracion_el_endpoint_responde_503_linaje_no_disponible(app_linaje):
+    r = app_linaje(construir_linaje({})).get(RUTA, headers=_auth())
+
+    assert r.status_code == 503
+    assert r.json()["error"]["code"] == "LINAJE_NO_DISPONIBLE"
+
+
+def test_sin_configuracion_la_app_completa_arranca(monkeypatch, tmp_path):
+    # La app real (lifespan incluido) arranca sin PERFILAMIENTO_URL ni clave.
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    monkeypatch.setenv("SOLVENTA_MODO_DESARROLLO", "1")  # solo para Redis, Identidad y el JWT
+    monkeypatch.setenv("COTIZACION_DATABASE_URL", f"sqlite:///{(tmp_path / 'c.db').as_posix()}")
+    monkeypatch.delenv("PERFILAMIENTO_URL", raising=False)
+    monkeypatch.delenv("PERFILAMIENTO_SERVICE_KEY", raising=False)
+    with TestClient(app) as cliente:
+        assert cliente.get("/health").status_code == 200
+        assert isinstance(app.state.linajes, LinajeSinConfigurar)
 
 
 def test_con_url_se_usa_el_adaptador_http_con_la_clave_propia():
