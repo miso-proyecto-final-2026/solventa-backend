@@ -12,6 +12,7 @@ from app.cotizacion.api_catalogo import construir_catalogo
 from app.cotizacion.api_catalogo import router as catalogo_router
 from app.cotizacion.config import ConfigCotizacion
 from app.cotizacion.errores import registrar_errores
+from app.cotizacion.linaje import construir_linaje
 from app.cotizacion.niveles import ClasificadorSenales
 from app.cotizacion.perfil import AdaptadorPerfilProveedores
 from app.cotizacion.reglas import cargar_reglas
@@ -38,6 +39,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Cotización asistida (HU38): acceso del asesor, catálogo y perfil para el asesor.
     app.state.verificador_asesor = construir_verificador(config)
     app.state.perfiles = perfiles
+    # Linaje del perfil para el asesor (HU24): fachada hacia MS Perfilamiento.
+    linajes = construir_linaje()
+    app.state.linajes = linajes
     app.state.clasificador_senales = ClasificadorSenales.desde_archivo()
     app.state.catalogo = construir_catalogo(
         cargar_reglas(config.reglas_version, config.reglas_dir)
@@ -49,6 +53,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         sondeador.cancel()
         await escritor.detener()  # escribe la trazabilidad pendiente antes de cerrar
         await servicio.cerrar()
+        await linajes.cerrar()
         engine_cotizacion.dispose()
 
 

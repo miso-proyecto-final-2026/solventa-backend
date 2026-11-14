@@ -47,6 +47,14 @@ info:
     (`BAJO`, `MEDIO`, `ALTO`), nunca con las cifras del cliente. `GET /v1/productos`
     lista los productos y los campos de `datos` (con `ETag`), para armar el formulario.
 
+    **Linaje (HU24).** `GET /v1/asesor/clientes/{cliente_id}/linaje` devuelve el linaje
+    de fuentes del último perfil enriquecido en MS Perfilamiento: fuente, tipo de dato,
+    campos (solo nombres), fecha de consulta, TTL, marcas de caché o valor por defecto
+    y estado del consentimiento, nunca valores. Cotización hace de fachada: consulta a
+    Perfilamiento con su propia clave de servicio y le informa el asesor, que queda en
+    la auditoría de consultas. Es el perfil de Perfilamiento, que no siempre coincide
+    con el que usó Cotización para el precio.
+
     **Datos del producto.** `datos` es un objeto cuyos campos dependen del
     producto y viven en las reglas versionadas, no en este contrato: agregar un
     ramo no cambia la API. Los campos de los productos iniciales están en los ejemplos.
@@ -415,6 +423,81 @@ paths:
           $ref: '#/components/responses/ErrorAsesorSinPermiso'
         '422':
           $ref: '#/components/responses/ErrorValidacion'
+  /v1/asesor/clientes/{cliente_id}/linaje:
+    get:
+      tags: [asesor]
+      operationId: linajeDelCliente
+      summary: Linaje de fuentes del último perfil enriquecido del cliente
+      security:
+        - tokenAsesor: []
+      parameters:
+        - name: cliente_id
+          in: path
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 36}
+      responses:
+        '200':
+          description: Linaje sin valores. Lo servido desde caché o por defecto queda marcado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinajeAsesor'
+              example:
+                perfil_id: 6a1f0c4e-2b7d-4e9a-8c3f-1d2e3f4a5b6c
+                cliente_id: 00000000-0000-4000-8000-0000000000a1
+                creado_en: '2026-11-14T15:00:00Z'
+                consentimiento_id: 9b2e7c1a-4d3f-4a8b-9c6d-0e1f2a3b4c5d
+                fuentes:
+                  - fuente: open_finance
+                    tipo_dato: FINANCIERO
+                    campos: [ingresos_mensuales_cop, ratio_endeudamiento, score_crediticio]
+                    obtenido_en: '2026-11-14T15:00:00Z'
+                    ttl_s: 3600
+                    hit_cache: false
+                    degradado: false
+                    por_defecto: false
+                    estado_consentimiento: OTORGADO
+                  - fuente: open_data
+                    tipo_dato: SOCIOECONOMICO
+                    campos: []
+                    obtenido_en: null
+                    ttl_s: 86400
+                    hit_cache: false
+                    degradado: true
+                    por_defecto: true
+                    estado_consentimiento: OTORGADO
+                ausentes: {estrato: sin_datos, reportes_negativos: sin_datos, zona_riesgo: sin_datos}
+                conflictos: []
+        '401':
+          $ref: '#/components/responses/ErrorAsesorNoAutenticado'
+        '403':
+          $ref: '#/components/responses/ErrorAsesorSinPermiso'
+        '404':
+          description: El cliente no tiene un perfil enriquecido en Perfilamiento.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+              example:
+                error:
+                  code: PERFIL_NO_ENCONTRADO
+                  message: El cliente no tiene un perfil enriquecido.
+                  details: []
+                  trace_id: 7f6c2f5e-0e4d-4d61-9a3e-2d1f0b7c8e55
+        '422':
+          $ref: '#/components/responses/ErrorValidacion'
+        '503':
+          description: Perfilamiento no respondió, falló o rechazó la credencial de Cotización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+              example:
+                error:
+                  code: LINAJE_NO_DISPONIBLE
+                  message: El linaje no está disponible en este momento. Intente de nuevo más tarde.
+                  details: []
+                  trace_id: 7f6c2f5e-0e4d-4d61-9a3e-2d1f0b7c8e55
   /v1/asesor/cotizaciones:
     post:
       tags: [asesor]
@@ -831,6 +914,50 @@ components:
               nombre: {type: string}
               nivel: {type: string, enum: [BAJO, MEDIO, ALTO]}
         obtenido_en: {type: string, format: date-time}
+    LinajeAsesor:
+      type: object
+      required: [perfil_id, cliente_id, creado_en, consentimiento_id, fuentes, ausentes, conflictos]
+      properties:
+        perfil_id: {type: string}
+        cliente_id: {type: string}
+        creado_en: {type: string, format: date-time}
+        consentimiento_id: {type: [string, 'null']}
+        fuentes:
+          type: array
+          items:
+            type: object
+            required: [fuente, tipo_dato, campos, obtenido_en, ttl_s, hit_cache, degradado, por_defecto, estado_consentimiento]
+            properties:
+              fuente: {type: string, enum: [open_finance, open_data]}
+              tipo_dato: {type: string, enum: [FINANCIERO, SOCIOECONOMICO]}
+              campos:
+                type: array
+                description: Nombres de los campos que aportó la fuente, nunca sus valores.
+                items: {type: string}
+              obtenido_en:
+                type: [string, 'null']
+                format: date-time
+                description: Cuándo se consultó al proveedor; si salió de caché, la fecha de la consulta original.
+              ttl_s: {type: [integer, 'null']}
+              hit_cache: {type: boolean}
+              degradado: {type: boolean}
+              por_defecto: {type: boolean}
+              estado_consentimiento: {type: string, enum: [OTORGADO]}
+        ausentes:
+          type: object
+          description: Campo que faltó → motivo (sin_datos, degradado, no_reportado…).
+          additionalProperties: {type: string}
+        conflictos:
+          type: array
+          items:
+            type: object
+            required: [campo, ganadora, descartadas]
+            properties:
+              campo: {type: string}
+              ganadora: {type: string}
+              descartadas:
+                type: array
+                items: {type: string}
     SolicitudAsistida:
       type: object
       required: [producto, datos]
