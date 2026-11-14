@@ -126,7 +126,8 @@
         "tags": [
           "perfilamiento"
         ],
-        "summary": "Linaje del perfil vigente, para auditoría",
+        "summary": "Linaje de un perfil (por defecto, el vigente), para auditoría",
+        "description": "Fuentes, tipo de dato, fechas, TTL y marcas de caché o degradación, sin valores. Cada consulta queda registrada con el servicio que llamó y, si lo informa en `X-Consultado-Por`, la persona a cuyo nombre consulta.",
         "operationId": "linaje_v1_perfilamiento__cliente_id__linaje_get",
         "parameters": [
           {
@@ -137,6 +138,44 @@
               "type": "string",
               "title": "Cliente Id"
             }
+          },
+          {
+            "name": "perfil_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 36
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Un perfil concreto del cliente.",
+              "title": "Perfil Id"
+            },
+            "description": "Un perfil concreto del cliente."
+          },
+          {
+            "name": "x-consultado-por",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Id de la persona a cuyo nombre consulta el servicio (p. ej., el asesor).",
+              "title": "X-Consultado-Por"
+            },
+            "description": "Id de la persona a cuyo nombre consulta el servicio (p. ej., el asesor)."
           },
           {
             "name": "x-service-key",
@@ -241,6 +280,32 @@
         ],
         "title": "CampoOut"
       },
+      "ConflictoOut": {
+        "properties": {
+          "campo": {
+            "type": "string",
+            "title": "Campo"
+          },
+          "ganadora": {
+            "type": "string",
+            "title": "Ganadora"
+          },
+          "descartadas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Descartadas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campo",
+          "ganadora",
+          "descartadas"
+        ],
+        "title": "ConflictoOut"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -285,6 +350,22 @@
             },
             "type": "array",
             "title": "Fuentes"
+          },
+          "ausentes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Ausentes",
+            "description": "Campo que faltó → motivo. Sin valores."
+          },
+          "conflictos": {
+            "items": {
+              "$ref": "#/components/schemas/ConflictoOut"
+            },
+            "type": "array",
+            "title": "Conflictos",
+            "description": "Campos que dieron dos fuentes y cuál se usó."
           }
         },
         "type": "object",
@@ -293,7 +374,9 @@
           "cliente_id",
           "creado_en",
           "consentimiento_id",
-          "fuentes"
+          "fuentes",
+          "ausentes",
+          "conflictos"
         ],
         "title": "LinajeOut"
       },
@@ -303,12 +386,18 @@
             "type": "string",
             "title": "Fuente"
           },
+          "tipo_dato": {
+            "type": "string",
+            "title": "Tipo Dato",
+            "description": "FINANCIERO (Open Finance) o SOCIOECONOMICO (Open Data)."
+          },
           "campos": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Campos"
+            "title": "Campos",
+            "description": "Nombres de los campos que aportó la fuente, nunca sus valores."
           },
           "obtenido_en": {
             "anyOf": [
@@ -319,7 +408,8 @@
                 "type": "null"
               }
             ],
-            "title": "Obtenido En"
+            "title": "Obtenido En",
+            "description": "Cuándo se consultó al proveedor. Si salió de caché, la fecha de la consulta original."
           },
           "ttl_s": {
             "anyOf": [
@@ -343,17 +433,24 @@
           "por_defecto": {
             "type": "boolean",
             "title": "Por Defecto"
+          },
+          "estado_consentimiento": {
+            "type": "string",
+            "title": "Estado Consentimiento",
+            "description": "Estado del consentimiento al consultar la fuente: siempre OTORGADO, porque sin él no se enriquece."
           }
         },
         "type": "object",
         "required": [
           "fuente",
+          "tipo_dato",
           "campos",
           "obtenido_en",
           "ttl_s",
           "hit_cache",
           "degradado",
-          "por_defecto"
+          "por_defecto",
+          "estado_consentimiento"
         ],
         "title": "LineaLinajeOut"
       },

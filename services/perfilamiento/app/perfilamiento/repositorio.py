@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -14,6 +14,7 @@ from sqlalchemy.pool import StaticPool
 from app.perfilamiento.modelos_db import (
     SCHEMA,
     BasePerfilamiento,
+    ConsultaLinajeDB,
     IntentoBloqueadoDB,
     LinajeFuenteDB,
     PerfilEnriquecidoDB,
@@ -82,6 +83,21 @@ class LinajeGuardado:
     creado_en: datetime
     consentimiento_id: str | None
     fuentes: tuple[LineaLinaje, ...]
+    # Del perfil guardado, solo nombres y motivos (HU24): qué faltó y qué fuente ganó un conflicto.
+    ausentes: dict[str, str] = field(default_factory=dict)
+    conflictos: tuple[dict[str, Any], ...] = ()
+
+
+@dataclass(frozen=True)
+class ConsultaLinaje:
+    id: str
+    cliente_id: str
+    perfil_id: str | None
+    origen: str
+    consultado_por: str | None
+    resultado: str
+    consultado_en: datetime
+    correlacion_id: str | None
 
 
 @dataclass(frozen=True)
@@ -153,17 +169,15 @@ class RepositorioPerfiles:
                 .order_by(PerfilEnriquecidoDB.creado_en.desc())
                 .limit(1)
             ).first()
-            if fila is None:
+            return _a_perfil(fila) if fila is not None else None
+
+    def por_id(self, cliente_id: str, perfil_id: str) -> PerfilGuardado | None:
+        """Un perfil concreto del cliente; None si no existe o es de otro cliente."""
+        with self._fabrica() as sesion:
+            fila = sesion.get(PerfilEnriquecidoDB, perfil_id)
+            if fila is None or fila.cliente_id != cliente_id:
                 return None
-            return PerfilGuardado(
-                fila.id,
-                fila.cliente_id,
-                fila.perfil,
-                fila.completitud,
-                fila.degradado,
-                fila.consentimiento_id,
-                _utc(fila.creado_en),  # type: ignore[arg-type]
-            )
+            return _a_perfil(fila)
 
     def linaje_de(self, perfil: PerfilGuardado) -> LinajeGuardado:
         with self._fabrica() as sesion:
@@ -189,6 +203,8 @@ class RepositorioPerfiles:
                     )
                     for f in filas
                 ),
+                ausentes=dict(perfil.perfil.get("ausentes", {})),
+                conflictos=tuple(perfil.perfil.get("conflictos", [])),
             )
 
     def registrar_intento(
@@ -233,3 +249,61 @@ class RepositorioPerfiles:
                 )
                 for f in filas
             ]
+
+    def registrar_consulta_linaje(
+        self,
+        *,
+        cliente_id: str,
+        perfil_id: str | None,
+        origen: str,
+        consultado_por: str | None,
+        resultado: str,
+        consultado_en: datetime,
+        correlacion_id: str | None,
+    ) -> None:
+        with self._fabrica() as sesion, sesion.begin():
+            sesion.add(
+                ConsultaLinajeDB(
+                    id=str(uuid.uuid4()),
+                    cliente_id=cliente_id,
+                    perfil_id=perfil_id,
+                    origen=origen,
+                    consultado_por=consultado_por,
+                    resultado=resultado,
+                    consultado_en=consultado_en,
+                    correlacion_id=correlacion_id,
+                )
+            )
+
+    def consultas_linaje_de(self, cliente_id: str) -> list[ConsultaLinaje]:
+        with self._fabrica() as sesion:
+            filas = sesion.scalars(
+                select(ConsultaLinajeDB)
+                .where(ConsultaLinajeDB.cliente_id == cliente_id)
+                .order_by(ConsultaLinajeDB.consultado_en)
+            ).all()
+            return [
+                ConsultaLinaje(
+                    f.id,
+                    f.cliente_id,
+                    f.perfil_id,
+                    f.origen,
+                    f.consultado_por,
+                    f.resultado,
+                    _utc(f.consultado_en),  # type: ignore[arg-type]
+                    f.correlacion_id,
+                )
+                for f in filas
+            ]
+
+
+def _a_perfil(fila: PerfilEnriquecidoDB) -> PerfilGuardado:
+    return PerfilGuardado(
+        fila.id,
+        fila.cliente_id,
+        fila.perfil,
+        fila.completitud,
+        fila.degradado,
+        fila.consentimiento_id,
+        _utc(fila.creado_en),  # type: ignore[arg-type]
+    )

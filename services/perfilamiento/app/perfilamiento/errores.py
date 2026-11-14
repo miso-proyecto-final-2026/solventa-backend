@@ -18,6 +18,10 @@ class ClienteInvalido(Exception):
     """El identificador del cliente no tiene un formato aceptable."""
 
 
+class ConsultorInvalido(Exception):
+    """La cabecera `X-Consultado-Por` no tiene un formato aceptable (HU24)."""
+
+
 class PerfilNoEncontrado(Exception):
     """El cliente no tiene un perfil enriquecido todavía."""
 
@@ -62,6 +66,17 @@ def registrar_errores(app: FastAPI) -> None:
                 "VALIDATION_ERROR",
                 "La solicitud no es válida.",
                 [{"campo": "cliente_id", "motivo": "debe tener entre 1 y 64 letras, dígitos o . _ : -"}],
+            ),
+        )
+
+    @app.exception_handler(ConsultorInvalido)
+    async def _consultor_invalido(_req: Request, _exc: ConsultorInvalido) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content=cuerpo_error(
+                "VALIDATION_ERROR",
+                "La solicitud no es válida.",
+                [{"campo": "X-Consultado-Por", "motivo": "debe tener entre 1 y 64 letras, dígitos o . _ : -"}],
             ),
         )
 
