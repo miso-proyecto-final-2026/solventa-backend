@@ -134,16 +134,41 @@ Cotización tiene el mismo cliente y el mismo breaker: respondió 3.787 cotizaci
 - Latencias de segundos en dos servicios, muy por encima del timeout de 300 ms de Identidad, apuntan a una dependencia
   compartida.
 
-**Hipótesis fuerte:** la RDS `db.t4g.micro`, la misma que en HA03 llegó a 153 conexiones y 89 % de CPU (ADR-0015).
-- Es la única base de todos los servicios.
+**Sospecha sobre la RDS `db.t4g.micro`,** la única base de todos los servicios:
 - En cada operación:
   - Identidad hace 3 viajes a la base;
   - Perfilamiento escribe un perfil, dos filas de linaje y los intentos;
   - Cotización escribe la cotización, su latencia y la trazabilidad.
 - Cada pod abre hasta 15 conexiones, y la siembra ya agotó `max_connections`.
 
-**Queda por confirmar** con las métricas de CloudWatch de la RDS en 17:43–18:54: CPU, créditos, conexiones, IOPS de
-escritura y latencias. Se conservan 15 días.
+**Verificación con CloudWatch** (solo lectura, 16:30–19:50 UTC, después del destroy). Serie por minuto en
+`solventa-experimentos/ha02/resultados/cloudwatch-rds-por-minuto.csv`:
+
+| Ventana (UTC) | CPU máx. | Conexiones máx. | Créditos mín. | Latencia lectura / escritura máx. | Memoria libre mín. | Swap |
+|---|---|---|---|---|---|---|
+| Siembra (16:30–16:41) | 17,7 % | 68 | 7,8 | 1,0 / 4,8 ms | 55 MB | 14 → 41 MB |
+| Línea base de Cotización y meseta (17:43–18:54) | 42,1 % | 59 | 4,0 | 4,0 / 3,3 ms | 54 MB | 43 → 230 MB |
+| Después (18:55–19:50) | 19,9 % | 49 | 3,2 | 1,8 / 13,3 ms | 52 MB | 153–205 MB |
+
+- **No se confirma que la RDS cause el ciclo de ~3 min.**
+  - Los créditos de CPU bajaron hasta 3,2, pero nunca llegaron a 0.
+  - Las conexiones de la meseta no pasaron de 59, por debajo de las 68 de la siembra, cuando sí se agotaron (el
+    máximo por minuto puede ocultar picos de segundos).
+  - La CPU no precede a las paradas: su correlación con los falsos bloqueos es −0,03 en el mismo minuto y 0,85 en el
+    minuto siguiente. Los picos de 20–42 % son consecuencia de cada parada, no su causa.
+  - El disco no muestra cola (`DiskQueueDepth` ≤ 0,13).
+- **Sí se confirma presión de memoria.** Con 1 GB, la memoria libre estuvo entre 52 y 114 MB, y el swap creció de 43
+  a 230 MB durante la meseta. Encaja con que la degradación empeore hacia el final de la hora, pero no prueba que
+  cause cada parada.
+- **La causa del ciclo sigue siendo una hipótesis.** Distinguir entre checkpoints, autovacuum o pausas de los pools
+  de los servicios pide Performance Insights o los logs de PostgreSQL (`log_checkpoints`,
+  `log_autovacuum_min_duration`), que no estaban activos.
+
+**El hallazgo repite el de HA03** ([ADR-0015](0015-autoescalado-por-solicitudes-concurrentes.md)). Con la misma
+`db.t4g.micro`, HA03 agotó las conexiones (153 y 89 % de CPU, 9.741 `ReadTimeout` de Identidad en Cotización), y con
+`db.t4g.medium` el humo 2 no tuvo fallos (aproximadas de 27,4 % a 0,04 %). Staging volvió después a `db.t4g.micro`
+(`staging.tfvars`), y la decisión 7 de ese ADR (presupuesto de dependencias) sigue abierta. HA02 vuelve a medir sobre
+una base al límite de memoria y compartida por todos los servicios.
 
 ## Decisiones nuevas (propuestas, a partir de la medición)
 
@@ -168,13 +193,22 @@ escritura y latencias. Se conservan 15 días.
       `503 CONSENTIMIENTO_NO_VERIFICABLE`, que se puede reintentar, en lugar del `403 CONSENTIMIENTO_NO_VIGENTE`.
     - **Auditoría:** dejar el intento en `intentos_bloqueados` solo con un 403 real. Así c5 vuelve a cuadrar con la base.
     - Sigue fallando cerrado: sin verificación no se perfila. Cotización informa la `aproximada` con su causa.
-12. **Base de datos.**
-    - Confirmar la hipótesis con CloudWatch.
-    - Si se confirma, para medir:
-      - staging usa al menos `db.t4g.medium`, como en el humo 2 de HA03;
-      - cada servicio acota su pool (por ejemplo, 5 conexiones sin desborde) o usa RDS Proxy o PgBouncer.
-    - Esto retoma la decisión 7 del ADR-0015, que sigue abierta.
-    - Revisar `pool_pre_ping`: un viaje extra en cada solicitud.
+12. **Subir la clase de la RDS de staging a `db.t4g.medium`** (2 vCPU, 4 GB).
+    - **Por qué:**
+      - es la segunda medición de rendimiento (HA03 y HA02) que se hace sobre una `db.t4g.micro` al límite: en HA03
+        por conexiones y en HA02 por memoria y swap;
+      - con `db.t4g.medium`, HA03 ya midió el comportamiento esperado;
+      - mientras la base esté al límite, las mediciones de HA02 no aíslan el comportamiento de los servicios.
+    - **Cómo:** cambiar `db_instance_class` en `staging.tfvars` (solventa-infra), en un PR con el plan revisado, no
+      solo para la sesión de medición como en HA03. El costo adicional se apaga con el destroy de cada sesión.
+    - **Junto con ella:**
+      - cada servicio acota su pool (por ejemplo, 5 conexiones sin desborde) o se usa RDS Proxy o PgBouncer, lo que
+        cierra la decisión 7 del ADR-0015;
+      - revisar `pool_pre_ping`, que agrega un viaje en cada solicitud;
+      - activar `log_checkpoints` y `log_autovacuum_min_duration` (o Performance Insights) en la próxima medición,
+        para confirmar o descartar la causa del ciclo de ~3 min.
+    - Esta decisión no depende de confirmar la hipótesis del ciclo: se justifica por la presión de memoria medida y
+      por el antecedente de HA03.
 13. **Identidad: optimizar antes que escalar.**
     - La consulta de consentimiento no está limitada por CPU, sino por la base.
     - Propuesta: una sola consulta, consentimiento con existencia del cliente, sin el `get` previo; y que Identidad
@@ -192,7 +226,7 @@ escritura y latencias. Se conservan 15 días.
 
 **Antes de medir:**
 - Las decisiones 9 a 11 implementadas.
-- La 12 confirmada y aplicada en staging.
+- La 12 aplicada en staging (`db.t4g.medium`, pools acotados y logs de checkpoints y autovacuum).
 - La 14 resuelta en el issue.
 
 **Para aceptar este ADR:**
