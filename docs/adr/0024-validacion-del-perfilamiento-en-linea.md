@@ -1,14 +1,18 @@
 # ADR-0024 — Validación del perfilamiento en línea (HA02)
 
-- **Estado:** Propuesta. Fija cómo se valida HA02 y qué se acepta como evidencia; los resultados y las decisiones que se
-  deriven se agregan después de la sesión en staging, como en el ADR-0015.
-- **Fecha:** 2026-11-14
+- **Estado:** Propuesta, **no aceptada**.
+  - Fija cómo se valida HA02 y qué se acepta como evidencia.
+  - La medición en staging del 2026-11-15 cumple c6 y c7 y no cumple c1–c5.
+  - Se mantiene en Propuesta, con las decisiones 9 a 14, hasta una nueva medición.
+- **Fecha:** 2026-11-14 (actualizado el 2026-11-15 con la medición en staging)
 - **Historia:** HA02 (arquitectura, Sprint 3) — [issue #43](https://github.com/miso-proyecto-final-2026/proyecto-final/issues/43)
 - **Depende de:** [ADR-0009](0009-ms-perfilamiento-enriquecimiento-y-replica-de-proveedores.md) (MS Perfilamiento:
   consentimiento en cada operación, caché con TTL por tipo de dato, linaje y enmienda HU24). **Relacionado:**
   [ADR-0013](0013-cache-aside-circuit-breaker-latencia-cotizacion.md) (caché, breaker y meta de la cotización en línea)
   y [ADR-0015](0015-autoescalado-por-solicitudes-concurrentes.md) (método de medición sobre staging).
-- **Experimento:** `solventa-experimentos/ha02/` (scripts, `RUNBOOK.md` y, al cerrar, el informe con veredicto).
+- **Experimento:** `solventa-experimentos/ha02/` (scripts y `RUNBOOK.md`).
+- **Informe:** `ha02/resultados/INFORME.md` e `informe-ha02.json`.
+- **Evidencia cruda:** el paquete de la sesión, fuera de git.
 
 ## Contexto
 
@@ -65,12 +69,132 @@ misma base de Redis (`/0`, la que pone `solventa-infra` a todos los servicios) y
 
 ## Consecuencias
 
-- **Pendiente de la medición:** el veredicto por criterio y las decisiones que se deriven (por ejemplo, si el HPA por
-  CPU de Perfilamiento basta a 20.000/h o hace falta una métrica de concurrencia como en el ADR-0015). Este ADR pasa a
-  Aceptado o se enmienda con esos resultados.
+- **Medición del 2026-11-15:** el veredicto por criterio y las decisiones 9 a 14 están más abajo.
+  - El HPA por CPU de Perfilamiento basta: en la meseta no pasó de 2 réplicas ni de 69m de CPU.
+  - El límite está en las dependencias: la consulta de consentimiento y la base.
 - **Hallazgo:** la caché compartida entre Cotización y Perfilamiento (decisión 8) contradice el ADR-0001 y puede dar
   aciertos falsos y campos incompletos; queda abierta en solventa-backend#84.
 - **Revocación:** el perfil deja de servirse de inmediato, pero las entradas de caché y respaldo viven hasta su TTL
   (hasta 24 h y 7 días); si la política de datos exige borrarlas, es trabajo de V-11.
 - **Costo de la evidencia indirecta (c5):** si en el futuro se quiere una prueba directa, hará falta una métrica de
   llamadas por fuente en Perfilamiento.
+
+## Medición en staging (2026-11-15)
+
+### Montaje
+
+**Cuenta y despliegue:** sesión en la cuenta del autor (`us-east-1`), desplegada desde ramas sin fusionar: backend
+`4a4f898` e infra `647e4e9` (`feature/HU24-linaje-asesor`). Identidad usó la imagen `4a4f898-scripts`.
+
+**Infraestructura:**
+- EKS con 6 `t3.medium` fijos.
+- RDS `db.t4g.micro` y Redis `cache.t4g.micro`.
+
+**Carga:**
+- k6 0.54.0 desde una `c5.large` en la VPC, contra el NLB interno.
+- ~11.800 clientes sintéticos.
+- Un escenario por corrida, de 16:42 a 19:44 UTC.
+
+| Criterio de HA02 | Veredicto | Evidencia |
+|---|---|---|
+| c1 — p95 ≤ 400 ms y p99 ≤ 800 ms | **No cumple** | miss p95 112,1 / p99 195,7 ms y hit 36,7 / 102,3 ms cumplen. lenta_4a 529,3 / 3.968,2 ms: con todo sin acierto y Open Finance hasta 500 ms, el p95 no puede bajar de ~500 ms |
+| c2 — ≥ 20.000/h sin saturación | **No cumple** | 18.121 respuestas 201 con consentimiento en la hora de meseta; 4 errores por saturación. Con los falsos bloqueos habrían sido 20.552 |
+| c3 — la cotización conserva su meta | **No cumple** | p95 de la línea base 111,1 ms → meseta 456,7 ms (+345,6 ms). Corrida no válida para c3: 12,6 % de cotizaciones `aproximada` |
+| c4 — degradación controlada | **No cumple** | lenta_4b con 100 % de 201 y 92,3 % degradadas, pero p95 724,4 ms (el timeout de la fuente, 0,7 s, supera los 400 ms de c1). caida_5a y caida_5b con 100 % marcadas y 42 y 40 respuestas 403 |
+| c5 — bloqueo sin consentimiento | **No cumple** (comprobación estricta) | 1.358 de 1.358 clientes sin consentimiento con 403 y 0 perfiles. La base (4.028 intentos) también cuenta los falsos bloqueos |
+| c6 — revocación ≤ 5 min | **Cumple** | 49 de 49 bloqueados en ≤ 0,168 s. Las claves siguen en Redis («no se sirve, no se borra») |
+| c7 — evidencia | **Cumple** | k6, muestreo, eventos, base, Redis y avisos de los logs |
+
+### Falsos bloqueos
+
+**Definición:** 403 a clientes **con** consentimiento.
+
+**Mecanismo:** Perfilamiento falla cerrado cuando la consulta a Identidad pasa de 300 ms o el breaker está abierto
+(5 fallos, 15 s). Con el circuito abierto no escribe aviso.
+
+**Cifras:**
+- Total: 2.567 de 36.724 solicitudes con consentimiento (7,0 %).
+- Meseta: 2.431, el 11,8 %, con solo 488 avisos `identidad_no_disponible`.
+- lenta_4a 51, caida_5a 42, caida_5b 40; humo, miss y calentar, 1 cada uno.
+
+Cotización tiene el mismo cliente y el mismo breaker: respondió 3.787 cotizaciones `aproximada` en la meseta.
+
+### Causa raíz
+
+**No es la CPU de Identidad.**
+- Sus 5,5 vCPU y 6 réplicas fueron de la siembra (bcrypt de ~11.800 registros).
+- En la meseta tuvo una mediana de 78m, 2 réplicas y 21 % del objetivo del HPA.
+
+**Las paradas siguen un ciclo de ~3 min y afectan a todos los servicios a la vez.**
+- Empiezan a las 18:04, unos 10 min después de empezar la carga combinada.
+- En cada parada:
+  - ~100 falsos bloqueos y ~140 cotizaciones aproximadas por minuto;
+  - el p95 de Perfilamiento sube a 0,6–3,3 s y el de Cotización a 1–9,8 s;
+  - entre paradas, los dos vuelven a ~110 ms.
+- Latencias de segundos en dos servicios, muy por encima del timeout de 300 ms de Identidad, apuntan a una dependencia
+  compartida.
+
+**Hipótesis fuerte:** la RDS `db.t4g.micro`, la misma que en HA03 llegó a 153 conexiones y 89 % de CPU (ADR-0015).
+- Es la única base de todos los servicios.
+- En cada operación:
+  - Identidad hace 3 viajes a la base;
+  - Perfilamiento escribe un perfil, dos filas de linaje y los intentos;
+  - Cotización escribe la cotización, su latencia y la trazabilidad.
+- Cada pod abre hasta 15 conexiones, y la siembra ya agotó `max_connections`.
+
+**Queda por confirmar** con las métricas de CloudWatch de la RDS en 17:43–18:54: CPU, créditos, conexiones, IOPS de
+escritura y latencias. Se conservan 15 días.
+
+## Decisiones nuevas (propuestas, a partir de la medición)
+
+9. **Caché corta del consentimiento, compatible con la revocación en ≤ 5 min.**
+   - Perfilamiento y Cotización guardan en memoria el último `OTORGADO` de cada cliente, con un TTL de 60 s. Nunca
+     guardan un «no otorgado» que venga de un fallo.
+   - Revocar deja de surtir efecto, como máximo, un TTL después. Así se cumple c6 (300 s) con margen. La decisión 6
+     cambia de «bloqueo en la primera consulta» a «bloqueo en ≤ TTL».
+   - Si se quiere el efecto inmediato, el evento de revocación de Identidad (bus de eventos) invalida la entrada.
+   - Reduce la carga sobre Identidad y la base en proporción a las consultas repetidas.
+10. **Timeout de 300 ms y respaldo vigente.**
+    - Se mantiene un timeout corto, para proteger el camino crítico.
+    - Si la consulta vence o el breaker está abierto, se usa la última verificación `OTORGADO` guardada, aunque haya
+      pasado el TTL de la decisión 9, mientras tenga menos de 5 minutos (*stale-if-error*). El límite de c6 se sigue
+      cumpliendo.
+    - Sin verificación previa, se sigue fallando cerrado.
+    - Antes de cambiar el valor del timeout se mide el p99 interno de Identidad.
+11. **El breaker deja rastro y no se confunde con un bloqueo.**
+    - **Avisos:** registrar un aviso al abrir y al cerrar el circuito, y contar las llamadas rechazadas (métrica por
+      servicio).
+    - **Respuesta sin verificación posible:** si no se puede verificar el consentimiento y no hay respaldo, responder
+      `503 CONSENTIMIENTO_NO_VERIFICABLE`, que se puede reintentar, en lugar del `403 CONSENTIMIENTO_NO_VIGENTE`.
+    - **Auditoría:** dejar el intento en `intentos_bloqueados` solo con un 403 real. Así c5 vuelve a cuadrar con la base.
+    - Sigue fallando cerrado: sin verificación no se perfila. Cotización informa la `aproximada` con su causa.
+12. **Base de datos.**
+    - Confirmar la hipótesis con CloudWatch.
+    - Si se confirma, para medir:
+      - staging usa al menos `db.t4g.medium`, como en el humo 2 de HA03;
+      - cada servicio acota su pool (por ejemplo, 5 conexiones sin desborde) o usa RDS Proxy o PgBouncer.
+    - Esto retoma la decisión 7 del ADR-0015, que sigue abierta.
+    - Revisar `pool_pre_ping`: un viaje extra en cada solicitud.
+13. **Identidad: optimizar antes que escalar.**
+    - La consulta de consentimiento no está limitada por CPU, sino por la base.
+    - Propuesta: una sola consulta, consentimiento con existencia del cliente, sin el `get` previo; y que Identidad
+      escale con sus llamadores (mínimo acorde o la misma señal), como propuso el ADR-0015.
+    - Escalar réplicas sin cambiar la base no corrige las paradas.
+14. **Metas inalcanzables con el diseño actual.**
+    - **lenta_4a:** la fuente tarda hasta 500 ms y todas las consultas son sin acierto, así que c1 (p95 ≤ 400 ms) no se
+      puede cumplir.
+    - **lenta_4b:** el timeout de la fuente (0,7 s) supera la latencia de c1.
+    - Antes de la próxima medición hay que decidir una de dos opciones:
+      - alinear el timeout de la fuente con el presupuesto de c1;
+      - dar a 4a y 4b una meta de latencia propia, de degradación, en el issue #43.
+
+### Condición para la próxima medición
+
+**Antes de medir:**
+- Las decisiones 9 a 11 implementadas.
+- La 12 confirmada y aplicada en staging.
+- La 14 resuelta en el issue.
+
+**Para aceptar este ADR:**
+- Repetir miss, hit, la meseta (con la línea base de Cotización), lenta_4a, caida_5a y la revocación.
+- Cumplir c1–c6, con los falsos bloqueos por debajo del 0,1 % y 0 % de cotizaciones aproximadas en la meseta.
