@@ -19,6 +19,7 @@ from app.contexto import correlacion_id
 from app.perfilamiento.errores import (
     ClienteInvalido,
     ConsentimientoNoVigente,
+    ConsultorInvalido,
     PerfilNoEncontrado,
 )
 from app.perfilamiento.normalizacion import PerfilCanonico, normalizar
@@ -34,6 +35,17 @@ from app.proveedores.servicio import ServicioFuentes
 log = logging.getLogger(__name__)
 
 _CLIENTE_VALIDO = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
+
+CONSULTA_ENTREGADA = "ENTREGADO"
+CONSULTA_SIN_PERFIL = "SIN_PERFIL"
+
+# Tipo de dato de cada fuente (HU24, criterio 1). Es lo mismo que decide su TTL
+# (`ConfigProveedores.ttl_de`): las señales financieras caducan antes que las socioeconómicas.
+TIPO_DATO = {"open_finance": "FINANCIERO", "open_data": "SOCIOECONOMICO"}
+
+# Solo se enriquece con consentimiento OTORGADO (`_exigir_consentimiento`), así que ese era su
+# estado en el momento de la consulta de cada fuente del linaje.
+ESTADO_CONSENTIMIENTO_AL_CONSULTAR = EstadoConsentimiento.OTORGADO.value
 
 
 def _linea(fuente: ResultadoFuente, canonico: PerfilCanonico) -> LineaLinaje:
@@ -98,10 +110,43 @@ class Enriquecedor:
             raise PerfilNoEncontrado
         return PerfilEnriquecido(guardado)
 
-    async def linaje(self, cliente_id: str) -> LinajeGuardado:
-        """Para auditoría: solo metadatos (fuentes, fechas, TTL), sin valores; no exige consentimiento."""
+    async def linaje(
+        self,
+        cliente_id: str,
+        origen: str,
+        consultado_por: str | None = None,
+        perfil_id: str | None = None,
+    ) -> LinajeGuardado:
+        """Para auditoría: solo metadatos (fuentes, fechas, TTL), sin valores; no exige consentimiento.
+
+        Sin `perfil_id` es el linaje del perfil vigente (el último). Cada consulta, también la que no
+        encuentra perfil, queda registrada con el servicio que llamó y la persona a cuyo nombre lo
+        hizo (HU24). Si no se puede registrar, la consulta falla: no se entrega sin evidencia. Que
+        no exija consentimiento es provisional: V-12 (#106) decide el comportamiento tras revocar.
+        """
         _validar_cliente(cliente_id)
-        guardado = await asyncio.to_thread(self._repo.ultimo, cliente_id)
+        if consultado_por is not None:
+            _validar_consultor(consultado_por)
+        if perfil_id is None:
+            guardado = await asyncio.to_thread(self._repo.ultimo, cliente_id)
+        else:
+            guardado = await asyncio.to_thread(self._repo.por_id, cliente_id, perfil_id)
+        await asyncio.to_thread(
+            self._repo.registrar_consulta_linaje,
+            cliente_id=cliente_id,
+            perfil_id=guardado.id if guardado else None,
+            origen=origen,
+            consultado_por=consultado_por,
+            resultado=CONSULTA_ENTREGADA if guardado else CONSULTA_SIN_PERFIL,
+            consultado_en=self._reloj(),
+            correlacion_id=correlacion_id.get(),
+        )
+        log.info(
+            "linaje_consultado origen=%s consultado_por=%s resultado=%s",
+            origen,
+            consultado_por or "-",
+            CONSULTA_ENTREGADA if guardado else CONSULTA_SIN_PERFIL,
+        )
         if guardado is None:
             raise PerfilNoEncontrado
         return await asyncio.to_thread(self._repo.linaje_de, guardado)
@@ -128,3 +173,8 @@ class Enriquecedor:
 def _validar_cliente(cliente_id: str) -> None:
     if not _CLIENTE_VALIDO.match(cliente_id):
         raise ClienteInvalido
+
+
+def _validar_consultor(consultado_por: str) -> None:
+    if not _CLIENTE_VALIDO.match(consultado_por):
+        raise ConsultorInvalido

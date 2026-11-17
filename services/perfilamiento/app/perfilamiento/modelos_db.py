@@ -75,3 +75,21 @@ class IntentoBloqueadoDB(BasePerfilamiento):
     correlacion_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     __table_args__ = (Index("ix_intentos_cliente", "cliente_id"),)
+
+
+class ConsultaLinajeDB(BasePerfilamiento):
+    """Quién consultó el linaje de quién (HU24). Solo inserción, como el resto de la evidencia."""
+
+    __tablename__ = "consultas_linaje"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    cliente_id: Mapped[str] = mapped_column(String(64))
+    perfil_id: Mapped[str | None] = mapped_column(String(36), nullable=True)  # None = sin perfil
+    origen: Mapped[str] = mapped_column(String(64))  # nombre de la clave de servicio que llamó
+    # Persona a cuyo nombre consulta el servicio (p. ej. el asesor, vía Cotización); None si no la informa.
+    consultado_por: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    resultado: Mapped[str] = mapped_column(String(20))  # ENTREGADO | SIN_PERFIL
+    consultado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    correlacion_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    __table_args__ = (Index("ix_consultas_linaje_cliente", "cliente_id"),)

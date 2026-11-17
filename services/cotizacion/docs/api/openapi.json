@@ -499,6 +499,106 @@
         }
       }
     },
+    "/v1/asesor/clientes/{cliente_id}/linaje": {
+      "get": {
+        "tags": [
+          "asesor"
+        ],
+        "summary": "Linaje de fuentes del último perfil enriquecido del cliente",
+        "operationId": "linaje_del_cliente_v1_asesor_clientes__cliente_id__linaje_get",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "title": "Cliente Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinajeAsesorOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token del asesor, no es válido o venció.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de un asesor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El cliente no tiene un perfil enriquecido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "El servicio de perfilamiento no está disponible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Solicitud no válida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/asesor/cotizaciones": {
       "post": {
         "tags": [
@@ -732,6 +832,32 @@
           "monto"
         ],
         "title": "ComponenteOut"
+      },
+      "ConflictoLinajeOut": {
+        "properties": {
+          "campo": {
+            "type": "string",
+            "title": "Campo"
+          },
+          "ganadora": {
+            "type": "string",
+            "title": "Ganadora"
+          },
+          "descartadas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Descartadas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campo",
+          "ganadora",
+          "descartadas"
+        ],
+        "title": "ConflictoLinajeOut"
       },
       "ConsultaExternaOut": {
         "properties": {
@@ -1370,6 +1496,138 @@
           "latencia_cliente_ms"
         ],
         "title": "LatenciaClienteIn"
+      },
+      "LinajeAsesorOut": {
+        "properties": {
+          "perfil_id": {
+            "type": "string",
+            "title": "Perfil Id"
+          },
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creado En"
+          },
+          "consentimiento_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consentimiento Id"
+          },
+          "fuentes": {
+            "items": {
+              "$ref": "#/components/schemas/LineaLinajeAsesorOut"
+            },
+            "type": "array",
+            "title": "Fuentes"
+          },
+          "ausentes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Ausentes"
+          },
+          "conflictos": {
+            "items": {
+              "$ref": "#/components/schemas/ConflictoLinajeOut"
+            },
+            "type": "array",
+            "title": "Conflictos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "perfil_id",
+          "cliente_id",
+          "creado_en",
+          "consentimiento_id",
+          "fuentes",
+          "ausentes",
+          "conflictos"
+        ],
+        "title": "LinajeAsesorOut",
+        "description": "Linaje del último perfil enriquecido: fuentes, fechas y marcas, nunca valores (HU24)."
+      },
+      "LineaLinajeAsesorOut": {
+        "properties": {
+          "fuente": {
+            "type": "string",
+            "title": "Fuente"
+          },
+          "tipo_dato": {
+            "type": "string",
+            "title": "Tipo Dato"
+          },
+          "campos": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Campos"
+          },
+          "obtenido_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obtenido En"
+          },
+          "ttl_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttl S"
+          },
+          "hit_cache": {
+            "type": "boolean",
+            "title": "Hit Cache"
+          },
+          "degradado": {
+            "type": "boolean",
+            "title": "Degradado"
+          },
+          "por_defecto": {
+            "type": "boolean",
+            "title": "Por Defecto"
+          },
+          "estado_consentimiento": {
+            "type": "string",
+            "title": "Estado Consentimiento"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fuente",
+          "tipo_dato",
+          "campos",
+          "obtenido_en",
+          "ttl_s",
+          "hit_cache",
+          "degradado",
+          "por_defecto",
+          "estado_consentimiento"
+        ],
+        "title": "LineaLinajeAsesorOut"
       },
       "MetadataOut": {
         "properties": {

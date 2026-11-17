@@ -1,4 +1,4 @@
-"""Endpoints de la cotización asistida por un asesor (HU38).
+"""Endpoints de la cotización asistida por un asesor (HU38) y el linaje del perfil (HU24).
 
 Todo el router exige el rol de asesor. El precio lo calcula el mismo motor que usa móvil
 (`ServicioCotizacion.cotizar`): aquí solo se identifica quién cotiza y a nombre de quién.
@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Self
 
 from fastapi import APIRouter, Depends, Path, Request
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from app.acceso import AsesorActual, exigir_asesor
 from app.cotizacion.api import (
@@ -28,6 +28,8 @@ from app.cotizacion.dominio import (
     SolicitudCotizacion,
     fuente_de_perfil,
 )
+from app.cotizacion.errores import LinajeNoDisponible
+from app.cotizacion.linaje import LinajePort
 from app.cotizacion.niveles import ClasificadorSenales
 from app.cotizacion.perfil import PerfilPort
 
@@ -85,6 +87,36 @@ class SolicitudAsistidaIn(BaseModel):
         return self
 
 
+class LineaLinajeAsesorOut(BaseModel):
+    fuente: str
+    tipo_dato: str
+    campos: list[str]
+    obtenido_en: datetime | None
+    ttl_s: int | None
+    hit_cache: bool
+    degradado: bool
+    por_defecto: bool
+    estado_consentimiento: str
+
+
+class ConflictoLinajeOut(BaseModel):
+    campo: str
+    ganadora: str
+    descartadas: list[str]
+
+
+class LinajeAsesorOut(BaseModel):
+    """Linaje del último perfil enriquecido: fuentes, fechas y marcas, nunca valores (HU24)."""
+
+    perfil_id: str
+    cliente_id: str
+    creado_en: datetime
+    consentimiento_id: str | None
+    fuentes: list[LineaLinajeAsesorOut]
+    ausentes: dict[str, str]
+    conflictos: list[ConflictoLinajeOut]
+
+
 class CotizacionAsistidaOut(CotizacionOut):
     perfil_fuente: str
     canal: str
@@ -118,6 +150,29 @@ async def perfil_del_cliente(
         ],
         obtenido_en=datetime.now(UTC),
     )
+
+
+@router.get(
+    "/clientes/{cliente_id}/linaje",
+    response_model=LinajeAsesorOut,
+    summary="Linaje de fuentes del último perfil enriquecido del cliente",
+    responses={
+        404: {"model": ErrorRespuestaOut, "description": "El cliente no tiene un perfil enriquecido."},
+        503: {"model": ErrorRespuestaOut, "description": "El servicio de perfilamiento no está disponible."},
+        **_ERROR_422,
+    },
+)
+async def linaje_del_cliente(
+    cliente_id: ClienteIdRuta, request: Request, asesor: AsesorActual
+) -> LinajeAsesorOut:
+    linajes: LinajePort = request.app.state.linajes
+    # Perfilamiento registra la consulta a nombre del asesor; no exige consentimiento (V-12, #106).
+    cuerpo = await linajes.obtener(cliente_id, asesor.id)
+    try:
+        return LinajeAsesorOut.model_validate(cuerpo)
+    except ValidationError as exc:
+        # Se filtra lo que no esté en el contrato y se rechaza lo que no lo cumpla.
+        raise LinajeNoDisponible from exc
 
 
 @router.post(
