@@ -5498,6 +5498,260 @@
             },
             "description": "El identificador debe tener entre 1 y 64 letras, dígitos o `. _ : -`."
           }
+        },
+        {
+          "name": "Oferta de vida hipotecario (HU25)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const o = pm.response.json();",
+                  "pm.test('producto, moneda y prima', () => { pm.expect(o.producto).to.eql('vida_hipotecario'); pm.expect(o.moneda).to.eql('COP'); pm.expect(o.prima_anual).to.be.above(0); pm.expect(o.prima_mensual).to.be.above(0); });",
+                  "pm.test('versión de reglas y etapa de vida', () => { pm.expect(o.version_reglas).to.be.a('string').and.not.empty; pm.expect(o.etapa_de_vida).to.be.a('string'); });",
+                  "pm.test('el desglose suma la prima anual', () => pm.expect(o.desglose.reduce((s, p) => s + p.ajuste, 0)).to.eql(o.prima_anual));",
+                  "pm.test('referencia al perfil usado', () => pm.expect(o.perfil_id).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{perfilamiento_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{perfilamiento_url}}/v1/perfilamiento/{{perfil_cliente_id}}/oferta",
+              "host": [
+                "{{perfilamiento_url}}"
+              ],
+              "path": [
+                "v1",
+                "perfilamiento",
+                "{{perfil_cliente_id}}",
+                "oferta"
+              ]
+            },
+            "description": "HU25. Requiere el perfil enriquecido (`Enriquecer perfil - con consentimiento`). Con la misma consulta devuelve siempre el mismo precio."
+          }
+        },
+        {
+          "name": "Oferta - con suma asegurada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('usa la suma pedida', () => pm.expect(pm.response.json().suma_asegurada).to.eql(100000000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{perfilamiento_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{perfilamiento_url}}/v1/perfilamiento/{{perfil_cliente_id}}/oferta?suma_asegurada=100000000",
+              "host": [
+                "{{perfilamiento_url}}"
+              ],
+              "path": [
+                "v1",
+                "perfilamiento",
+                "{{perfil_cliente_id}}",
+                "oferta"
+              ],
+              "query": [
+                {
+                  "key": "suma_asegurada",
+                  "value": "100000000"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Oferta - suma fuera de los límites",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('señala el campo', () => pm.expect(pm.response.json().error.details[0].campo).to.eql('suma_asegurada'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{perfilamiento_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{perfilamiento_url}}/v1/perfilamiento/{{perfil_cliente_id}}/oferta?suma_asegurada=1000",
+              "host": [
+                "{{perfilamiento_url}}"
+              ],
+              "path": [
+                "v1",
+                "perfilamiento",
+                "{{perfil_cliente_id}}",
+                "oferta"
+              ],
+              "query": [
+                {
+                  "key": "suma_asegurada",
+                  "value": "1000"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Oferta - cliente sin perfil",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('PERFIL_NO_ENCONTRADO', () => pm.expect(pm.response.json().error.code).to.eql('PERFIL_NO_ENCONTRADO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{perfilamiento_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{perfilamiento_url}}/v1/perfilamiento/sin-perfil-hu25/oferta",
+              "host": [
+                "{{perfilamiento_url}}"
+              ],
+              "path": [
+                "v1",
+                "perfilamiento",
+                "sin-perfil-hu25",
+                "oferta"
+              ]
+            },
+            "description": "No inventa un precio sin perfil."
+          }
+        },
+        {
+          "name": "Oferta - sin credencial",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{perfilamiento_url}}/v1/perfilamiento/{{perfil_cliente_id}}/oferta",
+              "host": [
+                "{{perfilamiento_url}}"
+              ],
+              "path": [
+                "v1",
+                "perfilamiento",
+                "{{perfil_cliente_id}}",
+                "oferta"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Oferta - clave sin permiso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "clave-sin-permiso",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{perfilamiento_url}}/v1/perfilamiento/{{perfil_cliente_id}}/oferta",
+              "host": [
+                "{{perfilamiento_url}}"
+              ],
+              "path": [
+                "v1",
+                "perfilamiento",
+                "{{perfil_cliente_id}}",
+                "oferta"
+              ]
+            },
+            "description": ""
+          }
         }
       ]
     },

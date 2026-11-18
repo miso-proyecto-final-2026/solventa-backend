@@ -18,7 +18,7 @@ from app.perfilamiento.modelos_db import SCHEMA, BasePerfilamiento
 pytestmark = pytest.mark.contenedores
 
 RAIZ = Path(__file__).parents[2]
-TABLAS = {"perfiles_enriquecidos", "linaje_fuentes", "intentos_bloqueados"}
+TABLAS = {"perfiles_enriquecidos", "linaje_fuentes", "intentos_bloqueados", "ofertas_calculadas"}
 
 
 @pytest.fixture
@@ -79,6 +79,14 @@ def test_las_tablas_son_de_solo_insercion(base_migrada, tabla):
                 f"INSERT INTO {SCHEMA}.intentos_bloqueados (id, cliente_id, operacion, origen, "
                 "estado_consentimiento, ocurrido_en) VALUES ('i1', 'c1', 'ENRIQUECER', 'x', "
                 "'REVOCADO', now())"
+            )
+        )
+        c.execute(
+            text(
+                f"INSERT INTO {SCHEMA}.ofertas_calculadas (id, cliente_id, perfil_id, producto, version_reglas, "
+                "moneda, suma_asegurada, etapa_de_vida, prima_anual, prima_mensual, desglose, degradado, creado_en) "
+                "VALUES ('o1', 'c1', 'p1', 'vida_hipotecario', 'v1', 'COP', 100000000, 'desarrollo', 180000, "
+                "15000, '[]', false, now())"
             )
         )
 

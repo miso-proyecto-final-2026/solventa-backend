@@ -1,0 +1,76 @@
+# Reglas de precio del seguro de vida hipotecario v1 (HU25).
+#
+# ATENCIÓN - SUPUESTOS DE PROTOTIPO: ninguna cifra de este archivo viene de un estudio actuarial ni de la
+# documentación del negocio (el hub no define la fórmula, las variables ni los rangos de precio, tampoco un
+# benchmark de «valor competitivo»). Sirven para demostrar el cálculo y deben ser revisadas por producto y
+# actuaría antes de usarse (definición de terminado de HU25).
+#
+# Cómo se calcula la prima anual (COP, redondeo ROUND_HALF_UP a 0 decimales en cada paso):
+#   base          = max(tasa_anual * suma_asegurada, prima_minima)
+#   etapa de vida = base * factor de la etapa (derivada de `antiguedad_cuentas_anios`)
+#   señales       = el valor anterior multiplicado, en orden, por el factor de cada señal del perfil
+#   degradado     = + recargo_degradado, solo si el perfil se armó con datos de respaldo
+# Si una señal no está en el perfil se aplica 1.00 y queda anotada como «sin dato»: nunca se inventa un valor.
+# Los rangos son [desde, hasta); null = sin límite. `sentido` indica cómo crece el riesgo con el valor de la
+# señal y el cargador valida que los factores lo respeten (el precio no baja cuando el riesgo sube).
+version: 2026.11.1-prototipo
+producto: vida_hipotecario
+nombre: Seguro de vida hipotecario
+moneda: COP
+
+suma_asegurada:
+  minimo: 20000000
+  maximo: 800000000
+  # Si la consulta no trae suma asegurada se asume el ingreso mensual por este número de meses (dentro de los
+  # límites) y, sin ingresos en el perfil, el valor por defecto.
+  meses_de_ingreso: 60
+  por_defecto: 100000000
+
+base:
+  tasa_anual: 0.0018
+  prima_minima: 180000
+
+# Etapa de vida. El perfil no trae la edad: se usa la antigüedad de las cuentas como aproximación de la
+# trayectoria financiera (a confirmar con producto; la edad real vendría de Identidad).
+etapa_de_vida:
+  campo: antiguedad_cuentas_anios
+  sin_dato: {etapa: sin_dato, factor: 1.00}
+  rangos:
+    - {desde: null, hasta: 5, etapa: inicial, factor: 0.90}
+    - {desde: 5, hasta: 15, etapa: desarrollo, factor: 1.00}
+    - {desde: 15, hasta: 30, etapa: consolidacion, factor: 1.30}
+    - {desde: 30, hasta: null, etapa: madurez, factor: 1.75}
+
+senales:
+  ratio_endeudamiento:
+    sentido: directo
+    rangos:
+      - {desde: null, hasta: 0.20, factor: 0.95}
+      - {desde: 0.20, hasta: 0.35, factor: 1.00}
+      - {desde: 0.35, hasta: 0.50, factor: 1.10}
+      - {desde: 0.50, hasta: null, factor: 1.25}
+  reportes_negativos:
+    sentido: directo
+    rangos:
+      - {desde: null, hasta: 1, factor: 1.00}
+      - {desde: 1, hasta: 3, factor: 1.15}
+      - {desde: 3, hasta: null, factor: 1.35}
+  ingresos_mensuales_cop:
+    sentido: inverso
+    rangos:
+      - {desde: null, hasta: 2000000, factor: 1.10}
+      - {desde: 2000000, hasta: 6000000, factor: 1.00}
+      - {desde: 6000000, hasta: null, factor: 0.95}
+  score_crediticio:
+    sentido: inverso
+    rangos:
+      - {desde: null, hasta: 500, factor: 1.20}
+      - {desde: 500, hasta: 650, factor: 1.05}
+      - {desde: 650, hasta: 750, factor: 1.00}
+      - {desde: 750, hasta: null, factor: 0.95}
+
+recargo_degradado: 0.15
+
+coberturas:
+  - {tipo: muerte, porcentaje_valor: 1.0, deducible_porcentaje: 0}
+  - {tipo: incapacidad_total_permanente, porcentaje_valor: 1.0, deducible_porcentaje: 0}

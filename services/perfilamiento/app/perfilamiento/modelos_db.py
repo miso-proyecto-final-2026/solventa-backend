@@ -18,6 +18,7 @@ from sqlalchemy import (
     Index,
     Integer,
     MetaData,
+    Numeric,
     String,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -75,3 +76,31 @@ class IntentoBloqueadoDB(BasePerfilamiento):
     correlacion_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     __table_args__ = (Index("ix_intentos_cliente", "cliente_id"),)
+
+
+class OfertaCalculadaDB(BasePerfilamiento):
+    """Oferta de vida hipotecario (HU25). Solo inserción: es evidencia del precio que se ofreció y por qué.
+
+    `perfil_id` apunta al perfil enriquecido que se usó y, por él, a su linaje (`linaje_fuentes`); está en el
+    mismo servicio, así que sí lleva clave foránea.
+    """
+
+    __tablename__ = "ofertas_calculadas"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    cliente_id: Mapped[str] = mapped_column(String(64))
+    perfil_id: Mapped[str] = mapped_column(String(36), ForeignKey(f"{SCHEMA}.perfiles_enriquecidos.id"))
+    producto: Mapped[str] = mapped_column(String(40))
+    version_reglas: Mapped[str] = mapped_column(String(40))
+    moneda: Mapped[str] = mapped_column(String(3))
+    suma_asegurada: Mapped[int] = mapped_column(Numeric(14, 0))
+    etapa_de_vida: Mapped[str] = mapped_column(String(20))
+    prima_anual: Mapped[int] = mapped_column(Numeric(14, 0))
+    prima_mensual: Mapped[int] = mapped_column(Numeric(14, 0))
+    desglose: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    degradado: Mapped[bool] = mapped_column(Boolean)
+    consentimiento_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    correlacion_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_ofertas_cliente_creado", "cliente_id", "creado_en"),)
