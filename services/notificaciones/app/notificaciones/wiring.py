@@ -29,9 +29,11 @@ from app.notificaciones.canales import CorreoSes, CorreoSimulado, PushSimulado
 from app.notificaciones.clientes import ClienteIdentidad, ClienteSuscripcion, Identidad
 from app.notificaciones.config import (
     CORREO_PROVEEDORES,
+    GRUPO_PAGOS,
     GRUPO_POLIZAS,
     SQLITE_LOCAL,
     TOPIC_CICLO_VIDA,
+    TOPIC_INDEMNIZACIONES,
     ConfigNotificaciones,
 )
 from app.notificaciones.dominio import CanalCorreo
@@ -67,19 +69,24 @@ class Ensamblado:
     clientes_http: list[httpx.AsyncClient]
     # None solo en desarrollo sin Kafka: nadie entrega eventos.
     consumidor: ConsumidorEventos | None = None
+    # El de `solventa.pagos.indemnizaciones` (HU30): otro topic y otro grupo, con su propio ritmo y su propia cola de fallidos.
+    consumidor_pagos: ConsumidorEventos | None = None
     _tareas: list[asyncio.Task[None]] = field(default_factory=list, init=False)
+
+    def _consumidores(self) -> list[ConsumidorEventos]:
+        return [c for c in (self.consumidor, self.consumidor_pagos) if c is not None]
 
     async def iniciar(self) -> None:
         if isinstance(self.publicador, PublicadorKafka):
             await self.publicador.iniciar()
-        if self.consumidor is not None:
-            await self.consumidor.iniciar()
-            self._tareas.append(asyncio.create_task(self.consumidor.ejecutar()))
+        for consumidor in self._consumidores():
+            await consumidor.iniciar()
+            self._tareas.append(asyncio.create_task(consumidor.ejecutar()))
         self._tareas.append(asyncio.create_task(self.servicio.ejecutar()))
 
     async def detener(self) -> None:
-        if self.consumidor is not None:
-            await self.consumidor.detener()
+        for consumidor in self._consumidores():
+            await consumidor.detener()
         for tarea in self._tareas:
             tarea.cancel()
         for tarea in self._tareas:
@@ -135,4 +142,14 @@ def construir_ensamblado(config: ConfigNotificaciones | None = None) -> Ensambla
         registro=RegistroEventos(TABLA_EVENTOS_PROCESADOS),
         publicador=publicador,
     )
-    return Ensamblado(servicio, identidad, fabrica, engine, publicador, clientes, consumidor)
+    consumidor_pagos = ConsumidorEventos(
+        brokers=brokers,
+        seguridad=seguridad,
+        topic=TOPIC_INDEMNIZACIONES,
+        grupo=GRUPO_PAGOS,
+        manejador=servicio.manejar_pago,
+        fabrica_sesiones=fabrica,
+        registro=RegistroEventos(TABLA_EVENTOS_PROCESADOS),
+        publicador=publicador,
+    )
+    return Ensamblado(servicio, identidad, fabrica, engine, publicador, clientes, consumidor, consumidor_pagos)

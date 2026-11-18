@@ -28,6 +28,7 @@ class EstadoEnvio(StrEnum):
 class TipoNotificacion(StrEnum):
     POLIZA_EMITIDA = "POLIZA_EMITIDA"
     FIRMA_SOLICITADA = "FIRMA_SOLICITADA"
+    INDEMNIZACION_PAGADA = "INDEMNIZACION_PAGADA"
 
 
 class Prioridad(StrEnum):
@@ -55,8 +56,10 @@ class Push:
     texto_publico: str
     prioridad: Prioridad
     tipo: TipoNotificacion
-    suscripcion_id: str
+    suscripcion_id: str | None
     idioma: str
+    # La indemnización conoce la póliza, no la suscripción: la app abre el detalle por cualquiera de las dos (HU30).
+    poliza_id: str | None = None
 
 
 class ErrorEnvio(Exception):

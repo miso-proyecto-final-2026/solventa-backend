@@ -9,6 +9,7 @@ Un producto sin traducción no hace fallar el envío: se muestra con su clave.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from html import escape
 from typing import Any
 
@@ -40,6 +41,9 @@ TEXTOS: dict[str, dict[str, Any]] = {
         "push_texto": "Tu póliza ya está activa. Toca para ver tu certificado.",
         "push_titulo_publico": "Solventa",
         "push_texto_publico": "Tienes una notificación nueva.",
+        "pago_titulo": "Indemnización pagada",
+        "pago_texto": "Te pagamos {monto} de tu indemnización. Toca para ver tu póliza.",
+        "pago_texto_sin_monto": "Te pagamos tu indemnización. Toca para ver tu póliza.",
         "firma_asunto": "Revisa y firma tu póliza",
         "firma_intro": "Tu asesor te envió tu póliza para que la revises y la firmes.",
         "firma_boton": "Revisar y firmar",
@@ -67,6 +71,9 @@ TEXTOS: dict[str, dict[str, Any]] = {
         "push_texto": "Your policy is now active. Tap to see your certificate.",
         "push_titulo_publico": "Solventa",
         "push_texto_publico": "You have a new notification.",
+        "pago_titulo": "Indemnity paid",
+        "pago_texto": "We paid you {monto} of your indemnity. Tap to see your policy.",
+        "pago_texto_sin_monto": "We paid your indemnity. Tap to see your policy.",
         "firma_asunto": "Review and sign your policy",
         "firma_intro": "Your advisor sent you your policy to review and sign.",
         "firma_boton": "Review and sign",
@@ -115,6 +122,42 @@ def construir_push(*, envio_id: str, cliente_id: str, suscripcion_id: str, idiom
         prioridad=Prioridad.ALTA,
         tipo=TipoNotificacion.POLIZA_EMITIDA,
         suscripcion_id=suscripcion_id,
+        idioma=idioma,
+    )
+
+
+def monto_legible(monto: str | None, moneda: str | None, idioma: str) -> str | None:
+    """`1500000.00` + `COP` → `$ 1.500.000 COP` (es-CO) o `COP 1,500,000` (en-US). Nulo si el monto no es un número."""
+    if not monto:
+        return None
+    try:
+        valor = Decimal(monto)
+    except InvalidOperation:
+        return None
+    moneda = (moneda or "COP").upper()
+    entero = f"{valor:,.0f}" if valor == valor.to_integral_value() else f"{valor:,.2f}"
+    if idioma == "es-CO":
+        return "$ " + entero.replace(",", "X").replace(".", ",").replace("X", ".") + f" {moneda}"
+    return f"{moneda} {entero}"
+
+
+def construir_push_indemnizacion(
+    *, envio_id: str, cliente_id: str, poliza_id: str, monto: str | None, moneda: str | None, idioma: str
+) -> Push:
+    """La versión pública (pantalla de bloqueo) no lleva monto ni póliza; el monto se ve al desbloquear (HU30, criterio 3)."""
+    t = TEXTOS[idioma]
+    legible = monto_legible(monto, moneda, idioma)
+    return Push(
+        envio_id=envio_id,
+        cliente_id=cliente_id,
+        titulo=t["pago_titulo"],
+        texto=t["pago_texto"].format(monto=legible) if legible else t["pago_texto_sin_monto"],
+        titulo_publico=t["push_titulo_publico"],
+        texto_publico=t["push_texto_publico"],
+        prioridad=Prioridad.ALTA,
+        tipo=TipoNotificacion.INDEMNIZACION_PAGADA,
+        suscripcion_id=None,
+        poliza_id=poliza_id,
         idioma=idioma,
     )
 
