@@ -11,6 +11,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     DateTime,
     Index,
     Integer,
@@ -88,6 +89,10 @@ class PolizaParametricaDB(BaseSiniestros):
     poliza_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     producto: Mapped[str] = mapped_column(String(50))
     zona: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # HU31: lo que la conciliación de Pagos muestra de la póliza. Viene en `poliza_emitida`; nulo en las pólizas anteriores.
+    cliente_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    numero_poliza: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    monto_asegurado: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     vigencia_desde: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     fecha_vencimiento: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     cancelada_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -12,10 +12,12 @@ from decimal import Decimal
 from app.eventos import Evento
 from app.pagos.dominio import (
     DatosToken,
+    LineaExtracto,
     PasarelaNoDisponible,
     PasarelaSinRespuesta,
     ResultadoCobro,
     SolicitudCobro,
+    SolicitudPago,
     TokenDesconocido,
 )
 
@@ -47,6 +49,8 @@ class PasarelaFalsa:
         self.reembolsos: dict[str, ResultadoCobro] = {}
         self.ordenes_reembolso: list[SolicitudCobro] = []
         self.reembolso_caido = False
+        self.ordenes_pago: list[SolicitudPago] = []
+        self.montos_pagados: dict[str, Decimal] = {}  # lo que el extracto dice haber pagado, por clave
 
     @property
     def cargos(self) -> int:
@@ -70,6 +74,25 @@ class PasarelaFalsa:
             await asyncio.sleep(60)
         return resultado
 
+    async def pagar(self, solicitud: SolicitudPago) -> ResultadoCobro:
+        """Misma mecánica que `cobrar` (guion e idempotencia por clave), para una indemnización."""
+        self.ordenes_pago.append(solicitud)
+        if solicitud.idempotency_key in self.libro:
+            return self.libro[solicitud.idempotency_key]
+        paso = self.guion.pop(0) if self.guion else "aprobar"
+        if paso == "caida":
+            raise PasarelaNoDisponible("conexión rechazada")
+        if paso == "rechazar":
+            resultado = ResultadoCobro(aprobado=False, referencia_pasarela="ref-r", codigo="CUENTA_CERRADA", motivo="Cuenta cerrada")
+        else:
+            resultado = ResultadoCobro(aprobado=True, referencia_pasarela=f"pg-{len(self.libro) + 1}")
+        self.libro[solicitud.idempotency_key] = resultado
+        if resultado.aprobado:
+            self.montos_pagados[solicitud.idempotency_key] = solicitud.monto
+        if paso == "perder":
+            raise PasarelaSinRespuesta("respuesta perdida")
+        return resultado
+
     async def reembolsar(self, solicitud: SolicitudCobro) -> ResultadoCobro:
         self.ordenes_reembolso.append(solicitud)
         if self.reembolso_caido:
@@ -79,6 +102,14 @@ class PasarelaFalsa:
                 aprobado=True, referencia_pasarela=f"rf-{len(self.reembolsos) + 1}"
             )
         return self.reembolsos[solicitud.idempotency_key]
+
+    async def extracto(self, idempotency_key: str) -> LineaExtracto | None:
+        resultado = self.libro.get(idempotency_key)
+        if resultado is None or not resultado.aprobado or idempotency_key not in self.montos_pagados:
+            return None
+        return LineaExtracto(
+            idempotency_key, self.montos_pagados[idempotency_key], "COP", resultado.referencia_pasarela or "", 1
+        )
 
     async def consultar(self, idempotency_key: str) -> ResultadoCobro | None:
         self.consultas.append(idempotency_key)
@@ -135,3 +166,24 @@ def comando_reembolso(suscripcion_id: str = "susc-1", **cambios) -> dict:
 def evento_reembolso(payload: dict | None = None) -> Evento:
     payload = payload or comando_reembolso()
     return evento(payload, event_type="reembolso_cobro_solicitado")
+
+
+def comando_indemnizacion(evento_id: str = "evt-1", poliza_id: str = "pol-1", **cambios) -> dict:
+    """Payload de `indemnizacion_solicitada` tal como lo publica MS Siniestros (HU28, ADR-0018)."""
+    payload = {
+        "idempotency_key": f"{evento_id}:{poliza_id}",
+        "evento_id": evento_id,
+        "poliza_id": poliza_id,
+        "producto": "parametrico_clima",
+        "monto_indemnizacion": 5000000,
+        "moneda": "COP",
+        "regla": "sismo",
+        "version_reglas": "2026-11-01",
+    }
+    payload.update(cambios)
+    return {k: v for k, v in payload.items() if v is not None}
+
+
+def evento_indemnizacion(payload: dict | None = None, event_type: str = "indemnizacion_solicitada") -> Evento:
+    payload = payload or comando_indemnizacion()
+    return Evento(event_type=event_type, source="ms-siniestros", correlation_id="corr-ind-1", payload=payload)

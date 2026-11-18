@@ -60,6 +60,25 @@ class EstadoTransaccion(StrEnum):
 ESTADOS_FINALES = (EstadoTransaccion.APROBADA.value, EstadoTransaccion.RECHAZADA.value)
 
 
+class EstadoIndemnizacion(StrEnum):
+    """`PENDIENTE` mientras no haya una respuesta cierta de la pasarela. `FALLIDA` es final: rechazo o intentos agotados."""
+
+    PENDIENTE = "PENDIENTE"
+    PAGADA = "PAGADA"
+    FALLIDA = "FALLIDA"
+
+
+class EstadoConciliacion(StrEnum):
+    """Conciliación de un desembolso contra el extracto de la pasarela (HU31)."""
+
+    PENDIENTE = "PENDIENTE"
+    CONCILIADO = "CONCILIADO"
+    CON_DIFERENCIA = "CON_DIFERENCIA"
+
+
+ESTADOS_FINALES_INDEMNIZACION = (EstadoIndemnizacion.PAGADA.value, EstadoIndemnizacion.FALLIDA.value)
+
+
 class EstadoCaso(StrEnum):
     """Cobro fallido en gestión (HU19). `VENCIDO`: la gracia terminó sin recuperarlo y ya se avisó al operador."""
 
@@ -89,6 +108,28 @@ class SolicitudCobro:
     monto: Decimal
     moneda: str
     referencia: str    # id de la suscripción: la pasarela solo conoce una referencia opaca
+
+
+@dataclass(frozen=True)
+class SolicitudPago:
+    """Orden de pagar una indemnización a una cuenta tokenizada (HU29). La pasarela no conoce la póliza, solo una referencia."""
+
+    idempotency_key: str
+    cuenta_destino: str    # token de la cuenta: ningún dato de cuenta en claro cruza este límite
+    monto: Decimal
+    moneda: str
+    referencia: str        # id del evento paramétrico
+
+
+@dataclass(frozen=True)
+class LineaExtracto:
+    """Lo que la pasarela dice haber pagado por una clave: contra esto se concilia un desembolso (HU31)."""
+
+    idempotency_key: str
+    monto: Decimal
+    moneda: str
+    referencia: str
+    ordenes_recibidas: int  # más de 1 prueba que la idempotencia de la pasarela evitó un pago doble
 
 
 @dataclass(frozen=True)
@@ -128,6 +169,14 @@ class PasarelaPago(Protocol):
 
     async def reembolsar(self, solicitud: SolicitudCobro) -> ResultadoCobro:
         """Devuelve un cobro una sola vez por `idempotency_key` (la del reembolso, distinta a la del cobro)."""
+        ...
+
+    async def pagar(self, solicitud: SolicitudPago) -> ResultadoCobro:
+        """Paga una indemnización una sola vez por `idempotency_key`: repetirla devuelve el resultado del primer pago."""
+        ...
+
+    async def extracto(self, idempotency_key: str) -> LineaExtracto | None:
+        """La línea del extracto del pago hecho con esa clave, o None si la pasarela no lo tiene (HU31)."""
         ...
 
     async def describir_token(self, token: str) -> DatosToken:

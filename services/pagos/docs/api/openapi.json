@@ -643,6 +643,822 @@
         }
       }
     },
+    "/v1/pagos/conciliacion/desembolsos": {
+      "get": {
+        "tags": [
+          "conciliacion"
+        ],
+        "summary": "Desembolsos de indemnizaciones, con filtros",
+        "operationId": "listar_v1_pagos_conciliacion_desembolsos_get",
+        "parameters": [
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Pagina"
+            }
+          },
+          {
+            "name": "tamano",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Tamano"
+            }
+          },
+          {
+            "name": "desde",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Fecha del pago (o del registro si aún no se paga) desde",
+              "title": "Desde"
+            },
+            "description": "Fecha del pago (o del registro si aún no se paga) desde"
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hasta"
+            }
+          },
+          {
+            "name": "tipo_evento",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 40
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tipo Evento"
+            }
+          },
+          {
+            "name": "estado_conciliacion",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "PENDIENTE",
+                    "CONCILIADO",
+                    "CON_DIFERENCIA"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado Conciliacion"
+            }
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "PENDIENTE",
+                    "PAGADA",
+                    "FALLIDA"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Estado del pago",
+              "title": "Estado"
+            },
+            "description": "Estado del pago"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, no es válido o venció (sesión vencida).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de un operador.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pagos/conciliacion/desembolsos/resumen": {
+      "get": {
+        "tags": [
+          "conciliacion"
+        ],
+        "summary": "Totales y comprobación de que no hubo pagos duplicados",
+        "operationId": "resumen_v1_pagos_conciliacion_desembolsos_resumen_get",
+        "parameters": [
+          {
+            "name": "desde",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Fecha del pago (o del registro si aún no se paga) desde",
+              "title": "Desde"
+            },
+            "description": "Fecha del pago (o del registro si aún no se paga) desde"
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hasta"
+            }
+          },
+          {
+            "name": "tipo_evento",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 40
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tipo Evento"
+            }
+          },
+          {
+            "name": "estado_conciliacion",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "PENDIENTE",
+                    "CONCILIADO",
+                    "CON_DIFERENCIA"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado Conciliacion"
+            }
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "PENDIENTE",
+                    "PAGADA",
+                    "FALLIDA"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Estado del pago",
+              "title": "Estado"
+            },
+            "description": "Estado del pago"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumenOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, no es válido o venció (sesión vencida).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de un operador.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pagos/conciliacion/desembolsos/exportar": {
+      "get": {
+        "tags": [
+          "conciliacion"
+        ],
+        "summary": "Exporta el reporte en CSV o PDF",
+        "operationId": "exportar_v1_pagos_conciliacion_desembolsos_exportar_get",
+        "parameters": [
+          {
+            "name": "formato",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "csv",
+                "pdf"
+              ],
+              "type": "string",
+              "default": "csv",
+              "title": "Formato"
+            }
+          },
+          {
+            "name": "desde",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Fecha del pago (o del registro si aún no se paga) desde",
+              "title": "Desde"
+            },
+            "description": "Fecha del pago (o del registro si aún no se paga) desde"
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hasta"
+            }
+          },
+          {
+            "name": "tipo_evento",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 40
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tipo Evento"
+            }
+          },
+          {
+            "name": "estado_conciliacion",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "PENDIENTE",
+                    "CONCILIADO",
+                    "CON_DIFERENCIA"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado Conciliacion"
+            }
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "PENDIENTE",
+                    "PAGADA",
+                    "FALLIDA"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Estado del pago",
+              "title": "Estado"
+            },
+            "description": "Estado del pago"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/csv": {},
+              "application/pdf": {}
+            }
+          },
+          "401": {
+            "description": "Falta el token, no es válido o venció (sesión vencida).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de un operador.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pagos/conciliacion/desembolsos/{desembolso_id}": {
+      "get": {
+        "tags": [
+          "conciliacion"
+        ],
+        "summary": "Un desembolso con los intentos de pago",
+        "operationId": "detalle_v1_pagos_conciliacion_desembolsos__desembolso_id__get",
+        "parameters": [
+          {
+            "name": "desembolso_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Desembolso Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetalleOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, no es válido o venció (sesión vencida).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de un operador.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pagos/conciliacion/desembolsos/{desembolso_id}/conciliar": {
+      "post": {
+        "tags": [
+          "conciliacion"
+        ],
+        "summary": "Concilia el desembolso contra el extracto de la pasarela",
+        "operationId": "conciliar_v1_pagos_conciliacion_desembolsos__desembolso_id__conciliar_post",
+        "parameters": [
+          {
+            "name": "desembolso_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Desembolso Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesembolsoOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, no es válido o venció (sesión vencida).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de un operador.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "No está pagado o la pasarela no tiene el pago.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pagos/conciliacion/desembolsos/{desembolso_id}/escalar": {
+      "post": {
+        "tags": [
+          "conciliacion"
+        ],
+        "summary": "Escala al equipo de pagos un desembolso con diferencia",
+        "operationId": "escalar_v1_pagos_conciliacion_desembolsos__desembolso_id__escalar_post",
+        "parameters": [
+          {
+            "name": "desembolso_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Desembolso Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EscalarIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesembolsoOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, no es válido o venció (sesión vencida).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de un operador.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "El desembolso no tiene diferencia.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -1049,6 +1865,620 @@
         ],
         "title": "CobroOut"
       },
+      "DesembolsoOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "title": "Idempotency Key"
+          },
+          "evento_id": {
+            "type": "string",
+            "title": "Evento Id"
+          },
+          "tipo_evento": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo Evento"
+          },
+          "magnitud": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Magnitud"
+          },
+          "ubicacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ubicacion"
+          },
+          "evento_ocurrido_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evento Ocurrido En"
+          },
+          "poliza_id": {
+            "type": "string",
+            "title": "Poliza Id"
+          },
+          "producto": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Producto"
+          },
+          "cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente",
+            "description": "Enmascarado"
+          },
+          "numero_poliza": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Poliza"
+          },
+          "monto_asegurado": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monto Asegurado"
+          },
+          "validacion": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validacion"
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "PENDIENTE",
+              "PAGADA",
+              "FALLIDA"
+            ],
+            "title": "Estado"
+          },
+          "monto": {
+            "type": "string",
+            "title": "Monto"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "referencia_pasarela": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referencia Pasarela"
+          },
+          "fecha_pago": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Pago"
+          },
+          "intentos": {
+            "type": "integer",
+            "title": "Intentos"
+          },
+          "reentregas": {
+            "type": "integer",
+            "title": "Reentregas",
+            "description": "Veces que llegó el mismo comando después del primero: ninguna volvió a pagar"
+          },
+          "estado_conciliacion": {
+            "type": "string",
+            "enum": [
+              "PENDIENTE",
+              "CONCILIADO",
+              "CON_DIFERENCIA"
+            ],
+            "title": "Estado Conciliacion"
+          },
+          "conciliado_por": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conciliado Por"
+          },
+          "conciliado_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conciliado En"
+          },
+          "diferencia": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diferencia"
+          },
+          "escalada_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalada En"
+          },
+          "escalada_por": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalada Por"
+          },
+          "nota_escalamiento": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nota Escalamiento"
+          },
+          "codigo_fallo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codigo Fallo"
+          },
+          "motivo_fallo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Fallo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "idempotency_key",
+          "evento_id",
+          "tipo_evento",
+          "magnitud",
+          "ubicacion",
+          "evento_ocurrido_en",
+          "poliza_id",
+          "producto",
+          "cliente",
+          "numero_poliza",
+          "monto_asegurado",
+          "validacion",
+          "estado",
+          "monto",
+          "moneda",
+          "referencia_pasarela",
+          "fecha_pago",
+          "intentos",
+          "reentregas",
+          "estado_conciliacion",
+          "conciliado_por",
+          "conciliado_en",
+          "diferencia",
+          "escalada_en",
+          "escalada_por",
+          "nota_escalamiento",
+          "codigo_fallo",
+          "motivo_fallo"
+        ],
+        "title": "DesembolsoOut"
+      },
+      "DetalleOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "title": "Idempotency Key"
+          },
+          "evento_id": {
+            "type": "string",
+            "title": "Evento Id"
+          },
+          "tipo_evento": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo Evento"
+          },
+          "magnitud": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Magnitud"
+          },
+          "ubicacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ubicacion"
+          },
+          "evento_ocurrido_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evento Ocurrido En"
+          },
+          "poliza_id": {
+            "type": "string",
+            "title": "Poliza Id"
+          },
+          "producto": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Producto"
+          },
+          "cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente",
+            "description": "Enmascarado"
+          },
+          "numero_poliza": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Poliza"
+          },
+          "monto_asegurado": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monto Asegurado"
+          },
+          "validacion": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validacion"
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "PENDIENTE",
+              "PAGADA",
+              "FALLIDA"
+            ],
+            "title": "Estado"
+          },
+          "monto": {
+            "type": "string",
+            "title": "Monto"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "referencia_pasarela": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referencia Pasarela"
+          },
+          "fecha_pago": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Pago"
+          },
+          "intentos": {
+            "type": "integer",
+            "title": "Intentos"
+          },
+          "reentregas": {
+            "type": "integer",
+            "title": "Reentregas",
+            "description": "Veces que llegó el mismo comando después del primero: ninguna volvió a pagar"
+          },
+          "estado_conciliacion": {
+            "type": "string",
+            "enum": [
+              "PENDIENTE",
+              "CONCILIADO",
+              "CON_DIFERENCIA"
+            ],
+            "title": "Estado Conciliacion"
+          },
+          "conciliado_por": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conciliado Por"
+          },
+          "conciliado_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conciliado En"
+          },
+          "diferencia": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diferencia"
+          },
+          "escalada_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalada En"
+          },
+          "escalada_por": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalada Por"
+          },
+          "nota_escalamiento": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nota Escalamiento"
+          },
+          "codigo_fallo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codigo Fallo"
+          },
+          "motivo_fallo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Fallo"
+          },
+          "intentos_de_pago": {
+            "items": {
+              "$ref": "#/components/schemas/IntentoOut"
+            },
+            "type": "array",
+            "title": "Intentos De Pago"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "idempotency_key",
+          "evento_id",
+          "tipo_evento",
+          "magnitud",
+          "ubicacion",
+          "evento_ocurrido_en",
+          "poliza_id",
+          "producto",
+          "cliente",
+          "numero_poliza",
+          "monto_asegurado",
+          "validacion",
+          "estado",
+          "monto",
+          "moneda",
+          "referencia_pasarela",
+          "fecha_pago",
+          "intentos",
+          "reentregas",
+          "estado_conciliacion",
+          "conciliado_por",
+          "conciliado_en",
+          "diferencia",
+          "escalada_en",
+          "escalada_por",
+          "nota_escalamiento",
+          "codigo_fallo",
+          "motivo_fallo",
+          "intentos_de_pago"
+        ],
+        "title": "DetalleOut"
+      },
       "ErrorCuerpoOut": {
         "properties": {
           "code": {
@@ -1109,6 +2539,21 @@
           "error"
         ],
         "title": "ErrorOut"
+      },
+      "EscalarIn": {
+        "properties": {
+          "nota": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Nota"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nota"
+        ],
+        "title": "EscalarIn"
       },
       "HTTPValidationError": {
         "properties": {
@@ -1269,6 +2714,37 @@
         ],
         "title": "PaginaCasosOut"
       },
+      "PaginaOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DesembolsoOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "pagina": {
+            "type": "integer",
+            "title": "Pagina"
+          },
+          "tamano": {
+            "type": "integer",
+            "title": "Tamano"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "pagina",
+          "tamano"
+        ],
+        "title": "PaginaOut"
+      },
       "RechazoOut": {
         "properties": {
           "codigo": {
@@ -1386,6 +2862,48 @@
           "repeticion"
         ],
         "title": "ReintentoOut"
+      },
+      "ResumenOut": {
+        "properties": {
+          "desembolsos": {
+            "type": "integer",
+            "title": "Desembolsos"
+          },
+          "claves_distintas": {
+            "type": "integer",
+            "title": "Claves Distintas"
+          },
+          "claves_con_mas_de_un_pago": {
+            "type": "integer",
+            "title": "Claves Con Mas De Un Pago",
+            "description": "Debe ser 0: la clave de idempotencia es única"
+          },
+          "pagados": {
+            "type": "integer",
+            "title": "Pagados"
+          },
+          "monto_pagado": {
+            "type": "string",
+            "title": "Monto Pagado"
+          },
+          "por_estado_conciliacion": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Por Estado Conciliacion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "desembolsos",
+          "claves_distintas",
+          "claves_con_mas_de_un_pago",
+          "pagados",
+          "monto_pagado",
+          "por_estado_conciliacion"
+        ],
+        "title": "ResumenOut"
       },
       "TarjetaOut": {
         "properties": {

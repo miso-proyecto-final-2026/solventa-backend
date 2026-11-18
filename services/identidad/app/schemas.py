@@ -73,6 +73,11 @@ class ClienteOut(BaseModel):
     creado_en: datetime
 
 
+class InicioSesionCreate(BaseModel):
+    email: str
+    password: str
+
+
 class ErrorResponse(BaseModel):
     detail: str
 
@@ -193,3 +198,21 @@ class ContactoClienteOut(BaseModel):
     cliente_id: str
     nombre: str
     email: str
+
+
+class MetodoBiometrico(str, Enum):
+    HUELLA = "HUELLA"
+    FACIAL = "FACIAL"
+
+
+class BiometriaActivar(BaseModel):
+    metodo: MetodoBiometrico
+    contrasena: str
+
+
+class BiometriaOut(BaseModel):
+    cliente_id: str
+    activo: bool
+    metodo: MetodoBiometrico | None = None
+    activado_en: datetime | None = None
+    desactivado_en: datetime | None = None

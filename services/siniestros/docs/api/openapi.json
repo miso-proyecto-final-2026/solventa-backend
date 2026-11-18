@@ -548,6 +548,42 @@
             ],
             "title": "Zona"
           },
+          "cliente_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Id"
+          },
+          "numero_poliza": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Poliza"
+          },
+          "monto_asegurado": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monto Asegurado"
+          },
           "vigencia_desde": {
             "type": "string",
             "format": "date-time",

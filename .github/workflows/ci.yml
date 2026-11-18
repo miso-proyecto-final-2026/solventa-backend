@@ -12,6 +12,7 @@ permissions:
 jobs:
   pruebas:
     name: pruebas (${{ matrix.service }})
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

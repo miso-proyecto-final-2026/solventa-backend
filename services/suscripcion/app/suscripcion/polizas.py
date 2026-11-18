@@ -381,21 +381,24 @@ def _encolar_ciclo_vida(sesion: Session, tipo: str, poliza: PolizaDB, susc: Susc
     campos: dict[str, Any] = {}
     if traza_id.get():
         campos["trace_id"] = traza_id.get()
+    carga: dict[str, Any] = {
+        "poliza_id": poliza.id,
+        "suscripcion_id": susc.id,
+        "cliente_id": poliza.cliente_id,
+        "numero_poliza": poliza.numero_poliza,
+        "producto": susc.producto,
+        # HU31: Siniestros lo guarda para que la conciliación de Pagos muestre el monto asegurado de la póliza.
+        "monto_asegurado": int(susc.monto_asegurado),
+        "vigencia_desde": repo.utc(poliza.vigencia_desde).isoformat(),
+        "fecha_vencimiento": repo.utc(poliza.fecha_vencimiento).isoformat(),
+        "fecha_emision": (repo.utc(poliza.fecha_emision) or ahora).isoformat(),
+    }
     evento = Evento(
         event_type=tipo,
         source=FUENTE,
         timestamp=ahora,
         correlation_id=susc.correlacion_id or susc.id,
-        payload={
-            "poliza_id": poliza.id,
-            "suscripcion_id": susc.id,
-            "cliente_id": poliza.cliente_id,
-            "numero_poliza": poliza.numero_poliza,
-            "producto": susc.producto,
-            "vigencia_desde": repo.utc(poliza.vigencia_desde).isoformat(),
-            "fecha_vencimiento": repo.utc(poliza.fecha_vencimiento).isoformat(),
-            "fecha_emision": (repo.utc(poliza.fecha_emision) or ahora).isoformat(),
-        },
+        payload=carga,
         **campos,
     )
     repo.encolar_evento(
