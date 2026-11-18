@@ -714,6 +714,258 @@
         }
       }
     },
+    "/v1/suscripciones/revisiones": {
+      "get": {
+        "tags": [
+          "revision-asistida"
+        ],
+        "summary": "Bandeja de revisión asistida",
+        "operationId": "bandeja_v1_suscripciones_revisiones_get",
+        "parameters": [
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "PENDIENTE",
+                "DECIDIDA"
+              ],
+              "type": "string",
+              "default": "PENDIENTE",
+              "title": "Estado"
+            }
+          },
+          {
+            "name": "categoria",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CategoriaMotivo"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Categoria"
+            }
+          },
+          {
+            "name": "mias",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Solo las cotizaciones de este asesor",
+              "default": false,
+              "title": "Mias"
+            },
+            "description": "Solo las cotizaciones de este asesor"
+          },
+          {
+            "name": "vencidas",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Solo pendientes con la cotización vencida",
+              "default": false,
+              "title": "Vencidas"
+            },
+            "description": "Solo pendientes con la cotización vencida"
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Pagina"
+            }
+          },
+          {
+            "name": "tamano",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Tamano"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaRevisionesOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/revisiones/{suscripcion_id}": {
+      "get": {
+        "tags": [
+          "revision-asistida"
+        ],
+        "summary": "Detalle de un caso derivado",
+        "operationId": "detalle_v1_suscripciones_revisiones__suscripcion_id__get",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionDetalleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/revisiones/{suscripcion_id}/decision": {
+      "post": {
+        "tags": [
+          "revision-asistida"
+        ],
+        "summary": "Aprobar, rechazar o ajustar un caso",
+        "operationId": "decidir_v1_suscripciones_revisiones__suscripcion_id__decision_post",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionRevisionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionDetalleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/suscripciones/enlace-firma/documento": {
       "get": {
         "tags": [
@@ -1915,6 +2167,15 @@
         ],
         "title": "BilleteraOut"
       },
+      "CategoriaMotivo": {
+        "type": "string",
+        "enum": [
+          "PERFIL_FUERA_DE_RANGO",
+          "MONTO_SOBRE_LIMITE",
+          "DATOS_INCOMPLETOS_O_INCONSISTENTES"
+        ],
+        "title": "CategoriaMotivo"
+      },
       "ClienteResumenOut": {
         "properties": {
           "nombre": {
@@ -2093,6 +2354,186 @@
         ],
         "title": "CompensacionOut"
       },
+      "CotizacionResumenOut": {
+        "properties": {
+          "cotizacion_id": {
+            "type": "string",
+            "title": "Cotizacion Id"
+          },
+          "producto": {
+            "type": "string",
+            "title": "Producto"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "monto_asegurado": {
+            "type": "integer",
+            "title": "Monto Asegurado"
+          },
+          "prima_mensual": {
+            "type": "integer",
+            "title": "Prima Mensual"
+          },
+          "prima_anual": {
+            "type": "integer",
+            "title": "Prima Anual"
+          },
+          "periodicidad_pago": {
+            "type": "string",
+            "title": "Periodicidad Pago"
+          },
+          "coberturas": {
+            "items": {
+              "$ref": "#/components/schemas/CoberturaOut"
+            },
+            "type": "array",
+            "title": "Coberturas"
+          },
+          "vigente_hasta": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Hasta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cotizacion_id",
+          "producto",
+          "moneda",
+          "monto_asegurado",
+          "prima_mensual",
+          "prima_anual",
+          "periodicidad_pago",
+          "coberturas",
+          "vigente_hasta"
+        ],
+        "title": "CotizacionResumenOut"
+      },
+      "DecisionAutomaticaOut": {
+        "properties": {
+          "motivos": {
+            "items": {
+              "$ref": "#/components/schemas/MotivoOut"
+            },
+            "type": "array",
+            "title": "Motivos"
+          },
+          "reglas_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reglas Version"
+          },
+          "decidido_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decidido En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "motivos",
+          "reglas_version",
+          "decidido_en"
+        ],
+        "title": "DecisionAutomaticaOut"
+      },
+      "DecisionHumanaOut": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "justificacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Justificacion"
+          },
+          "asesor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asesor Id"
+          },
+          "asesor_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asesor Nombre"
+          },
+          "decidido_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decidido En"
+          },
+          "ajuste": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ajuste"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision",
+          "justificacion",
+          "asesor_id",
+          "asesor_nombre",
+          "decidido_en",
+          "ajuste"
+        ],
+        "title": "DecisionHumanaOut"
+      },
       "DecisionOut": {
         "properties": {
           "decision": {
@@ -2163,6 +2604,46 @@
           "duracion_decision_ms"
         ],
         "title": "DecisionOut"
+      },
+      "DecisionRevisionIn": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "APROBADA",
+              "RECHAZADA",
+              "AJUSTADA"
+            ],
+            "title": "Decision"
+          },
+          "justificacion": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 20,
+            "title": "Justificacion",
+            "description": "Interna: el cliente no la ve"
+          },
+          "monto_asegurado": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monto Asegurado",
+            "description": "El nuevo monto asegurado; solo al ajustar"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "decision",
+          "justificacion"
+        ],
+        "title": "DecisionRevisionIn"
       },
       "DocumentoFirmaOut": {
         "properties": {
@@ -2564,6 +3045,23 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "MotivoOut": {
+        "properties": {
+          "categoria": {
+            "$ref": "#/components/schemas/CategoriaMotivo"
+          },
+          "texto": {
+            "type": "string",
+            "title": "Texto"
+          }
+        },
+        "type": "object",
+        "required": [
+          "categoria",
+          "texto"
+        ],
+        "title": "MotivoOut"
+      },
       "PaginaAsistidasOut": {
         "properties": {
           "items": {
@@ -2594,6 +3092,43 @@
           "tamano"
         ],
         "title": "PaginaAsistidasOut"
+      },
+      "PaginaRevisionesOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RevisionResumenOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "total_vencidas": {
+            "type": "integer",
+            "title": "Total Vencidas",
+            "description": "Pendientes con la cotización vencida, para el aviso de la bandeja"
+          },
+          "pagina": {
+            "type": "integer",
+            "title": "Pagina"
+          },
+          "tamano": {
+            "type": "integer",
+            "title": "Tamano"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "total_vencidas",
+          "pagina",
+          "tamano"
+        ],
+        "title": "PaginaRevisionesOut"
       },
       "PolizaOut": {
         "properties": {
@@ -2762,6 +3297,204 @@
         ],
         "title": "PolizaResumenOut",
         "description": "La póliza dentro de la saga: lo que el operador necesita ver si el documento no se genera."
+      },
+      "Prioridad": {
+        "type": "string",
+        "enum": [
+          "ALTA",
+          "MEDIA",
+          "BAJA"
+        ],
+        "title": "Prioridad"
+      },
+      "RevisionDetalleOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id",
+            "description": "Para que la consola pida los niveles del perfil a Cotización"
+          },
+          "cliente": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClienteResumenOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cotizacion": {
+            "$ref": "#/components/schemas/CotizacionResumenOut"
+          },
+          "decision_automatica": {
+            "$ref": "#/components/schemas/DecisionAutomaticaOut"
+          },
+          "decision_humana": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecisionHumanaOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prioridad": {
+            "$ref": "#/components/schemas/Prioridad"
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "PENDIENTE",
+              "DECIDIDA"
+            ],
+            "title": "Estado"
+          },
+          "creada_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creada En"
+          },
+          "cotizacion_vencida": {
+            "type": "boolean",
+            "title": "Cotizacion Vencida"
+          },
+          "puede_decidir": {
+            "type": "boolean",
+            "title": "Puede Decidir"
+          },
+          "decisiones_permitidas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Decisiones Permitidas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "cliente_id",
+          "cliente",
+          "cotizacion",
+          "decision_automatica",
+          "decision_humana",
+          "prioridad",
+          "estado",
+          "creada_en",
+          "cotizacion_vencida",
+          "puede_decidir",
+          "decisiones_permitidas"
+        ],
+        "title": "RevisionDetalleOut"
+      },
+      "RevisionResumenOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "El de la suscripción (saga)"
+          },
+          "cliente": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClienteResumenOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Nulo si MS Identidad no responde"
+          },
+          "producto": {
+            "type": "string",
+            "title": "Producto"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "monto_asegurado": {
+            "type": "integer",
+            "title": "Monto Asegurado"
+          },
+          "categorias": {
+            "items": {
+              "$ref": "#/components/schemas/CategoriaMotivo"
+            },
+            "type": "array",
+            "title": "Categorias"
+          },
+          "motivo": {
+            "type": "string",
+            "title": "Motivo"
+          },
+          "creada_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creada En"
+          },
+          "prioridad": {
+            "$ref": "#/components/schemas/Prioridad"
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "PENDIENTE",
+              "DECIDIDA"
+            ],
+            "title": "Estado"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
+          "cotizacion_vencida": {
+            "type": "boolean",
+            "title": "Cotizacion Vencida"
+          },
+          "vigente_hasta": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Hasta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "cliente",
+          "producto",
+          "moneda",
+          "monto_asegurado",
+          "categorias",
+          "motivo",
+          "creada_en",
+          "prioridad",
+          "estado",
+          "decision",
+          "cotizacion_vencida",
+          "vigente_hasta"
+        ],
+        "title": "RevisionResumenOut"
       },
       "SuscripcionAsistidaIn": {
         "properties": {

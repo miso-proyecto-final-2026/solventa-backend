@@ -141,6 +141,30 @@ class ClaveReutilizada(ErrorSuscripcion):
     )
 
 
+class RevisionNoEncontrada(ErrorSuscripcion):
+    status, code, mensaje = 404, "REVISION_NO_ENCONTRADA", "La suscripción no tiene una revisión asistida."
+
+
+class RevisionYaDecidida(ErrorSuscripcion):
+    status, code, mensaje = 409, "REVISION_YA_DECIDIDA", "Otro asesor ya decidió este caso."
+
+
+class CotizacionNoDisponible(ErrorSuscripcion):
+    status, code, mensaje = (
+        503,
+        "COTIZACION_NO_DISPONIBLE",
+        "No se pudo confirmar la vigencia de la cotización. Intente de nuevo en un momento.",
+    )
+
+
+class AjusteInvalido(ErrorSuscripcion):
+    status, code, mensaje = 422, "AJUSTE_INVALIDO", "El nuevo monto asegurado debe ser mayor que cero y menor que el actual."
+
+
+class SinMetodoPago(ErrorSuscripcion):
+    status, code, mensaje = 409, "SIN_METODO_PAGO", "La suscripción no tiene un método de pago para cobrar."
+
+
 class DependenciaNoDisponible(ErrorSuscripcion):
     status, code, mensaje = 503, "DEPENDENCIA_NO_DISPONIBLE", "Un servicio necesario no responde; reintente."
 
