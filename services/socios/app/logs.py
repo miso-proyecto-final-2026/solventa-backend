@@ -1,0 +1,112 @@
+"""Logs estructurados en JSON con `trace_id` y `correlation_id`, sin credenciales ni datos personales (HU32, criterio 11).
+
+El código de Socios nunca pasa a un log el `client_secret`, el token ni las cabeceras de la solicitud.
+`FiltroDatosPersonales` es la segunda defensa: enmascara credenciales con forma conocida (`client_secret=…`,
+`Bearer …`, `Basic …`, un JWT suelto), correos y números de tarjeta en el mensaje, en sus argumentos y en la traza de
+una excepción, venga de este servicio o de una librería (httpx, redis).
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import re
+import time
+from datetime import UTC, datetime
+from typing import Any
+
+from app.contexto import correlacion_id, traza_id
+
+ENMASCARADO_CORREO = "[correo-redactado]"
+ENMASCARADO_PAN = "[pan-redactado]"
+ENMASCARADO_SECRETO = "[secreto-redactado]"
+_CORREO = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
+_PAN = re.compile(r"(?<![0-9A-Za-z])(?:\d[ -]?){12,18}\d(?![0-9A-Za-z])")
+# client_secret=… (formulario o query), "client_secret": "…" (JSON) y equivalentes con access_token.
+_PARAMETRO_SECRETO = re.compile(
+    r"""(?i)(["']?(?:client_secret|access_token|secreto)["']?\s*[:=]\s*["']?)[^\s"'&,}]+"""
+)
+_ESQUEMA_AUTORIZACION = re.compile(r"(?i)\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+")
+_JWT = re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
+
+
+def redactar(texto: str) -> str:
+    texto = _PARAMETRO_SECRETO.sub(rf"\1{ENMASCARADO_SECRETO}", texto)
+    texto = _ESQUEMA_AUTORIZACION.sub(rf"\1 {ENMASCARADO_SECRETO}", texto)
+    texto = _JWT.sub(ENMASCARADO_SECRETO, texto)
+    return _PAN.sub(ENMASCARADO_PAN, _CORREO.sub(ENMASCARADO_CORREO, texto))
+
+
+class FiltroDatosPersonales(logging.Filter):
+    def filter(self, registro: logging.LogRecord) -> bool:
+        registro.msg = redactar(registro.getMessage())
+        registro.args = None
+        if registro.exc_info and registro.exc_info[1] is not None:
+            registro.exc_text = redactar(logging.Formatter().formatException(registro.exc_info))
+            registro.exc_info = None
+        return True
+
+
+class FormateadorJson(logging.Formatter):
+    def format(self, registro: logging.LogRecord) -> str:
+        campos = getattr(registro, "campos", None) or {}
+        linea: dict[str, Any] = {
+            **{k: redactar(v) if isinstance(v, str) else v for k, v in campos.items()},
+            "timestamp": datetime.fromtimestamp(registro.created, UTC).isoformat(),
+            "level": registro.levelname,
+            "logger": registro.name,
+            "message": registro.getMessage(),
+            "trace_id": traza_id.get(),
+            "correlation_id": correlacion_id.get(),
+        }
+        if registro.exc_text:
+            linea["exception"] = registro.exc_text
+        elif registro.exc_info:
+            linea["exception"] = redactar(self.formatException(registro.exc_info))
+        return json.dumps(linea, ensure_ascii=False)
+
+
+def configurar_logs(nivel: int = logging.INFO) -> None:
+    """Un único manejador en la raíz: todo lo que se registre (servicio, uvicorn, httpx) sale en JSON y redactado."""
+    manejador = logging.StreamHandler()
+    manejador.setFormatter(FormateadorJson())
+    manejador.addFilter(FiltroDatosPersonales())
+    raiz = logging.getLogger()
+    raiz.handlers = [manejador]
+    raiz.setLevel(nivel)
+    for nombre in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        registro = logging.getLogger(nombre)
+        registro.handlers = []
+        registro.propagate = True
+    # Cada request ya se registra con método, ruta, estado y duración (MiddlewareCorrelacion): el access log
+    # de uvicorn lo duplica y además trae el query string.
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    # httpx registra la URL completa con su query string; `request_saliente` (ganchos_http) la sustituye sin ella.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+def ganchos_http() -> dict[str, list[Any]]:
+    """`event_hooks` de httpx: un log por request saliente con host, ruta (sin query), estado y duración.
+
+    No registra cabeceras, cuerpos ni query string: pueden traer tokens o datos personales.
+    """
+
+    async def antes(peticion: Any) -> None:
+        peticion.extensions["inicio"] = time.perf_counter()
+
+    async def despues(respuesta: Any) -> None:
+        peticion = respuesta.request
+        inicio = peticion.extensions.get("inicio")
+        logging.getLogger("solventa.http").info(
+            "request_saliente",
+            extra={"campos": {
+                "evento": "request_saliente",
+                "metodo": peticion.method,
+                "host": peticion.url.host,
+                "ruta": peticion.url.path,
+                "estado": respuesta.status_code,
+                "duracion_ms": round((time.perf_counter() - inicio) * 1000, 1) if inicio else None,
+            }},
+        )
+
+    return {"request": [antes], "response": [despues]}

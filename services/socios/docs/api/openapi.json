@@ -1,0 +1,655 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Solventa — API de socios",
+    "description": "API para socios de distribución (HU32). Autenticación OAuth2 client credentials en `/oauth/token`; cotización embebida en `/partners/v1`. Cada versión se publica bajo su propio prefijo.",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/oauth/token": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Obtener un token de acceso (OAuth2 client credentials)",
+        "operationId": "emitir_token_oauth_token_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_emitir_token_oauth_token_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Solicitud inválida o grant no soportado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOAuthOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credenciales del cliente inválidas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOAuthOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/partners/v1/cotizaciones": {
+      "post": {
+        "tags": [
+          "partners-v1"
+        ],
+        "summary": "Cotizar un seguro para un cliente del socio",
+        "operationId": "cotizar_partners_v1_cotizaciones_post",
+        "parameters": [
+          {
+            "name": "X-Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Obligatoria. Repetirla devuelve la respuesta original.",
+              "title": "X-Idempotency-Key"
+            },
+            "description": "Obligatoria. Repetirla devuelve la respuesta original."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitudCotizacionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CotizacionOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Falta o es inválida la cabecera X-Idempotency-Key (INVALID_REQUEST).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente, inválido (INVALID_TOKEN) o vencido (TOKEN_EXPIRED).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El contrato no habilita el endpoint (ENDPOINT_NOT_AUTHORIZED).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Clave de idempotencia reutilizada o en proceso (IDEMPOTENCY_CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Producto o datos inválidos (INVALID_REQUEST).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Cuota del contrato excedida (RATE_LIMIT_EXCEEDED). Reintente tras `Retry-After` segundos.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Segundos para reintentar."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Cotización u otra dependencia no responde (SERVICE_UNAVAILABLE).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/partners/v1/status": {
+      "get": {
+        "tags": [
+          "partners-v1"
+        ],
+        "summary": "Estado del API de socios",
+        "description": "Público y sin datos sensibles: estado general y de cada dependencia, sin URLs, versiones internas ni errores.",
+        "operationId": "estado_api_partners_v1_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EstadoOut"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "El API no puede cotizar en este momento.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EstadoOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Body_emitir_token_oauth_token_post": {
+        "properties": {
+          "grant_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Type"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret"
+          }
+        },
+        "type": "object",
+        "title": "Body_emitir_token_oauth_token_post"
+      },
+      "CoberturaOut": {
+        "properties": {
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "monto": {
+            "type": "integer",
+            "title": "Monto"
+          },
+          "deducible": {
+            "type": "integer",
+            "title": "Deducible"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tipo",
+          "monto",
+          "deducible"
+        ],
+        "title": "CoberturaOut"
+      },
+      "CotizacionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "referencia_cliente": {
+            "type": "string",
+            "title": "Referencia Cliente"
+          },
+          "producto": {
+            "type": "string",
+            "title": "Producto"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "prima_anual": {
+            "type": "integer",
+            "title": "Prima Anual"
+          },
+          "prima_mensual": {
+            "type": "integer",
+            "title": "Prima Mensual"
+          },
+          "coberturas": {
+            "items": {
+              "$ref": "#/components/schemas/CoberturaOut"
+            },
+            "type": "array",
+            "title": "Coberturas"
+          },
+          "vigente_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Vigente Hasta"
+          },
+          "degradado": {
+            "type": "boolean",
+            "title": "Degradado",
+            "description": "True si se calculó con un perfil por defecto porque un proveedor no respondió."
+          },
+          "aproximada": {
+            "type": "boolean",
+            "title": "Aproximada"
+          },
+          "aviso": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aviso"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "referencia_cliente",
+          "producto",
+          "moneda",
+          "prima_anual",
+          "prima_mensual",
+          "coberturas",
+          "vigente_hasta",
+          "degradado",
+          "aproximada"
+        ],
+        "title": "CotizacionOut"
+      },
+      "DependenciasOut": {
+        "properties": {
+          "cotizacion": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "no_disponible"
+            ],
+            "title": "Cotizacion"
+          },
+          "base_datos": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "no_disponible"
+            ],
+            "title": "Base Datos"
+          },
+          "almacen": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "no_disponible"
+            ],
+            "title": "Almacen"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cotizacion",
+          "base_datos",
+          "almacen"
+        ],
+        "title": "DependenciasOut"
+      },
+      "DetalleErrorOut": {
+        "properties": {
+          "campo": {
+            "type": "string",
+            "title": "Campo"
+          },
+          "motivo": {
+            "type": "string",
+            "title": "Motivo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campo",
+          "motivo"
+        ],
+        "title": "DetalleErrorOut"
+      },
+      "ErrorCuerpoOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "details": {
+            "items": {
+              "$ref": "#/components/schemas/DetalleErrorOut"
+            },
+            "type": "array",
+            "title": "Details"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "details",
+          "trace_id"
+        ],
+        "title": "ErrorCuerpoOut"
+      },
+      "ErrorOAuthOut": {
+        "properties": {
+          "error": {
+            "type": "string",
+            "title": "Error"
+          },
+          "error_description": {
+            "type": "string",
+            "title": "Error Description"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error",
+          "error_description",
+          "trace_id"
+        ],
+        "title": "ErrorOAuthOut"
+      },
+      "ErrorOut": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorCuerpoOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "title": "ErrorOut"
+      },
+      "EstadoOut": {
+        "properties": {
+          "estado": {
+            "type": "string",
+            "enum": [
+              "operativo",
+              "degradado",
+              "no_disponible"
+            ],
+            "title": "Estado"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "versiones_soportadas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Versiones Soportadas"
+          },
+          "dependencias": {
+            "$ref": "#/components/schemas/DependenciasOut"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "estado",
+          "version",
+          "versiones_soportadas",
+          "dependencias",
+          "timestamp"
+        ],
+        "title": "EstadoOut"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "SolicitudCotizacionIn": {
+        "properties": {
+          "producto": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Producto",
+            "examples": [
+              "microseguro_vida"
+            ]
+          },
+          "referencia_cliente": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "title": "Referencia Cliente",
+            "description": "Identificador del cliente en el sistema del socio. No envíe documentos ni datos personales.",
+            "examples": [
+              "cli-000123"
+            ]
+          },
+          "datos": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Datos",
+            "examples": [
+              {
+                "edad": 35,
+                "suma_asegurada": 50000000
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "producto",
+          "referencia_cliente",
+          "datos"
+        ],
+        "title": "SolicitudCotizacionIn"
+      },
+      "TokenOut": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type"
+          },
+          "expires_in": {
+            "type": "integer",
+            "title": "Expires In"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in",
+          "scope"
+        ],
+        "title": "TokenOut"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
