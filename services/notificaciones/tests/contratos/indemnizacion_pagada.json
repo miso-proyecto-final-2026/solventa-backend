@@ -1,0 +1,23 @@
+{
+  "event_id": "5b0f3c1e-8a52-4d0e-9a44-0f6f2f7b9a10",
+  "event_type": "indemnizacion_pagada",
+  "source": "ms-pagos",
+  "timestamp": "2026-11-17T15:00:00Z",
+  "correlation_id": "0c6a2a2e-5a63-4b0b-8f0c-6b9a4d3b1e77",
+  "trace_id": "d1f2c8a4-6b0d-4f6c-9d57-2f8f4a8b3c11",
+  "version": "1.0",
+  "payload": {
+    "indemnizacion_id": "7e1c9d52-3f84-4a6b-b1d0-9c2e5a7f4b08",
+    "idempotency_key": "0c6a2a2e-5a63-4b0b-8f0c-6b9a4d3b1e77:90d7708a-1f26-4e2e-9c2d-722dca46c475",
+    "evento_id": "0c6a2a2e-5a63-4b0b-8f0c-6b9a4d3b1e77",
+    "poliza_id": "90d7708a-1f26-4e2e-9c2d-722dca46c475",
+    "cliente_id": "cli-1",
+    "producto": "microseguro_vida",
+    "estado": "PAGADA",
+    "monto": "1500000.00",
+    "moneda": "COP",
+    "referencia_pasarela": "sim-4f9c2a",
+    "resuelta_en": "2026-11-17T15:00:00+00:00",
+    "repeticion": false
+  }
+}
