@@ -117,6 +117,13 @@ class Entorno:
     def linaje(self, cliente_id: str = CLIENTE):
         return self.cliente.get(f"/v1/perfilamiento/{cliente_id}/linaje", headers=self.cabeceras)
 
+    def oferta(self, cliente_id: str = CLIENTE, suma: int | None = None, cabeceras: dict[str, str] | None = None):
+        return self.cliente.get(
+            f"/v1/perfilamiento/{cliente_id}/oferta",
+            params={} if suma is None else {"suma_asegurada": suma},
+            headers=self.cabeceras if cabeceras is None else cabeceras,
+        )
+
     def revocar(self, cliente_id: str = CLIENTE) -> None:
         self.consentimiento._estados[cliente_id] = EstadoConsentimiento.REVOCADO
 

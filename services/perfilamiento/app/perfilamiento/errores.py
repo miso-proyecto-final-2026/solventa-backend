@@ -30,6 +30,14 @@ class ConsentimientoNoVigente(Exception):
         self.estado = estado
 
 
+class SumaAseguradaInvalida(Exception):
+    """La suma asegurada pedida no cabe en los límites de las reglas de precio."""
+
+    def __init__(self, motivo: str) -> None:
+        super().__init__(motivo)
+        self.motivo = motivo
+
+
 class NoAutenticado(Exception):
     def __init__(self, mensaje: str = "Se requiere la clave de servicio.") -> None:
         super().__init__(mensaje)
@@ -62,6 +70,17 @@ def registrar_errores(app: FastAPI) -> None:
                 "VALIDATION_ERROR",
                 "La solicitud no es válida.",
                 [{"campo": "cliente_id", "motivo": "debe tener entre 1 y 64 letras, dígitos o . _ : -"}],
+            ),
+        )
+
+    @app.exception_handler(SumaAseguradaInvalida)
+    async def _suma_invalida(_req: Request, exc: SumaAseguradaInvalida) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content=cuerpo_error(
+                "VALIDATION_ERROR",
+                "La solicitud no es válida.",
+                [{"campo": "suma_asegurada", "motivo": exc.motivo}],
             ),
         )
 

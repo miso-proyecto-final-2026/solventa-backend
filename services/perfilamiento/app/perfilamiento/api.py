@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Depends, Header, Query, Request
 from pydantic import BaseModel
 
 from app.perfilamiento.errores import NoAutenticado, SinPermiso
@@ -73,6 +73,40 @@ class LinajeOut(BaseModel):
     fuentes: list[LineaLinajeOut]
 
 
+class PasoOut(BaseModel):
+    paso: str
+    nombre: str
+    factor: str | None
+    valor_perfil: float | int | None
+    ajuste: int
+    acumulado: int
+    sin_dato: bool
+
+
+class CoberturaOut(BaseModel):
+    tipo: str
+    monto_cubierto: int
+    deducible_porcentaje: str
+
+
+class OfertaOut(BaseModel):
+    oferta_id: str
+    cliente_id: str
+    producto: str
+    moneda: str
+    suma_asegurada: int
+    prima_anual: int
+    prima_mensual: int
+    etapa_de_vida: str
+    version_reglas: str
+    perfil_id: str
+    perfil_creado_en: str
+    degradado: bool
+    desglose: list[PasoOut]
+    coberturas: list[CoberturaOut]
+    creado_en: str
+
+
 router = APIRouter(prefix="/v1/perfilamiento", tags=["perfilamiento"])
 EnriquecedorActual = Annotated[Enriquecedor, Depends(obtener_enriquecedor)]
 
@@ -120,4 +154,42 @@ async def linaje(cliente_id: str, _origen: Origen, servicio: EnriquecedorActual)
             )
             for f in l.fuentes
         ],
+    )
+
+
+@router.get(
+    "/{cliente_id}/oferta",
+    response_model=OfertaOut,
+    summary="Oferta de vida hipotecario con el precio individualizado por el perfil (exige consentimiento vigente)",
+    responses={
+        404: {"description": "El cliente no tiene perfil enriquecido: no se inventa un precio."},
+        422: {"description": "Suma asegurada fuera de los límites de las reglas."},
+    },
+)
+async def oferta(
+    cliente_id: str,
+    origen: Origen,
+    servicio: EnriquecedorActual,
+    suma_asegurada: Annotated[
+        int | None,
+        Query(gt=0, description="Saldo a asegurar en COP. Sin ella se usa el ingreso por los meses de las reglas."),
+    ] = None,
+) -> OfertaOut:
+    guardada, calculada, perfil_creado_en = await servicio.oferta(cliente_id, origen, suma_asegurada)
+    return OfertaOut(
+        oferta_id=guardada.id,
+        cliente_id=guardada.cliente_id,
+        producto=guardada.producto,
+        moneda=guardada.moneda,
+        suma_asegurada=guardada.suma_asegurada,
+        prima_anual=guardada.prima_anual,
+        prima_mensual=guardada.prima_mensual,
+        etapa_de_vida=guardada.etapa_de_vida,
+        version_reglas=guardada.version_reglas,
+        perfil_id=guardada.perfil_id,
+        perfil_creado_en=perfil_creado_en.isoformat(),
+        degradado=guardada.degradado,
+        desglose=[PasoOut(**p) for p in guardada.desglose],
+        coberturas=[CoberturaOut(**c) for c in calculada.coberturas],
+        creado_en=guardada.creado_en.isoformat(),
     )
