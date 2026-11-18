@@ -18,6 +18,18 @@ MS Suscripción ──poliza_emitida / confirmacion_reenvio_solicitada / firma_e
 App móvil ──GET /v1/notificaciones──▶ la bandeja ──▶ notificación local de Android (prioridad alta)
 ```
 
+### Pago paramétrico (HU30)
+
+```
+MS Pagos ──indemnizacion_pagada──▶ solventa.pagos.indemnizaciones ──▶ consumidor (solventa-notificaciones.pagos)
+                                          └─ un envío PUSH, prioridad alta, clave = indemnizacion_id ─▶ bandeja del titular
+```
+
+Solo el pagado avisa; `indemnizacion_fallida` se ignora. La clave de idempotencia es el `indemnizacion_id`, así que una
+republicación de Pagos (`repeticion`) no duplica el aviso. La versión de la pantalla de bloqueo no lleva monto ni póliza;
+el detalle lleva el monto según el idioma. La notificación trae `poliza_id` (y `suscripcion_id` nulo): la app abre la póliza
+por su id. No hay correo.
+
 Un fallo de envío **nunca toca la póliza**: ya está emitida. Agotados los intentos, el envío queda `FALLIDO` y el
 operador lo ve en `GET /v1/notificaciones/envios-fallidos`.
 
