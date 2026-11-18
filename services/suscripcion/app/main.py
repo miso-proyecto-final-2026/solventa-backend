@@ -15,6 +15,7 @@ from app.suscripcion.api_certificado import router as certificado_router
 from app.suscripcion.api_enlace_firma import router as enlace_firma_router
 from app.suscripcion.api_firma import router as firma_router
 from app.suscripcion.api_polizas import router as polizas_router
+from app.suscripcion.api_revision import router as revision_router
 from app.suscripcion.config import ConfigSuscripcion
 from app.suscripcion.errores import registrar_errores
 from app.suscripcion.relay import RelayEventos
@@ -27,6 +28,7 @@ from app.suscripcion.wiring import (
     construir_servicio_certificado,
     construir_servicio_enlace_firma,
     construir_servicio_firma,
+    construir_servicio_revision,
 )
 
 configurar_logs()
@@ -63,6 +65,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.servicio_asistida = construir_servicio_asistida(
         servicio, firma, app.state.servicio_certificado, app.state.servicio_enlace_firma, engine, clientes, config
     )
+    app.state.servicio_revision = construir_servicio_revision(engine, clientes, config)
     app.state.verificador_asesor = construir_verificador(config)
     app.state.tareas = set()
     segundo_plano = [
@@ -92,6 +95,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Solventa — MS Suscripción", version="0.1.0", lifespan=lifespan)
 # Primero: si no, `GET /v1/suscripciones/asistidas` coincidiría con `/{suscripcion_id}`.
 app.include_router(asistida_router)
+app.include_router(revision_router)
 app.include_router(enlace_firma_router)
 app.include_router(suscripciones_router)
 app.include_router(polizas_router)
