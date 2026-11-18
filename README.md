@@ -8,7 +8,7 @@ por separado, tiene su propio paquete `app`, su `Dockerfile` y su propio esquema
 services/
   identidad/     MS Identidad    HU01–HU08 (registro, KYC, consentimiento)
   cotizacion/    MS Cotización   HU09–HU14, HU37–HU38 (proveedores de datos, perfil, motor de rating)
-  perfilamiento/ MS Perfilamiento HU23 (enriquecimiento del perfil de riesgo, linaje)
+  perfilamiento/ MS Perfilamiento HU23 (enriquecimiento del perfil de riesgo, linaje) y HU25 (oferta de vida hipotecario con precio individualizado)
   suscripcion/   MS Suscripción   HU15 y HU18 (saga de suscripción: decisión automática, paso de cobro y documento de la póliza con HU20; la firma y la emisión llegan con HU21; la venta asistida del asesor, con HU39; la revisión asistida de los casos derivados, con HU16)
   siniestros/    MS Siniestros   HU27 (recepción de eventos paramétricos; HU28 validará la condición)
   pagos/         MS Pagos        HU18 (cobro de la prima con pasarela simulada, idempotencia y conciliación)
