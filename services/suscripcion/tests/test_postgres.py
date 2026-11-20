@@ -366,7 +366,8 @@ def test_la_base_acepta_la_modalidad_socio_y_guarda_el_socio_de_la_saga(fabrica_
 
     from tests.test_firma import ORIGEN, OTP
 
-    susc, firma = _lista_para_firmar(fabrica_pg)
+    susc, nueva_firma = _lista_para_firmar(fabrica_pg)
+    firma = nueva_firma()
     with fabrica_pg() as s, s.begin():
         s.execute(text(f"UPDATE {SCHEMA}.suscripciones SET socio_client_id = 'socio-a' WHERE id = :i"), {"i": susc.id})
     origen = replace(ORIGEN, canal="WEB", modalidad="SOCIO", socio_client_id="socio-a")
