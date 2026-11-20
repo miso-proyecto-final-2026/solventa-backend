@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.socios.almacen import ErrorAlmacen
-from app.socios.errores import ErrorSocios, RecursoNoEncontrado, SolicitudInvalida
+from app.socios.errores import ErrorSocios, RecursoNoEncontrado, ReglaDeNegocio
 
 # Solo para pruebas: nunca es un secreto real.
 SECRETO_PRUEBA = "secreto-de-prueba-socio-0123456789"
@@ -200,7 +200,7 @@ class SuscripcionesFalsas:
             raise self.error
         saga = self._propia(suscripcion_id, socio_client_id)
         if firma["codigo"] != self.OTP:
-            raise SolicitudInvalida(detalles=[{"campo": "motivo", "motivo": "OTP_INVALIDO"}])
+            raise ReglaDeNegocio("OTP_INVALIDO")
         saga.update(
             estado_saga="EMITIDA",
             paso_actual="EMISION",

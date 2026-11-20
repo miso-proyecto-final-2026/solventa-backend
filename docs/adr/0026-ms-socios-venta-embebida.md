@@ -48,7 +48,8 @@ La historia dejó tres puntos «a confirmar» (criterios 5, 6 y 8). Se decidiero
    - Socios: `X-Idempotency-Key` en Redis (HU32). Misma clave y mismo cuerpo, misma respuesta; otro cuerpo, 409 `IDEMPOTENCY_CONFLICT`.
    - Suscripción: la clave de la saga es `socio:` + sha256(`client_id`, clave). Va a `uq_susc_cliente_clave`, así la garantía también vale
      en la base y si Redis se vacía. Dos socios con la misma clave no se confunden.
-8. **Errores (criterio 9), traducción provisional.** HU34 define el catálogo definitivo y aún no existe.
+8. **Errores (criterio 9), traducción provisional.** **Reemplazada por [ADR-0027](0027-ms-socios-catalogo-de-errores.md) (HU34):** la validación y las reglas de
+   negocio son 400 con `reason`, y el 409 queda para la clave de idempotencia. Lo que sigue es la versión de HU33.
 
    | Origen | Respuesta de Socios |
    |---|---|

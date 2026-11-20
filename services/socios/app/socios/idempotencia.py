@@ -3,7 +3,8 @@
 La clave es por socio (dos socios pueden usar la misma sin cruzarse) y se guarda solo su sha256. Flujo:
 
 1. `reservar`: `SET NX` de la clave en estado `en_proceso` con un TTL corto. Si ya existía:
-   - con otro cuerpo, o todavía en proceso → conflicto (409, no reintentar con esa clave);
+   - con otro cuerpo → 409 `IDEMPOTENCY_CONFLICT` (no reintentar con esa clave);
+   - todavía en proceso → 409 con `reason: SOLICITUD_EN_PROCESO` y `Retry-After` (sí reintentar, con la misma clave);
    - terminada con el mismo cuerpo → se devuelve la respuesta original sin recalcular.
 2. `completar`: guarda el estado y el cuerpo de la respuesta exitosa por 24 horas.
 3. `liberar`: si la solicitud falló (4xx/5xx), se borra la reserva para que el socio pueda reintentar.
@@ -21,7 +22,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.socios.almacen import Almacen, ErrorAlmacen
-from app.socios.errores import ConflictoIdempotencia, ServicioNoDisponible
+from app.socios.errores import (
+    ConflictoIdempotencia,
+    ServicioNoDisponible,
+    SolicitudEnProceso,
+)
 
 PREFIJO = "socios:idem"
 EN_PROCESO = "en_proceso"
@@ -61,15 +66,15 @@ class Idempotencia:
                 if guardado is not None:
                     break
             else:
-                raise ConflictoIdempotencia
+                raise SolicitudEnProceso
         except ErrorAlmacen as error:
             raise ServicioNoDisponible("No se puede verificar la clave de idempotencia; reintente.") from error
 
         entrada = json.loads(guardado)
         if entrada.get("huella") != huella_cuerpo:
-            raise ConflictoIdempotencia("La clave de idempotencia ya se usó con otra solicitud. No reintente con la misma clave.")
+            raise ConflictoIdempotencia()
         if entrada.get("estado") != COMPLETADA:
-            raise ConflictoIdempotencia("La solicitud original con esta clave sigue en proceso; espere su respuesta.")
+            raise SolicitudEnProceso
         return RespuestaGuardada(status=int(entrada["status"]), cuerpo=entrada["cuerpo"])
 
     async def completar(self, client_id: str, clave: str, huella_cuerpo: str, status: int, cuerpo: Any) -> None:

@@ -5,7 +5,7 @@ import logging
 import httpx
 import pytest
 from app.socios.errores import (
-    ConflictoDeNegocio,
+    ReglaDeNegocio,
     ServicioNoDisponible,
     SolicitudInvalida,
 )
@@ -66,7 +66,7 @@ def test_la_respuesta_no_trae_datos_internos_ni_del_cliente(cliente, token):
     assert DOCUMENTO_APTO[1] not in r.text and CLIENTE_APTO not in r.text and TOKEN_PAGO not in r.text
 
 
-def test_sin_cuerpo_valido_responde_422(cliente, token, suscripciones):
+def test_sin_cuerpo_valido_responde_400(cliente, token, suscripciones):
     t = token()
     sin_cliente = {k: v for k, v in SUSCRIPCION.items() if k != "cliente"}
 
@@ -78,7 +78,7 @@ def test_sin_cuerpo_valido_responde_422(cliente, token, suscripciones):
         {**SUSCRIPCION, "cliente": {**CLIENTE, "numero_documento": "12"}},
     ):
         r = _suscribir(cliente, t, cuerpo, clave="x")
-        assert r.status_code == 422 and r.json()["error"]["code"] == "INVALID_REQUEST"
+        assert r.status_code == 400 and r.json()["error"]["code"] == "INVALID_REQUEST"
     assert suscripciones.llamadas == []
 
 
@@ -147,14 +147,15 @@ def test_si_la_suscripcion_falla_la_clave_se_libera_para_reintentar(cliente, tok
         (("CC", "300400500"), "CONSENTIMIENTO_NO_VIGENTE"),
     ],
 )
-def test_un_cliente_que_no_puede_comprar_responde_422_con_el_motivo(cliente, token, suscripciones, documento, motivo):
+def test_un_cliente_que_no_puede_comprar_responde_400_con_el_motivo(cliente, token, suscripciones, documento, motivo):
     cuerpo = {**SUSCRIPCION, "cliente": {"tipo_documento": documento[0], "numero_documento": documento[1]}}
 
     r = _suscribir(cliente, token(), cuerpo)
 
-    assert r.status_code == 422
+    assert r.status_code == 400
     assert r.json()["error"]["code"] == "INVALID_REQUEST"
-    assert r.json()["error"]["details"] == [{"campo": "cliente", "motivo": motivo}]
+    assert r.json()["error"]["reason"] == motivo
+    assert r.json()["error"]["details"] == []
     assert suscripciones.llamadas == []
 
 
@@ -172,21 +173,21 @@ def test_si_identidad_no_responde_es_503_y_el_documento_no_se_escribe_en_los_log
 
 
 @pytest.mark.parametrize(
-    ("error", "status", "codigo", "detalles"),
+    ("error", "status", "codigo", "reason", "detalles"),
     [
-        (ConflictoDeNegocio(detalles=[{"campo": "motivo", "motivo": "COTIZACION_YA_USADA"}]), 409, "IDEMPOTENCY_CONFLICT", [{"campo": "motivo", "motivo": "COTIZACION_YA_USADA"}]),
-        (SolicitudInvalida(detalles=[{"campo": "metodo_pago", "motivo": "debe ser el token"}]), 422, "INVALID_REQUEST", [{"campo": "metodo_pago", "motivo": "debe ser el token"}]),
-        (ServicioNoDisponible(), 503, "SERVICE_UNAVAILABLE", []),
+        (ReglaDeNegocio("COTIZACION_YA_USADA"), 400, "INVALID_REQUEST", "COTIZACION_YA_USADA", []),
+        (SolicitudInvalida(detalles=[{"campo": "metodo_pago", "motivo": "debe ser el token"}]), 400, "INVALID_REQUEST", None, [{"campo": "metodo_pago", "motivo": "debe ser el token"}]),
+        (ServicioNoDisponible(), 503, "SERVICE_UNAVAILABLE", None, []),
     ],
 )
-def test_los_errores_de_suscripcion_llegan_al_socio_en_su_formato(cliente, token, suscripciones, error, status, codigo, detalles):
+def test_los_errores_de_suscripcion_llegan_al_socio_en_su_formato(cliente, token, suscripciones, error, status, codigo, reason, detalles):
     suscripciones.error = error
 
     r = _suscribir(cliente, token())
 
     assert r.status_code == status
     cuerpo = r.json()["error"]
-    assert (cuerpo["code"], cuerpo["details"]) == (codigo, detalles)
+    assert (cuerpo["code"], cuerpo.get("reason"), cuerpo["details"]) == (codigo, reason, detalles)
     assert cuerpo["trace_id"] and cuerpo["message"]
 
 
@@ -306,14 +307,14 @@ def test_la_firma_con_la_misma_clave_y_otro_codigo_es_409(cliente, token):
     assert r.status_code == 409 and r.json()["error"]["code"] == "IDEMPOTENCY_CONFLICT"
 
 
-def test_un_codigo_erroneo_es_422_y_deja_reintentar_con_la_misma_clave(cliente, token):
+def test_un_codigo_erroneo_es_400_y_deja_reintentar_con_la_misma_clave(cliente, token):
     t = token()
     sid = _suscribir(cliente, t).json()["id"]
 
     mala = _firmar(cliente, t, sid, codigo="000000")
     buena = _firmar(cliente, t, sid, codigo=OTP)
 
-    assert mala.status_code == 422 and mala.json()["error"]["details"] == [{"campo": "motivo", "motivo": "OTP_INVALIDO"}]
+    assert mala.status_code == 400 and mala.json()["error"]["reason"] == "OTP_INVALIDO"
     assert buena.status_code == 200
 
 
@@ -333,7 +334,7 @@ def test_el_hash_de_la_firma_debe_ser_un_sha256(cliente, token, suscripciones):
 
     r = _firmar(cliente, t, sid, documento_sha256="no-es-un-hash")
 
-    assert r.status_code == 422 and not [c for c in suscripciones.llamadas if c[0] == "firmar"]
+    assert r.status_code == 400 and not [c for c in suscripciones.llamadas if c[0] == "firmar"]
 
 
 @pytest.mark.parametrize(
@@ -391,13 +392,13 @@ def test_cotizar_sin_cliente_sigue_como_en_hu32(cliente, token, cotizaciones, id
     assert identidad.consultas == []
 
 
-def test_cotizar_con_un_cliente_sin_kyc_responde_422_y_libera_la_clave(cliente, token, cotizaciones, identidad):
+def test_cotizar_con_un_cliente_sin_kyc_responde_400_y_libera_la_clave(cliente, token, cotizaciones, identidad):
     t = token()
     sin_kyc = {**COTIZAR, "cliente": {"tipo_documento": "CC", "numero_documento": "200300400"}}
 
     r = _cotizar(cliente, t, sin_kyc)
 
-    assert r.status_code == 422 and r.json()["error"]["details"] == [{"campo": "cliente", "motivo": "KYC_NO_VERIFICADO"}]
+    assert r.status_code == 400 and r.json()["error"]["reason"] == "KYC_NO_VERIFICADO"
     assert cotizaciones.llamadas == []
     assert _cotizar(cliente, t, {**COTIZAR, "cliente": CLIENTE}).status_code == 201
 

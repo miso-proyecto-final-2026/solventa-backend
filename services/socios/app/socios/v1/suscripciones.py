@@ -27,7 +27,7 @@ from app.socios.acceso import (
 from app.socios.almacen import ErrorAlmacen
 from app.socios.idempotencia import huella
 from app.socios.identificacion import ClienteIn, identificar_exigiendo
-from app.socios.v1.api import ErrorOut, _clave_idempotencia
+from app.socios.v1.api import _clave_idempotencia, respuestas_error
 
 log = logging.getLogger(__name__)
 
@@ -146,15 +146,8 @@ class FirmaOut(BaseModel):
     metodo_autenticacion: str
 
 
-_ERRORES: dict[int | str, dict[str, Any]] = {
-    401: {"model": ErrorOut, "description": "Token ausente, inválido (INVALID_TOKEN) o vencido (TOKEN_EXPIRED)."},
-    403: {"model": ErrorOut, "description": "El contrato no habilita el endpoint (ENDPOINT_NOT_AUTHORIZED)."},
-    404: {"model": ErrorOut, "description": "La venta no existe o es de otro socio (RESOURCE_NOT_FOUND)."},
-    409: {"model": ErrorOut, "description": "Conflicto con el estado de la venta o clave reutilizada (IDEMPOTENCY_CONFLICT)."},
-    422: {"model": ErrorOut, "description": "Solicitud o cliente no válidos (INVALID_REQUEST); el motivo va en `details`."},
-    429: {"model": ErrorOut, "description": "Cuota del contrato excedida (RATE_LIMIT_EXCEEDED)."},
-    503: {"model": ErrorOut, "description": "Suscripción, Identidad u otra dependencia no responde (SERVICE_UNAVAILABLE)."},
-}
+_ERRORES_LECTURA = respuestas_error(no_encontrado=True)
+_ERRORES = respuestas_error(no_encontrado=True, conflicto=True)
 
 
 def _poliza_url(suscripcion_id: str) -> str:
@@ -292,7 +285,7 @@ async def iniciar(
     "/polizas/{suscripcion_id}",
     response_model=PolizaConsultaOut,
     summary="Consultar el estado de la venta y de su póliza",
-    responses=_ERRORES,
+    responses=_ERRORES_LECTURA,
 )
 async def consultar(suscripcion_id: str, request: Request, socio: ConsultarPoliza) -> PolizaConsultaOut:
     """`suscripcion_id` es el `id` que devolvió `POST /suscripciones`. Cuando `estado` es `EMITIDA` trae la póliza vigente."""
@@ -303,7 +296,7 @@ async def consultar(suscripcion_id: str, request: Request, socio: ConsultarPoliz
     "/suscripciones/{suscripcion_id}/documento-firma",
     response_model=DocumentoFirmaOut,
     summary="Documento por firmar: su hash y vencimiento",
-    responses=_ERRORES,
+    responses=_ERRORES_LECTURA,
 )
 async def documento_firma(suscripcion_id: str, request: Request, socio: FirmarSuscripcion) -> DocumentoFirmaOut:
     d = await request.app.state.suscripciones.documento_firma(suscripcion_id, socio.client_id)
@@ -314,7 +307,7 @@ async def documento_firma(suscripcion_id: str, request: Request, socio: FirmarSu
     "/suscripciones/{suscripcion_id}/documento-firma/pdf",
     summary="PDF de la póliza por firmar, para que el cliente lo lea",
     response_class=Response,
-    responses={200: {"content": {"application/pdf": {}}}, **_ERRORES},
+    responses={200: {"content": {"application/pdf": {}}}, **_ERRORES_LECTURA},
 )
 async def documento_firma_pdf(suscripcion_id: str, request: Request, socio: FirmarSuscripcion) -> Response:
     contenido = await request.app.state.suscripciones.documento_pdf(suscripcion_id, socio.client_id)
@@ -325,7 +318,7 @@ async def documento_firma_pdf(suscripcion_id: str, request: Request, socio: Firm
     "/suscripciones/{suscripcion_id}/firma/codigo",
     status_code=202,
     summary="Enviar al cliente el código de un solo uso para firmar",
-    responses=_ERRORES,
+    responses=_ERRORES_LECTURA,
 )
 async def solicitar_codigo(suscripcion_id: str, request: Request, socio: FirmarSuscripcion) -> Response:
     await request.app.state.suscripciones.solicitar_codigo(suscripcion_id, socio.client_id)

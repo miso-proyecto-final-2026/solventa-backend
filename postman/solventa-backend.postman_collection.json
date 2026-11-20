@@ -12163,14 +12163,14 @@
           }
         },
         {
-          "name": "Producto desconocido (422)",
+          "name": "Producto desconocido (400)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));",
                   "pm.test('INVALID_REQUEST', () => pm.expect(pm.response.json().error.code).to.eql('INVALID_REQUEST'));"
                 ]
               }
@@ -12257,7 +12257,27 @@
                 "token"
               ]
             },
-            "description": "Necesita el socio sembrado con los cuatro endpoints (scripts/sembrar_socio_demo.py)."
+            "description": "Necesita el socio sembrado con los cuatro endpoints (scripts/sembrar_socio_demo.py).",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{socio_client_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{socio_client_secret}}",
+                  "type": "text"
+                }
+              ]
+            }
           }
         },
         {
@@ -12324,15 +12344,15 @@
           }
         },
         {
-          "name": "Cotizar con un cliente sin KYC (422)",
+          "name": "Cotizar con un cliente sin KYC (400)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
-                  "pm.test('motivo de negocio en details', () => pm.expect(pm.response.json().error.details[0].motivo).to.eql('KYC_NO_VERIFICADO'));"
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('motivo de negocio en reason', () => pm.expect(pm.response.json().error.reason).to.eql('KYC_NO_VERIFICADO'));"
                 ]
               }
             }
@@ -12493,14 +12513,14 @@
           }
         },
         {
-          "name": "Suscribir con el número de tarjeta (422)",
+          "name": "Suscribir con el número de tarjeta (400)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Responde 422', () => pm.response.to.have.status(422));"
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));"
                 ]
               }
             }
@@ -12553,15 +12573,15 @@
           }
         },
         {
-          "name": "Suscribir con un cliente sin KYC (422)",
+          "name": "Suscribir con un cliente sin KYC (400)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
-                  "pm.test('motivo KYC_NO_VERIFICADO', () => pm.expect(pm.response.json().error.details[0].motivo).to.eql('KYC_NO_VERIFICADO'));"
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('motivo KYC_NO_VERIFICADO', () => pm.expect(pm.response.json().error.reason).to.eql('KYC_NO_VERIFICADO'));"
                 ]
               }
             }
@@ -13075,15 +13095,15 @@
           }
         },
         {
-          "name": "Firmar con un código erróneo (422)",
+          "name": "Firmar con un código erróneo (400)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
-                  "pm.test('motivo OTP_INVALIDO', () => pm.expect(pm.response.json().error.details[0].motivo).to.eql('OTP_INVALIDO'));"
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('reason OTP_INVALIDO', () => pm.expect(pm.response.json().error.reason).to.eql('OTP_INVALIDO'));"
                 ]
               }
             }
@@ -13319,6 +13339,647 @@
           }
         }
       ]
+    },
+    {
+      "name": "MS Socios — errores (HU34)",
+      "item": [
+        {
+          "name": "Obtener token (client credentials)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('socio_token', pm.response.json().access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{socios_url}}/oauth/token",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "description": "Necesita el socio sembrado (scripts/sembrar_socio_demo.py).",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{socio_client_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{socio_client_secret}}",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "400 INVALID_REQUEST: cuerpo inválido con details",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));",
+                  "const e = pm.response.json().error;",
+                  "pm.test('estructura del catálogo', () => pm.expect(Object.keys(e).every(k => ['code','message','trace_id','details','reason'].includes(k))).to.be.true);",
+                  "pm.test('code, message y trace_id presentes', () => { pm.expect(e.code).to.be.a('string'); pm.expect(e.message).to.be.a('string'); pm.expect(e.trace_id).to.be.a('string'); });",
+                  "pm.test('X-Correlation-Id presente', () => pm.expect(pm.response.headers.has('X-Correlation-Id')).to.be.true);",
+                  "pm.test('code INVALID_REQUEST', () => pm.expect(e.code).to.eql('INVALID_REQUEST'));",
+                  "pm.test('details nombra el campo', () => pm.expect(e.details[0].campo).to.eql('producto'));",
+                  "pm.test('sin reason', () => pm.expect(e.reason).to.be.undefined);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/cotizaciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "cotizaciones"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto\": \"\",\n  \"referencia_cliente\": \"postman-errores\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "400 INVALID_REQUEST: regla de negocio con reason",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));",
+                  "const e = pm.response.json().error;",
+                  "pm.test('estructura del catálogo', () => pm.expect(Object.keys(e).every(k => ['code','message','trace_id','details','reason'].includes(k))).to.be.true);",
+                  "pm.test('code, message y trace_id presentes', () => { pm.expect(e.code).to.be.a('string'); pm.expect(e.message).to.be.a('string'); pm.expect(e.trace_id).to.be.a('string'); });",
+                  "pm.test('X-Correlation-Id presente', () => pm.expect(pm.response.headers.has('X-Correlation-Id')).to.be.true);",
+                  "pm.test('code INVALID_REQUEST', () => pm.expect(e.code).to.eql('INVALID_REQUEST'));",
+                  "pm.test('reason KYC_NO_VERIFICADO', () => pm.expect(e.reason).to.eql('KYC_NO_VERIFICADO'));",
+                  "pm.test('details vacío', () => pm.expect(e.details).to.eql([]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/cotizaciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "cotizaciones"
+              ]
+            },
+            "description": "Requiere un cliente registrado cuyo KYC no está verificado (socio_cliente_sin_kyc).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto\": \"microseguro_vida\",\n  \"referencia_cliente\": \"postman-errores\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  },\n  \"cliente\": {\n    \"tipo_documento\": \"{{socio_cliente_tipo}}\",\n    \"numero_documento\": \"{{socio_cliente_sin_kyc}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "401 INVALID_TOKEN: sin token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "const e = pm.response.json().error;",
+                  "pm.test('estructura del catálogo', () => pm.expect(Object.keys(e).every(k => ['code','message','trace_id','details','reason'].includes(k))).to.be.true);",
+                  "pm.test('code, message y trace_id presentes', () => { pm.expect(e.code).to.be.a('string'); pm.expect(e.message).to.be.a('string'); pm.expect(e.trace_id).to.be.a('string'); });",
+                  "pm.test('X-Correlation-Id presente', () => pm.expect(pm.response.headers.has('X-Correlation-Id')).to.be.true);",
+                  "pm.test('code INVALID_TOKEN', () => pm.expect(e.code).to.eql('INVALID_TOKEN'));",
+                  "pm.test('WWW-Authenticate', () => pm.expect(pm.response.headers.get('WWW-Authenticate')).to.include('Bearer'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/cotizaciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "cotizaciones"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto\": \"microseguro_vida\",\n  \"referencia_cliente\": \"postman-errores\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "401 INVALID_TOKEN: token mal formado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "const e = pm.response.json().error;",
+                  "pm.test('estructura del catálogo', () => pm.expect(Object.keys(e).every(k => ['code','message','trace_id','details','reason'].includes(k))).to.be.true);",
+                  "pm.test('code, message y trace_id presentes', () => { pm.expect(e.code).to.be.a('string'); pm.expect(e.message).to.be.a('string'); pm.expect(e.trace_id).to.be.a('string'); });",
+                  "pm.test('X-Correlation-Id presente', () => pm.expect(pm.response.headers.has('X-Correlation-Id')).to.be.true);",
+                  "pm.test('code INVALID_TOKEN', () => pm.expect(e.code).to.eql('INVALID_TOKEN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer no-es-un-jwt",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/cotizaciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "cotizaciones"
+              ]
+            },
+            "description": "TOKEN_EXPIRED (token vencido) no se provoca aquí: el token dura 1 hora. Se prueba en pytest (test_catalogo_errores.py).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto\": \"microseguro_vida\",\n  \"referencia_cliente\": \"postman-errores\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "403 ENDPOINT_NOT_AUTHORIZED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('socio_sin_contrato_token')) { pm.test.skip('Sin el socio sembrado (socio_sin_contrato_token)'); }",
+                  "else {",
+                  "  pm.test('Responde 403', () => pm.response.to.have.status(403));",
+                  "  const e = pm.response.json().error;",
+                  "  pm.test('estructura del catálogo', () => pm.expect(Object.keys(e).every(k => ['code','message','trace_id','details','reason'].includes(k))).to.be.true);",
+                  "  pm.test('code, message y trace_id presentes', () => { pm.expect(e.code).to.be.a('string'); pm.expect(e.message).to.be.a('string'); pm.expect(e.trace_id).to.be.a('string'); });",
+                  "  pm.test('X-Correlation-Id presente', () => pm.expect(pm.response.headers.has('X-Correlation-Id')).to.be.true);",
+                  "  pm.test('code ENDPOINT_NOT_AUTHORIZED', () => pm.expect(e.code).to.eql('ENDPOINT_NOT_AUTHORIZED'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_sin_contrato_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/cotizaciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "cotizaciones"
+              ]
+            },
+            "description": "Siembre un socio sin endpoints (SOCIO_DEMO_ENDPOINTS vacío), pida su token y guárdelo en socio_sin_contrato_token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto\": \"microseguro_vida\",\n  \"referencia_cliente\": \"postman-errores\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "404 RESOURCE_NOT_FOUND: ruta inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "const e = pm.response.json().error;",
+                  "pm.test('estructura del catálogo', () => pm.expect(Object.keys(e).every(k => ['code','message','trace_id','details','reason'].includes(k))).to.be.true);",
+                  "pm.test('code, message y trace_id presentes', () => { pm.expect(e.code).to.be.a('string'); pm.expect(e.message).to.be.a('string'); pm.expect(e.trace_id).to.be.a('string'); });",
+                  "pm.test('X-Correlation-Id presente', () => pm.expect(pm.response.headers.has('X-Correlation-Id')).to.be.true);",
+                  "pm.test('code RESOURCE_NOT_FOUND', () => pm.expect(e.code).to.eql('RESOURCE_NOT_FOUND'));",
+                  "pm.test('sin el formato de Starlette', () => pm.expect(pm.response.json().detail).to.be.undefined);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/no-existe",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "no-existe"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "405 INVALID_REQUEST: método no permitido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 405', () => pm.response.to.have.status(405));",
+                  "const e = pm.response.json().error;",
+                  "pm.test('estructura del catálogo', () => pm.expect(Object.keys(e).every(k => ['code','message','trace_id','details','reason'].includes(k))).to.be.true);",
+                  "pm.test('code, message y trace_id presentes', () => { pm.expect(e.code).to.be.a('string'); pm.expect(e.message).to.be.a('string'); pm.expect(e.trace_id).to.be.a('string'); });",
+                  "pm.test('X-Correlation-Id presente', () => pm.expect(pm.response.headers.has('X-Correlation-Id')).to.be.true);",
+                  "pm.test('code INVALID_REQUEST', () => pm.expect(e.code).to.eql('INVALID_REQUEST'));",
+                  "pm.test('cabecera Allow', () => pm.expect(pm.response.headers.get('Allow')).to.include('POST'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/cotizaciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "cotizaciones"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "409 IDEMPOTENCY_CONFLICT: clave con otro cuerpo",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('socio_idem_errores', 'postman-errores-' + pm.variables.replaceIn('{{$guid}}'));",
+                  "pm.sendRequest({",
+                  "  url: pm.variables.get('socios_url') + '/partners/v1/cotizaciones', method: 'POST',",
+                  "  header: { 'Authorization': 'Bearer ' + pm.collectionVariables.get('socio_token'), 'Content-Type': 'application/json',",
+                  "            'X-Idempotency-Key': pm.collectionVariables.get('socio_idem_errores') },",
+                  "  body: { mode: 'raw', raw: JSON.stringify({ producto: 'microseguro_vida', referencia_cliente: 'postman-errores',",
+                  "                                             datos: { edad: 35, suma_asegurada: 50000000 } }) }",
+                  "}, () => {});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "const e = pm.response.json().error;",
+                  "pm.test('estructura del catálogo', () => pm.expect(Object.keys(e).every(k => ['code','message','trace_id','details','reason'].includes(k))).to.be.true);",
+                  "pm.test('code, message y trace_id presentes', () => { pm.expect(e.code).to.be.a('string'); pm.expect(e.message).to.be.a('string'); pm.expect(e.trace_id).to.be.a('string'); });",
+                  "pm.test('X-Correlation-Id presente', () => pm.expect(pm.response.headers.has('X-Correlation-Id')).to.be.true);",
+                  "pm.test('code IDEMPOTENCY_CONFLICT', () => pm.expect(e.code).to.eql('IDEMPOTENCY_CONFLICT'));",
+                  "pm.test('sin reason ni Retry-After', () => { pm.expect(e.reason).to.be.undefined; pm.expect(pm.response.headers.has('Retry-After')).to.be.false; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{socio_idem_errores}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/cotizaciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "cotizaciones"
+              ]
+            },
+            "description": "El script previo cotiza con la clave y el cuerpo original; esta solicitud reutiliza la clave con otro cuerpo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto\": \"microseguro_vida\",\n  \"referencia_cliente\": \"postman-errores-otro\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "429 RATE_LIMIT_EXCEEDED: cuota excedida",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "['a', 'b'].forEach(k => pm.sendRequest({",
+                  "  url: pm.variables.get('socios_url') + '/partners/v1/cotizaciones', method: 'POST',",
+                  "  header: { 'Authorization': 'Bearer ' + pm.collectionVariables.get('socio_cuota_token'), 'Content-Type': 'application/json',",
+                  "            'X-Idempotency-Key': 'postman-cuota-' + k + '-' + Date.now() },",
+                  "  body: { mode: 'raw', raw: JSON.stringify({ producto: 'microseguro_vida', referencia_cliente: 'postman-cuota',",
+                  "                                             datos: { edad: 35, suma_asegurada: 50000000 } }) }",
+                  "}, () => {}));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('socio_cuota_token')) { pm.test.skip('Sin el socio sembrado (socio_cuota_token)'); }",
+                  "else {",
+                  "  pm.test('Responde 429', () => pm.response.to.have.status(429));",
+                  "  const e = pm.response.json().error;",
+                  "  pm.test('estructura del catálogo', () => pm.expect(Object.keys(e).every(k => ['code','message','trace_id','details','reason'].includes(k))).to.be.true);",
+                  "  pm.test('code, message y trace_id presentes', () => { pm.expect(e.code).to.be.a('string'); pm.expect(e.message).to.be.a('string'); pm.expect(e.trace_id).to.be.a('string'); });",
+                  "  pm.test('X-Correlation-Id presente', () => pm.expect(pm.response.headers.has('X-Correlation-Id')).to.be.true);",
+                  "  pm.test('code RATE_LIMIT_EXCEEDED', () => pm.expect(e.code).to.eql('RATE_LIMIT_EXCEEDED'));",
+                  "  pm.test('Retry-After', () => pm.expect(pm.response.headers.get('Retry-After')).to.match(/^[0-9]+$/));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_cuota_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/cotizaciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "cotizaciones"
+              ]
+            },
+            "description": "Siembre un socio con cuota de 1 por segundo (cuota_rps=1), pida su token y guárdelo en socio_cuota_token. El script previo gasta la cuota con dos solicitudes. 500 y 503 se prueban en pytest (test_catalogo_errores.py, test_circuito.py).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto\": \"microseguro_vida\",\n  \"referencia_cliente\": \"postman-errores\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "description": "Un caso por cada código del catálogo alcanzable por HTTP. Ver services/socios/docs/api/errores-y-reintentos.md."
     }
   ],
   "variable": [
@@ -13623,6 +14284,18 @@
     {
       "key": "socio_espera",
       "value": "0"
+    },
+    {
+      "key": "socio_idem_errores",
+      "value": ""
+    },
+    {
+      "key": "socio_sin_contrato_token",
+      "value": ""
+    },
+    {
+      "key": "socio_cuota_token",
+      "value": ""
     }
   ]
 }

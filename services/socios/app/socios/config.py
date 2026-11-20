@@ -27,8 +27,11 @@ class ConfigSocios:
     jwt_ttl_s: int = 3600
     timeout_cotizacion_s: float = 3.0
     timeout_identidad_s: float = 3.0
-    # La firma sella el PDF de la póliza: tarda más que una consulta.
-    timeout_suscripcion_s: float = 10.0
+    # La firma sella el PDF de la póliza: tarda más que una consulta. Identidad + Suscripción (3 + 6) debe quedar por
+    # debajo de los 10 s que el socio espera antes de reintentar con la misma clave (HU34).
+    timeout_suscripcion_s: float = 6.0
+    circuito_umbral_fallos: int = 5
+    circuito_enfriamiento_s: float = 30.0
     ttl_idempotencia_s: int = 24 * 3600
     ttl_contratos_s: float = 60.0
 
@@ -87,5 +90,7 @@ class ConfigSocios:
             jwt_ttl_s=int(e.get("SOCIOS_JWT_TTL_S", "3600")),
             timeout_cotizacion_s=float(e.get("SOCIOS_TIMEOUT_COTIZACION_S", "3.0")),
             timeout_identidad_s=float(e.get("SOCIOS_TIMEOUT_IDENTIDAD_S", "3.0")),
-            timeout_suscripcion_s=float(e.get("SOCIOS_TIMEOUT_SUSCRIPCION_S", "10.0")),
+            timeout_suscripcion_s=float(e.get("SOCIOS_TIMEOUT_SUSCRIPCION_S", "6.0")),
+            circuito_umbral_fallos=int(e.get("SOCIOS_CIRCUITO_UMBRAL_FALLOS", "5")),
+            circuito_enfriamiento_s=float(e.get("SOCIOS_CIRCUITO_ENFRIAMIENTO_S", "30")),
         )

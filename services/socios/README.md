@@ -20,7 +20,9 @@ Las decisiones de diseño están en [ADR-0025](../../docs/adr/0025-ms-socios-fac
 | `GET /partners/v1/status` | Pública | Estado del API (`operativo`, `degradado` o `no_disponible`) y de sus dependencias, sin datos internos. 503 si no puede cotizar. |
 | `GET /health` | Interna (Kubernetes) | Liveness. Fuera del borde. |
 
-Errores de `/partners/v1`, con el formato `{"error": {"code", "message", "details", "trace_id"}}`:
+Errores de `/partners/v1`, con el formato `{"error": {"code", "message", "trace_id", "reason"?, "details"}}`. La referencia completa
+(catálogo, motivos y política de reintentos) está en [`docs/api/errores-y-reintentos.md`](docs/api/errores-y-reintentos.md) y el diseño en
+[ADR-0027](../../docs/adr/0027-ms-socios-catalogo-de-errores.md):
 
 | Código | HTTP | Qué hacer |
 |---|---|---|
@@ -28,13 +30,12 @@ Errores de `/partners/v1`, con el formato `{"error": {"code", "message", "detail
 | `TOKEN_EXPIRED` | 401 | Pida un token nuevo. |
 | `ENDPOINT_NOT_AUTHORIZED` | 403 | El contrato no habilita el endpoint. |
 | `RESOURCE_NOT_FOUND` | 404 | La venta no existe o es de otro socio (no se distingue). |
-| `INVALID_REQUEST` | 400 / 422 | Falta `X-Idempotency-Key` (400), o el cuerpo, el producto, los datos o el cliente no son válidos (422, con `details`). Un cliente que no puede comprar trae el motivo: `CLIENTE_NO_REGISTRADO`, `KYC_NO_VERIFICADO` o `CONSENTIMIENTO_NO_VIGENTE`. Un OTP erróneo trae `OTP_INVALIDO`. |
-| `IDEMPOTENCY_CONFLICT` | 409 | La clave ya se usó con otro cuerpo o la original sigue en proceso. También cubre los conflictos de negocio de la venta (cotización ya usada o vencida, firma vencida...): el motivo va en `details`. No reintente con esa clave. |
+| `INVALID_REQUEST` | 400 | La cabecera, el cuerpo o los datos no son válidos (`details`), o una regla de negocio no se cumple (`reason`: `KYC_NO_VERIFICADO`, `COTIZACION_YA_USADA`, `OTP_INVALIDO`...). |
+| `IDEMPOTENCY_CONFLICT` | 409 | La clave ya se usó con otro cuerpo: no reintente con ella. Con `reason: SOLICITUD_EN_PROCESO`, la original sigue en curso: reintente con la misma clave tras `Retry-After`. |
 | `RATE_LIMIT_EXCEEDED` | 429 | Espere `Retry-After` segundos. |
 | `SERVICE_UNAVAILABLE` | 503 | Cotización, Identidad, Suscripción o el almacén no responden; reintente con la misma clave. |
+| `SERVICE_DEGRADED` | 503 | El circuito hacia una dependencia está abierto: reintente tras `Retry-After`. |
 | `INTERNAL_ERROR` | 500 | Reporte el `trace_id`. |
-
-Los códigos de negocio de la venta van en `details` mientras HU34 define el catálogo definitivo (ver ADR-0026).
 
 ## Venta embebida (HU33)
 
@@ -96,5 +97,7 @@ fachada frente a Cotización directa (criterio 10).
 | `SOCIOS_JWT_TTL_S` | No | 3600. |
 | `SOCIOS_TIMEOUT_COTIZACION_S` | No | 3. |
 | `SOCIOS_TIMEOUT_IDENTIDAD_S` | No | 3. |
-| `SOCIOS_TIMEOUT_SUSCRIPCION_S` | No | 10 (la firma sella el PDF). |
+| `SOCIOS_TIMEOUT_SUSCRIPCION_S` | No | 6. La suma de los tiempos de una operación (Identidad 3 + Suscripción 6) debe quedar por debajo de los 10 s que el socio espera. |
+| `SOCIOS_CIRCUITO_UMBRAL_FALLOS` | No | 5 fallos seguidos (timeout, conexión o 5xx) abren el circuito de esa dependencia. |
+| `SOCIOS_CIRCUITO_ENFRIAMIENTO_S` | No | 30. Con el circuito abierto, 503 `SERVICE_DEGRADED` con `Retry-After`; vencido, la primera solicitud sondea. |
 | `SOLVENTA_MODO_DESARROLLO` | Nunca en staging | Habilita SQLite, almacén en memoria y un secreto JWT de desarrollo. |
