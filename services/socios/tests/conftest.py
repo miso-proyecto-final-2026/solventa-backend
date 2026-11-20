@@ -14,10 +14,17 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 
 from app.main import app
-from tests.dobles import SECRETO_JWT_PRUEBA, SECRETO_PRUEBA, CotizacionesFalsas
+from tests.dobles import (
+    SECRETO_JWT_PRUEBA,
+    SECRETO_PRUEBA,
+    CotizacionesFalsas,
+    IdentidadFalsa,
+    SuscripcionesFalsas,
+)
 
 # bcrypt con el costo mínimo: las pruebas no miden el costo, solo el comportamiento.
 RONDAS_PRUEBA = 4
+TODOS_LOS_ENDPOINTS = ("cotizaciones:crear", "suscripciones:crear", "suscripciones:firmar", "polizas:consultar")
 
 
 @pytest.fixture(autouse=True)
@@ -35,7 +42,7 @@ def fabrica():
 
 @pytest.fixture
 def sembrar(fabrica):
-    def _sembrar(client_id="socio-a", endpoints=("cotizaciones:crear",), cuota_rps=50, secreto=SECRETO_PRUEBA, version="v1"):
+    def _sembrar(client_id="socio-a", endpoints=TODOS_LOS_ENDPOINTS, cuota_rps=50, secreto=SECRETO_PRUEBA, version="v1"):
         with fabrica.begin() as sesion:
             return guardar_socio(
                 sesion,
@@ -63,7 +70,17 @@ def cotizaciones():
 
 
 @pytest.fixture
-def ensamblado(fabrica, almacen, cotizaciones):
+def identidad():
+    return IdentidadFalsa()
+
+
+@pytest.fixture
+def suscripciones():
+    return SuscripcionesFalsas()
+
+
+@pytest.fixture
+def ensamblado(fabrica, almacen, cotizaciones, identidad, suscripciones):
     return Ensamblado(
         # Sin caché de contratos en las pruebas de la API: cada cambio de contrato se ve de inmediato.
         registro=RegistroSocios(fabrica, ttl_contratos_s=0),
@@ -73,6 +90,8 @@ def ensamblado(fabrica, almacen, cotizaciones):
         limitador=LimitadorCuota(almacen, reloj=lambda: 1_800_000_000.0),
         idempotencia=Idempotencia(almacen),
         cotizaciones=cotizaciones,
+        identidad=identidad,
+        suscripciones=suscripciones,
     )
 
 

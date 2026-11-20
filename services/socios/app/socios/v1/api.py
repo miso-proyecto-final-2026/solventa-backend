@@ -22,6 +22,7 @@ from app.socios.acceso import ENDPOINT_COTIZACIONES, SocioAutorizado, exigir_end
 from app.socios.almacen import ErrorAlmacen
 from app.socios.errores import FaltaClaveIdempotencia
 from app.socios.idempotencia import huella
+from app.socios.identificacion import ClienteIn, identificar_exigiendo
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +49,13 @@ class SolicitudCotizacionIn(BaseModel):
         examples=["cli-000123"],
     )
     datos: dict[str, Any] = Field(examples=[{"edad": 35, "suma_asegurada": 50000000}])
+    cliente: ClienteIn | None = Field(
+        default=None,
+        description=(
+            "Cliente registrado en Solventa (KYC verificado y consentimiento vigente). Con él la cotización se puede "
+            "suscribir (HU33); sin él es informativa y no se puede suscribir."
+        ),
+    )
 
 
 class CoberturaOut(BaseModel):
@@ -164,7 +172,10 @@ async def cotizar(
 ) -> JSONResponse:
     clave = _clave_idempotencia(x_idempotency_key)
     estado = request.app.state
-    huella_cuerpo = huella({"operacion": ENDPOINT_COTIZACIONES, "version": VERSION, **solicitud.model_dump(mode="json")})
+    cuerpo = solicitud.model_dump(mode="json")
+    if cuerpo["cliente"] is None:
+        del cuerpo["cliente"]  # la huella de una cotización informativa no cambia respecto a HU32
+    huella_cuerpo = huella({"operacion": ENDPOINT_COTIZACIONES, "version": VERSION, **cuerpo})
 
     guardada = await estado.idempotencia.reservar(socio.client_id, clave, huella_cuerpo)
     if guardada is not None:
@@ -172,9 +183,11 @@ async def cotizar(
         return JSONResponse(guardada.cuerpo, status_code=guardada.status, headers={"X-Idempotent-Replayed": "true"})
 
     try:
-        crudo = await estado.cotizaciones.crear(
-            cliente_id_para(socio.client_id, solicitud.referencia_cliente), solicitud.producto, solicitud.datos
-        )
+        if solicitud.cliente is not None:
+            cliente_id = await identificar_exigiendo(estado.identidad, solicitud.cliente)
+        else:
+            cliente_id = cliente_id_para(socio.client_id, solicitud.referencia_cliente)
+        crudo = await estado.cotizaciones.crear(cliente_id, solicitud.producto, solicitud.datos)
     except BaseException:
         await estado.idempotencia.liberar(socio.client_id, clave)
         raise

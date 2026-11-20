@@ -11,7 +11,7 @@ Variables:
 - SOCIOS_DATABASE_URL o DATABASE_URL: base de MS Socios (SQLite local si falta y SOLVENTA_MODO_DESARROLLO=1).
 - SOCIO_DEMO_CLIENT_SECRET (obligatoria, 24 a 72 caracteres).
 - SOCIO_DEMO_CLIENT_ID (por defecto `socio-demo`), SOCIO_DEMO_NOMBRE, SOCIO_DEMO_CUOTA_RPS (por defecto 5),
-  SOCIO_DEMO_ENDPOINTS (separados por coma; por defecto `cotizaciones:crear`).
+  SOCIO_DEMO_ENDPOINTS (separados por coma; por defecto los cuatro de HU32 y HU33).
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.socios import repositorio as repo
-from app.socios.acceso import ENDPOINT_COTIZACIONES, ENDPOINTS_CONOCIDOS
+from app.socios.acceso import ENDPOINTS_CONOCIDOS
 from app.socios.registro import VERSION_V1
 from app.socios.secretos import hash_secreto
 from sqlalchemy.orm import Session, sessionmaker
@@ -32,6 +32,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.configuracion import ErrorConfiguracion, permitir_sustituto_local
 
 LONGITUD_MINIMA_SECRETO = 24
+# Los de HU32 (cotizar) y HU33 (vender, firmar y consultar): el socio de prueba recorre la venta completa.
+ENDPOINTS_POR_DEFECTO = "cotizaciones:crear,suscripciones:crear,suscripciones:firmar,polizas:consultar"
 
 
 def sembrar(
@@ -84,7 +86,7 @@ def main(env: dict[str, str] | None = None) -> int:
     if engine.dialect.name == "sqlite":
         repo.crear_tablas_locales(engine)
     client_id = e.get("SOCIO_DEMO_CLIENT_ID", "socio-demo")
-    endpoints = [x.strip() for x in e.get("SOCIO_DEMO_ENDPOINTS", ENDPOINT_COTIZACIONES).split(",") if x.strip()]
+    endpoints = [x.strip() for x in e.get("SOCIO_DEMO_ENDPOINTS", ENDPOINTS_POR_DEFECTO).split(",") if x.strip()]
     try:
         sembrar(
             sessionmaker(bind=engine, expire_on_commit=False),

@@ -80,6 +80,7 @@ def nueva_suscripcion(
     coberturas: list[dict[str, Any]] | None = None,
     cotizacion_version_reglas: str | None = None,
     asesor_id: str | None = None,
+    socio_client_id: str | None = None,
     cotizacion_vigente_hasta: datetime | None = None,
 ) -> SuscripcionDB:
     """Crea la saga en `EN_PROGRESO` / `DECISION`. Puede lanzar IntegrityError (clave repetida o cotización ya usada)."""
@@ -102,6 +103,7 @@ def nueva_suscripcion(
         coberturas=coberturas,
         cotizacion_version_reglas=cotizacion_version_reglas,
         asesor_id=asesor_id,
+        socio_client_id=socio_client_id,
         cotizacion_vigente_hasta=cotizacion_vigente_hasta,
         created_at=ahora,
         updated_at=ahora,

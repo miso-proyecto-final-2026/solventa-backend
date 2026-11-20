@@ -12222,6 +12222,1103 @@
           }
         }
       ]
+    },
+    {
+      "name": "MS Socios — suscripción (HU33)",
+      "description": "Venta embebida del socio. Requiere el socio sembrado con los cuatro endpoints, un cliente registrado con KYC verificado y consentimiento vigente (socio_cliente_documento) y otro con KYC pendiente (socio_cliente_sin_kyc). Servicios: Identidad, Cotización, Perfilamiento, Suscripción, Pagos y Socios.",
+      "item": [
+        {
+          "name": "Obtener token (client credentials)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('socio_token', pm.response.json().access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{socios_url}}/oauth/token",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "description": "Necesita el socio sembrado con los cuatro endpoints (scripts/sembrar_socio_demo.py)."
+          }
+        },
+        {
+          "name": "Cotizar con el cliente registrado (201)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test('no devuelve el documento ni el cliente interno', () => { const t = pm.response.text(); pm.expect(t).to.not.include(pm.collectionVariables.get('socio_cliente_documento')); pm.expect(r).to.not.have.property('cliente_id'); });",
+                  "pm.collectionVariables.set('socio_cotizacion_id', r.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/cotizaciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "cotizaciones"
+              ]
+            },
+            "description": "El cliente debe existir en Solventa con KYC VERIFICADO y consentimiento vigente (variable socio_cliente_documento).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto\": \"microseguro_vida\",\n  \"referencia_cliente\": \"cliente-postman-hu33\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  },\n  \"cliente\": {\n    \"tipo_documento\": \"{{socio_cliente_tipo}}\",\n    \"numero_documento\": \"{{socio_cliente_documento}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cotizar con un cliente sin KYC (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('motivo de negocio en details', () => pm.expect(pm.response.json().error.details[0].motivo).to.eql('KYC_NO_VERIFICADO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/cotizaciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "cotizaciones"
+              ]
+            },
+            "description": "Requiere un cliente registrado cuyo KYC no está verificado (socio_cliente_sin_kyc).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto\": \"microseguro_vida\",\n  \"referencia_cliente\": \"cliente-sin-kyc\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  },\n  \"cliente\": {\n    \"tipo_documento\": \"{{socio_cliente_tipo}}\",\n    \"numero_documento\": \"{{socio_cliente_sin_kyc}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Suscribir sin X-Idempotency-Key (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/suscripciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "suscripciones"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cotizacion_id\": \"{{socio_cotizacion_id}}\",\n  \"cliente\": {\n    \"tipo_documento\": \"{{socio_cliente_tipo}}\",\n    \"numero_documento\": \"{{socio_cliente_documento}}\"\n  },\n  \"metodo_pago\": \"tok_sim_postman-hu33\",\n  \"acepta_terminos\": true,\n  \"periodicidad_pago\": \"ANUAL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Suscribir sin token (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/suscripciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "suscripciones"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cotizacion_id\": \"{{socio_cotizacion_id}}\",\n  \"cliente\": {\n    \"tipo_documento\": \"{{socio_cliente_tipo}}\",\n    \"numero_documento\": \"{{socio_cliente_documento}}\"\n  },\n  \"metodo_pago\": \"tok_sim_postman-hu33\",\n  \"acepta_terminos\": true,\n  \"periodicidad_pago\": \"ANUAL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Suscribir con el número de tarjeta (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/suscripciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "suscripciones"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cotizacion_id\": \"{{socio_cotizacion_id}}\",\n  \"cliente\": {\n    \"tipo_documento\": \"{{socio_cliente_tipo}}\",\n    \"numero_documento\": \"{{socio_cliente_documento}}\"\n  },\n  \"metodo_pago\": \"4242 4242 4242 4242\",\n  \"acepta_terminos\": true,\n  \"periodicidad_pago\": \"ANUAL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Suscribir con un cliente sin KYC (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('motivo KYC_NO_VERIFICADO', () => pm.expect(pm.response.json().error.details[0].motivo).to.eql('KYC_NO_VERIFICADO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/suscripciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "suscripciones"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cotizacion_id\": \"{{socio_cotizacion_id}}\",\n  \"cliente\": {\n    \"tipo_documento\": \"{{socio_cliente_tipo}}\",\n    \"numero_documento\": \"{{socio_cliente_sin_kyc}}\"\n  },\n  \"metodo_pago\": \"tok_sim_postman-hu33\",\n  \"acepta_terminos\": true,\n  \"periodicidad_pago\": \"ANUAL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Suscribir (202)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('socio_idem_venta', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 202', () => pm.response.to.have.status(202));",
+                  "const r = pm.response.json();",
+                  "pm.test('trae el id y dónde consultar', () => { pm.expect(r.id).to.be.a('string'); pm.expect(r.poliza_url).to.eql('/partners/v1/polizas/' + r.id); });",
+                  "pm.collectionVariables.set('socio_suscripcion_id', r.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{socio_idem_venta}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/suscripciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "suscripciones"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cotizacion_id\": \"{{socio_cotizacion_id}}\",\n  \"cliente\": {\n    \"tipo_documento\": \"{{socio_cliente_tipo}}\",\n    \"numero_documento\": \"{{socio_cliente_documento}}\"\n  },\n  \"metodo_pago\": \"tok_sim_postman-hu33\",\n  \"acepta_terminos\": true,\n  \"periodicidad_pago\": \"ANUAL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Repetir con la misma clave (misma venta)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 202', () => pm.response.to.have.status(202));",
+                  "pm.test('misma venta', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('socio_suscripcion_id')));",
+                  "pm.test('marcada como repetición', () => pm.expect(pm.response.headers.get('X-Idempotent-Replayed')).to.eql('true'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{socio_idem_venta}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/suscripciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "suscripciones"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cotizacion_id\": \"{{socio_cotizacion_id}}\",\n  \"cliente\": {\n    \"tipo_documento\": \"{{socio_cliente_tipo}}\",\n    \"numero_documento\": \"{{socio_cliente_documento}}\"\n  },\n  \"metodo_pago\": \"tok_sim_postman-hu33\",\n  \"acepta_terminos\": true,\n  \"periodicidad_pago\": \"ANUAL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Misma clave con otro contenido (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('IDEMPOTENCY_CONFLICT', () => pm.expect(pm.response.json().error.code).to.eql('IDEMPOTENCY_CONFLICT'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{socio_idem_venta}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/suscripciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "suscripciones"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cotizacion_id\": \"{{socio_cotizacion_id}}\",\n  \"cliente\": {\n    \"tipo_documento\": \"{{socio_cliente_tipo}}\",\n    \"numero_documento\": \"{{socio_cliente_documento}}\"\n  },\n  \"metodo_pago\": \"tok_sim_postman-hu33\",\n  \"acepta_terminos\": true,\n  \"periodicidad_pago\": \"MENSUAL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Póliza inexistente (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('RESOURCE_NOT_FOUND con trace_id', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('RESOURCE_NOT_FOUND'); pm.expect(e.trace_id).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/polizas/00000000-0000-4000-8000-000000000000",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "polizas",
+                "00000000-0000-4000-8000-000000000000"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Póliza de otro socio (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('socio_otro_token')) { pm.test.skip('Sin segundo socio sembrado (socio_otro_token)'); }",
+                  "else { pm.test('Responde 404', () => pm.response.to.have.status(404)); pm.test('igual que una inexistente', () => pm.expect(pm.response.json().error.code).to.eql('RESOURCE_NOT_FOUND')); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_otro_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/polizas/{{socio_suscripcion_id}}",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "polizas",
+                "{{socio_suscripcion_id}}"
+              ]
+            },
+            "description": "Aislamiento (criterio 10). Siembre un segundo socio y guarde su token en socio_otro_token."
+          }
+        },
+        {
+          "name": "Consultar hasta que se pueda firmar (COBRO_REALIZADO)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "const n = Number(pm.collectionVariables.get('socio_espera') || 0);",
+                  "if (r.estado !== 'COBRO_REALIZADO' && n < 30) {",
+                  "  pm.collectionVariables.set('socio_espera', n + 1);",
+                  "  postman.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "  pm.collectionVariables.set('socio_espera', 0);",
+                  "  pm.test('la venta llegó a COBRO_REALIZADO', () => pm.expect(r.estado).to.eql('COBRO_REALIZADO'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/polizas/{{socio_suscripcion_id}}",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "polizas",
+                "{{socio_suscripcion_id}}"
+              ]
+            },
+            "description": "La decisión y el cobro son asíncronos: la petición se repite hasta 30 veces (use un retardo de 1000 ms entre peticiones en el Runner o Newman: --delay-request 1000)."
+          }
+        },
+        {
+          "name": "Documento por firmar (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test('hash sha256 y estado PENDIENTE', () => { pm.expect(r.documento_sha256).to.match(/^[0-9a-f]{64}$/); pm.expect(r.estado).to.eql('PENDIENTE'); });",
+                  "pm.collectionVariables.set('socio_hash_documento', r.documento_sha256);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/suscripciones/{{socio_suscripcion_id}}/documento-firma",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "suscripciones",
+                "{{socio_suscripcion_id}}",
+                "documento-firma"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "PDF del documento (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('es un PDF sin caché', () => { pm.expect(pm.response.headers.get('Content-Type')).to.include('application/pdf'); pm.expect(pm.response.headers.get('Cache-Control')).to.eql('no-store'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/suscripciones/{{socio_suscripcion_id}}/documento-firma/pdf",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "suscripciones",
+                "{{socio_suscripcion_id}}",
+                "documento-firma",
+                "pdf"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Enviar el código de firma al cliente (202)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 202', () => pm.response.to.have.status(202));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/suscripciones/{{socio_suscripcion_id}}/firma/codigo",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "suscripciones",
+                "{{socio_suscripcion_id}}",
+                "firma",
+                "codigo"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Firmar con un código erróneo (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('motivo OTP_INVALIDO', () => pm.expect(pm.response.json().error.details[0].motivo).to.eql('OTP_INVALIDO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/suscripciones/{{socio_suscripcion_id}}/firma",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "suscripciones",
+                "{{socio_suscripcion_id}}",
+                "firma"
+              ]
+            },
+            "description": "Gasta uno de los intentos de firma del cliente.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documento_sha256\": \"{{socio_hash_documento}}\",\n  \"documento_revisado\": true,\n  \"codigo\": \"000000\",\n  \"canal\": \"MOVIL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Firmar con el código del cliente (200, EMITIDA)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('socio_idem_firma', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test('la póliza queda emitida', () => pm.expect(r.estado).to.eql('EMITIDA'));",
+                  "pm.test('no expone datos internos', () => { pm.expect(r).to.not.have.property('poliza_id'); pm.expect(r).to.not.have.property('socio_client_id'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{socio_idem_firma}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/suscripciones/{{socio_suscripcion_id}}/firma",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "suscripciones",
+                "{{socio_suscripcion_id}}",
+                "firma"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documento_sha256\": \"{{socio_hash_documento}}\",\n  \"documento_revisado\": true,\n  \"codigo\": \"{{socio_otp}}\",\n  \"canal\": \"MOVIL\",\n  \"dispositivo\": \"Postman HU33\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Repetir la firma con la misma clave (misma firma)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('marcada como repetición', () => pm.expect(pm.response.headers.get('X-Idempotent-Replayed')).to.eql('true'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{socio_idem_firma}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/suscripciones/{{socio_suscripcion_id}}/firma",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "suscripciones",
+                "{{socio_suscripcion_id}}",
+                "firma"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documento_sha256\": \"{{socio_hash_documento}}\",\n  \"documento_revisado\": true,\n  \"codigo\": \"{{socio_otp}}\",\n  \"canal\": \"MOVIL\",\n  \"dispositivo\": \"Postman HU33\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Consultar la póliza emitida (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test('EMITIDA con póliza vigente', () => { pm.expect(r.estado).to.eql('EMITIDA'); pm.expect(r.poliza.estado).to.eql('VIGENTE'); pm.expect(r.poliza.numero_poliza).to.be.a('string'); });",
+                  "pm.test('firma registrada', () => pm.expect(r.firma.estado).to.eql('FIRMADA'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{socio_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/polizas/{{socio_suscripcion_id}}",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "polizas",
+                "{{socio_suscripcion_id}}"
+              ]
+            },
+            "description": "El certificado y la confirmación llegan al cliente por correo (HU22) al emitirse."
+          }
+        }
+      ]
     }
   ],
   "variable": [
@@ -12486,6 +13583,46 @@
     {
       "key": "socio_cotizacion_id",
       "value": ""
+    },
+    {
+      "key": "socio_cliente_tipo",
+      "value": "CC"
+    },
+    {
+      "key": "socio_cliente_documento",
+      "value": ""
+    },
+    {
+      "key": "socio_cliente_sin_kyc",
+      "value": ""
+    },
+    {
+      "key": "socio_suscripcion_id",
+      "value": ""
+    },
+    {
+      "key": "socio_idem_venta",
+      "value": ""
+    },
+    {
+      "key": "socio_idem_firma",
+      "value": ""
+    },
+    {
+      "key": "socio_hash_documento",
+      "value": ""
+    },
+    {
+      "key": "socio_otp",
+      "value": "123456"
+    },
+    {
+      "key": "socio_otro_token",
+      "value": ""
+    },
+    {
+      "key": "socio_espera",
+      "value": "0"
     }
   ]
 }

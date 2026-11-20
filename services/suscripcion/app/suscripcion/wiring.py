@@ -39,6 +39,7 @@ from app.suscripcion.documento import cargar_plantilla
 from app.suscripcion.enlace_firma import ServicioEnlaceFirma
 from app.suscripcion.firma import ServicioFirma
 from app.suscripcion.firma_asistida import ServicioFirmaAsistida
+from app.suscripcion.firma_socio import ServicioFirmaSocio
 from app.suscripcion.modelos_db import TABLA_EVENTOS_PROCESADOS
 from app.suscripcion.polizas import GeneradorDocumentos
 from app.suscripcion.proveedor_firma import ProveedorFirmaSimulado
@@ -132,6 +133,11 @@ def construir_servicio_asistida(
         enlaces=enlaces,
         espera_correo=timedelta(seconds=cargar_reglas().correo_espera_segundos),
     )
+
+
+def construir_servicio_socio(servicio: ServicioSuscripcion, firma: ServicioFirma, engine: Engine) -> ServicioFirmaSocio:
+    """Venta embebida del socio (HU33): lo que hace el socio sobre la saga, con los mismos servicios de HU15 y HU21."""
+    return ServicioFirmaSocio(fabrica=sessionmaker(bind=engine, expire_on_commit=False), suscripciones=servicio, firma=firma)
 
 
 def construir_servicio_revision(engine: Engine, clientes: list[httpx.AsyncClient], config: ConfigSuscripcion) -> ServicioRevisionAsistida:

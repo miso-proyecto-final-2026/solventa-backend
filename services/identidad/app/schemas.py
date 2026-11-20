@@ -176,6 +176,21 @@ class ClienteBusquedaOut(BaseModel):
     consentimiento: ConsentimientoResumenOut
 
 
+class IdentificacionClienteIn(BaseModel):
+    """El documento viaja en el cuerpo (no en la URL) para que no quede en los registros de acceso."""
+
+    tipo_documento: str
+    numero_documento: str
+
+
+class IdentificacionClienteOut(BaseModel):
+    """Lo mínimo que MS Socios necesita para decidir si puede vender: sin nombre, correo ni documento."""
+
+    cliente_id: str
+    estado_kyc: str
+    consentimiento_vigente: bool
+
+
 class SesionActualOut(BaseModel):
     """Solo el dueño del token: sin nombre, correo ni documento."""
 

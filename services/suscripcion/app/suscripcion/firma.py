@@ -57,6 +57,7 @@ CANALES = ("MOVIL", "WEB")
 MODALIDAD_CLIENTE = "CLIENTE"
 MODALIDAD_ASISTIDA_PANTALLA = "ASISTIDA_PANTALLA"
 MODALIDAD_ASISTIDA_ENLACE = "ASISTIDA_ENLACE"
+MODALIDAD_SOCIO = "SOCIO"
 MOTIVO_VENCIDA = "FIRMA_VENCIDA"
 MOTIVO_FALLIDA = "FIRMA_FALLIDA"
 COMPENSACION_SOLICITADA = "SOLICITADA"
@@ -102,6 +103,7 @@ class OrigenFirma:
     dispositivo: str | None
     modalidad: str = MODALIDAD_CLIENTE
     asesor_id: str | None = None
+    socio_client_id: str | None = None
 
 
 def firma_gestionable(susc: SuscripcionDB, poliza: PolizaDB | None, vence_en: datetime | None, ahora: datetime) -> bool:
@@ -421,6 +423,7 @@ class ServicioFirma:
                 copia_firmada_s3_key=clave_copia,
                 modalidad=origen.modalidad,
                 asesor_id=origen.asesor_id,
+                socio_client_id=origen.socio_client_id,
                 created_at=ahora,
             )
             try:

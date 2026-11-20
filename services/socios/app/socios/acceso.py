@@ -20,7 +20,12 @@ from app.socios.registro import Contrato
 from app.socios.tokens import ErrorToken, TokenExpiradoError
 
 ENDPOINT_COTIZACIONES = "cotizaciones:crear"
-ENDPOINTS_CONOCIDOS = frozenset({ENDPOINT_COTIZACIONES})
+ENDPOINT_SUSCRIPCIONES_CREAR = "suscripciones:crear"
+ENDPOINT_SUSCRIPCIONES_FIRMAR = "suscripciones:firmar"
+ENDPOINT_POLIZAS_CONSULTAR = "polizas:consultar"
+ENDPOINTS_CONOCIDOS = frozenset(
+    {ENDPOINT_COTIZACIONES, ENDPOINT_SUSCRIPCIONES_CREAR, ENDPOINT_SUSCRIPCIONES_FIRMAR, ENDPOINT_POLIZAS_CONSULTAR}
+)
 _REALM = 'Bearer realm="solventa-partners"'
 
 
