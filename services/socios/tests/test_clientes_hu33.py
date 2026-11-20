@@ -6,8 +6,10 @@ import httpx
 import pytest
 from app.socios.clientes import ClienteIdentidad, ClienteSuscripcion
 from app.socios.errores import (
-    ConflictoDeNegocio,
+    ConflictoIdempotencia,
+    ErrorInterno,
     RecursoNoEncontrado,
+    ReglaDeNegocio,
     ServicioNoDisponible,
     SolicitudInvalida,
 )
@@ -64,8 +66,8 @@ async def test_un_documento_invalido_es_solicitud_invalida_sin_repetir_el_docume
     assert error.value.detalles[0]["campo"] == "cliente" and "123" not in str(error.value.detalles)
 
 
-@pytest.mark.parametrize("estado", [401, 403, 500, 503])
-async def test_otros_estados_de_identidad_son_servicio_no_disponible(estado):
+@pytest.mark.parametrize("estado", [500, 503])
+async def test_un_5xx_de_identidad_es_servicio_no_disponible(estado):
     with pytest.raises(ServicioNoDisponible):
         await _identidad(lambda _p: httpx.Response(estado)).identificar("CC", "100200300")
 
@@ -148,12 +150,12 @@ async def test_el_codigo_y_la_firma_llevan_el_socio_en_el_cuerpo():
     ("respuesta", "esperado"),
     [
         (_error(404, "SUSCRIPCION_NO_ENCONTRADA"), RecursoNoEncontrado),
-        (_error(409, "COTIZACION_YA_USADA"), ConflictoDeNegocio),
-        (_error(409, "CLAVE_IDEMPOTENCIA_REUTILIZADA"), ConflictoDeNegocio),
+        (_error(409, "COTIZACION_YA_USADA"), ReglaDeNegocio),
+        (_error(409, "CLAVE_IDEMPOTENCIA_REUTILIZADA"), ConflictoIdempotencia),
         (_error(422, "VALIDATION_ERROR", detalles=[{"campo": "metodo_pago", "motivo": "x"}]), SolicitudInvalida),
-        (_error(400, "ERROR"), SolicitudInvalida),
-        (_error(403, "OTP_INVALIDO"), SolicitudInvalida),
-        (_error(401, "CLAVE_DE_SERVICIO_INVALIDA"), ServicioNoDisponible),
+        (_error(400, "ERROR"), ErrorInterno),
+        (_error(403, "OTP_INVALIDO"), ReglaDeNegocio),
+        (_error(401, "CLAVE_DE_SERVICIO_INVALIDA"), ErrorInterno),
         (_error(503, "DEPENDENCIA_NO_DISPONIBLE"), ServicioNoDisponible),
         (httpx.Response(500, text="boom"), ServicioNoDisponible),
     ],
@@ -163,21 +165,22 @@ async def test_la_tabla_de_traduccion_de_errores(respuesta, esperado):
         await _suscripcion(lambda _p: respuesta).detalle("s-1", "socio-a")
 
 
-async def test_un_conflicto_conserva_el_motivo_de_negocio():
-    with pytest.raises(ConflictoDeNegocio) as error:
+async def test_un_conflicto_de_negocio_se_traduce_a_su_reason_con_mensaje_propio():
+    with pytest.raises(ReglaDeNegocio) as error:
         await _suscripcion(lambda _p: _error(409, "COTIZACION_YA_USADA", "La cotización ya tiene una suscripción en curso.")).detalle("s", "a")
 
-    assert error.value.detalles == [{"campo": "motivo", "motivo": "COTIZACION_YA_USADA"}]
-    assert error.value.mensaje == "La cotización ya tiene una suscripción en curso."
+    assert error.value.reason == "COTIZACION_YA_USADA" and error.value.detalles == []
+    assert error.value.status == 400
+    assert error.value.mensaje != "La cotización ya tiene una suscripción en curso."
 
 
 async def test_un_otp_erroneo_conserva_el_motivo_y_un_404_no_revela_nada():
-    with pytest.raises(SolicitudInvalida) as otp:
+    with pytest.raises(ReglaDeNegocio) as otp:
         await _suscripcion(lambda _p: _error(403, "OTP_INVALIDO")).firmar("s", "a", {})
     with pytest.raises(RecursoNoEncontrado) as ausente:
         await _suscripcion(lambda _p: _error(404, "SUSCRIPCION_NO_ENCONTRADA")).detalle("s", "a")
 
-    assert otp.value.detalles == [{"campo": "motivo", "motivo": "OTP_INVALIDO"}]
+    assert otp.value.reason == "OTP_INVALIDO"
     assert ausente.value.detalles == []
 
 

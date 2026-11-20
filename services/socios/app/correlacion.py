@@ -15,6 +15,7 @@ import uuid
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.contexto import correlacion_id, traza_id
+from app.socios.errores import respuesta_error_interno
 
 log = logging.getLogger("solventa.http")
 # No se registran las sondas ni las métricas: llenarían Loki sin aportar nada.
@@ -57,7 +58,15 @@ class MiddlewareCorrelacion:
             await send(mensaje)
 
         try:
-            await self.app(scope, receive, enviar)
+            try:
+                await self.app(scope, receive, enviar)
+            except Exception:
+                # El 500 se resuelve aquí y no en ServerErrorMiddleware, que corre fuera de este contexto: así el
+                # `trace_id` del cuerpo es el del log y la respuesta lleva `X-Correlation-Id` (HU34, CA1 y CA4).
+                log.exception("error_inesperado", extra={"campos": {"evento": "error_inesperado"}})
+                if estado["codigo"]:
+                    raise  # la respuesta ya empezó: no se puede cambiar
+                await respuesta_error_interno()(scope, receive, enviar)
         finally:
             if scope["path"] not in _SIN_REGISTRO:
                 log.info(

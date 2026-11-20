@@ -1,6 +1,7 @@
 # ADR-0025: MS Socios — fachada versionada con OAuth2, cuota e idempotencia en el servicio
 
-- **Estado:** Aceptado (HU32, Sprint 3)
+- **Estado:** Aceptado (HU32, Sprint 3). Los errores de `/partners/v1` (incluidos `INVALID_TOKEN` y `SERVICE_UNAVAILABLE`) los define
+  [ADR-0027](0027-ms-socios-catalogo-de-errores.md) (HU34).
 - **Depende de:** [ADR-0001](0001-descomposicion-microservicios-bounded-contexts.md) (Socios es dueño de `Cliente_API` y
   `Contrato_API` y no guarda datos de negocio), [ADR-0002](0002-comunicacion-sincrona-asincrona-por-flujo.md) (la API de socios es
   síncrona) y [ADR-0003](0003-motor-de-rating-reglas-versionadas-y-migraciones-alembic.md) (el motor de rating lo comparten la app, la web y los socios)

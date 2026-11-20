@@ -186,17 +186,17 @@ def test_los_errores_de_validacion_de_cotizacion_llegan_al_socio(cliente, token,
 
     r = _post(cliente, token())
 
-    assert r.status_code == 422
+    assert r.status_code == 400
     assert r.json()["error"]["details"] == [{"campo": "datos.edad", "motivo": "fuera de rango"}]
 
 
-def test_campos_desconocidos_o_referencias_invalidas_responden_422(cliente, token, cotizaciones):
+def test_campos_desconocidos_o_referencias_invalidas_responden_400(cliente, token, cotizaciones):
     t = token()
 
     extra = _post(cliente, t, cuerpo={**CUERPO, "documento": "123"}, clave="a")
     referencia = _post(cliente, t, cuerpo={**CUERPO, "referencia_cliente": "con espacio"}, clave="b")
 
-    assert extra.status_code == referencia.status_code == 422
+    assert extra.status_code == referencia.status_code == 400
     assert extra.json()["error"]["code"] == "INVALID_REQUEST"
     assert cotizaciones.llamadas == []
 

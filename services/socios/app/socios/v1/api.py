@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.socios.acceso import ENDPOINT_COTIZACIONES, SocioAutorizado, exigir_endpoint
 from app.socios.almacen import ErrorAlmacen
-from app.socios.errores import FaltaClaveIdempotencia
+from app.socios.errores import CATALOGO, MOTIVOS, FaltaClaveIdempotencia
 from app.socios.idempotencia import huella
 from app.socios.identificacion import ClienteIn, identificar_exigiendo
 
@@ -98,29 +98,61 @@ class DetalleErrorOut(BaseModel):
 
 
 class ErrorCuerpoOut(BaseModel):
-    code: str
-    message: str
-    details: list[DetalleErrorOut]
-    trace_id: str
+    code: Literal[*CATALOGO] = Field(description="Código estable del catálogo de errores; programe contra él, no contra `message`.")  # type: ignore[valid-type]
+    message: str = Field(description="Mensaje en español para una persona. Puede cambiar; no lo interprete.")
+    trace_id: str = Field(description="Identificador de la solicitud. Repórtelo a soporte junto con `X-Correlation-Id`.")
+    reason: Literal[*MOTIVOS] | None = Field(  # type: ignore[valid-type]
+        default=None, description="Motivo de negocio, de una lista cerrada, cuando una regla no se cumple."
+    )
+    details: list[DetalleErrorOut] = Field(description="Campos inválidos, si aplica.")
 
 
 class ErrorOut(BaseModel):
     error: ErrorCuerpoOut
 
 
-_ERRORES_COTIZAR: dict[int | str, dict[str, Any]] = {
-    400: {"model": ErrorOut, "description": "Falta o es inválida la cabecera X-Idempotency-Key (INVALID_REQUEST)."},
-    401: {"model": ErrorOut, "description": "Token ausente, inválido (INVALID_TOKEN) o vencido (TOKEN_EXPIRED)."},
-    403: {"model": ErrorOut, "description": "El contrato no habilita el endpoint (ENDPOINT_NOT_AUTHORIZED)."},
-    409: {"model": ErrorOut, "description": "Clave de idempotencia reutilizada o en proceso (IDEMPOTENCY_CONFLICT)."},
-    422: {"model": ErrorOut, "description": "Producto o datos inválidos (INVALID_REQUEST)."},
-    429: {
-        "model": ErrorOut,
-        "description": "Cuota del contrato excedida (RATE_LIMIT_EXCEEDED). Reintente tras `Retry-After` segundos.",
-        "headers": {"Retry-After": {"schema": {"type": "integer"}, "description": "Segundos para reintentar."}},
-    },
-    503: {"model": ErrorOut, "description": "Cotización u otra dependencia no responde (SERVICE_UNAVAILABLE)."},
-}
+_RETRY_AFTER = {"Retry-After": {"schema": {"type": "integer"}, "description": "Segundos para reintentar."}}
+
+
+def respuestas_error(*, no_encontrado: bool = False, conflicto: bool = False) -> dict[int | str, dict[str, Any]]:
+    """Las respuestas de error documentadas de una ruta de `/partners/v1`. Todas usan `ErrorOut` (catálogo de HU34)."""
+    r: dict[int | str, dict[str, Any]] = {
+        400: {
+            "model": ErrorOut,
+            "description": "INVALID_REQUEST: cuerpo, cabecera o parámetro inválido (`details`), o una regla de negocio no se cumple (`reason`).",
+        },
+        401: {"model": ErrorOut, "description": "INVALID_TOKEN (token ausente o inválido) o TOKEN_EXPIRED (vencido)."},
+        403: {"model": ErrorOut, "description": "ENDPOINT_NOT_AUTHORIZED: el contrato no habilita el endpoint."},
+        429: {
+            "model": ErrorOut,
+            "description": "RATE_LIMIT_EXCEEDED: cuota del contrato excedida. Reintente tras `Retry-After`.",
+            "headers": _RETRY_AFTER,
+        },
+        500: {"model": ErrorOut, "description": "INTERNAL_ERROR: fallo no previsto. Reintente con retroceso exponencial."},
+        503: {
+            "model": ErrorOut,
+            "description": (
+                "SERVICE_UNAVAILABLE (una dependencia no responde; reintente con retroceso) o SERVICE_DEGRADED "
+                "(circuito abierto; reintente tras `Retry-After`)."
+            ),
+            "headers": _RETRY_AFTER,
+        },
+    }
+    if no_encontrado:
+        r[404] = {"model": ErrorOut, "description": "RESOURCE_NOT_FOUND: el recurso no existe o es de otro socio."}
+    if conflicto:
+        r[409] = {
+            "model": ErrorOut,
+            "description": (
+                "IDEMPOTENCY_CONFLICT: la clave se usó con otro cuerpo (no reintente con ella) o, con `reason` "
+                "SOLICITUD_EN_PROCESO, la original sigue en curso (reintente con la misma clave tras `Retry-After`)."
+            ),
+            "headers": _RETRY_AFTER,
+        }
+    return r
+
+
+_ERRORES_COTIZAR = respuestas_error(no_encontrado=True, conflicto=True)
 
 
 def cliente_id_para(client_id: str, referencia_cliente: str) -> str:

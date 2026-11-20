@@ -52,16 +52,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       }
@@ -115,7 +105,7 @@
             }
           },
           "400": {
-            "description": "Falta o es inválida la cabecera X-Idempotency-Key (INVALID_REQUEST).",
+            "description": "INVALID_REQUEST: cuerpo, cabecera o parámetro inválido (`details`), o una regla de negocio no se cumple (`reason`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -125,7 +115,7 @@
             }
           },
           "401": {
-            "description": "Token ausente, inválido (INVALID_TOKEN) o vencido (TOKEN_EXPIRED).",
+            "description": "INVALID_TOKEN (token ausente o inválido) o TOKEN_EXPIRED (vencido).",
             "content": {
               "application/json": {
                 "schema": {
@@ -135,27 +125,7 @@
             }
           },
           "403": {
-            "description": "El contrato no habilita el endpoint (ENDPOINT_NOT_AUTHORIZED).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Clave de idempotencia reutilizada o en proceso (IDEMPOTENCY_CONFLICT).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Producto o datos inválidos (INVALID_REQUEST).",
+            "description": "ENDPOINT_NOT_AUTHORIZED: el contrato no habilita el endpoint.",
             "content": {
               "application/json": {
                 "schema": {
@@ -165,7 +135,7 @@
             }
           },
           "429": {
-            "description": "Cuota del contrato excedida (RATE_LIMIT_EXCEEDED). Reintente tras `Retry-After` segundos.",
+            "description": "RATE_LIMIT_EXCEEDED: cuota del contrato excedida. Reintente tras `Retry-After`.",
             "headers": {
               "Retry-After": {
                 "schema": {
@@ -182,8 +152,54 @@
               }
             }
           },
+          "500": {
+            "description": "INTERNAL_ERROR: fallo no previsto. Reintente con retroceso exponencial.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
           "503": {
-            "description": "Cotización u otra dependencia no responde (SERVICE_UNAVAILABLE).",
+            "description": "SERVICE_UNAVAILABLE (una dependencia no responde; reintente con retroceso) o SERVICE_DEGRADED (circuito abierto; reintente tras `Retry-After`).",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Segundos para reintentar."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RESOURCE_NOT_FOUND: el recurso no existe o es de otro socio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENCY_CONFLICT: la clave se usó con otro cuerpo (no reintente con ella) o, con `reason` SOLICITUD_EN_PROCESO, la original sigue en curso (reintente con la misma clave tras `Retry-After`).",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Segundos para reintentar."
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -275,8 +291,18 @@
               }
             }
           },
+          "400": {
+            "description": "INVALID_REQUEST: cuerpo, cabecera o parámetro inválido (`details`), o una regla de negocio no se cumple (`reason`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "Token ausente, inválido (INVALID_TOKEN) o vencido (TOKEN_EXPIRED).",
+            "description": "INVALID_TOKEN (token ausente o inválido) o TOKEN_EXPIRED (vencido).",
             "content": {
               "application/json": {
                 "schema": {
@@ -286,37 +312,7 @@
             }
           },
           "403": {
-            "description": "El contrato no habilita el endpoint (ENDPOINT_NOT_AUTHORIZED).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "La venta no existe o es de otro socio (RESOURCE_NOT_FOUND).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflicto con el estado de la venta o clave reutilizada (IDEMPOTENCY_CONFLICT).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Solicitud o cliente no válidos (INVALID_REQUEST); el motivo va en `details`.",
+            "description": "ENDPOINT_NOT_AUTHORIZED: el contrato no habilita el endpoint.",
             "content": {
               "application/json": {
                 "schema": {
@@ -326,7 +322,25 @@
             }
           },
           "429": {
-            "description": "Cuota del contrato excedida (RATE_LIMIT_EXCEEDED).",
+            "description": "RATE_LIMIT_EXCEEDED: cuota del contrato excedida. Reintente tras `Retry-After`.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Segundos para reintentar."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR: fallo no previsto. Reintente con retroceso exponencial.",
             "content": {
               "application/json": {
                 "schema": {
@@ -336,7 +350,43 @@
             }
           },
           "503": {
-            "description": "Suscripción, Identidad u otra dependencia no responde (SERVICE_UNAVAILABLE).",
+            "description": "SERVICE_UNAVAILABLE (una dependencia no responde; reintente con retroceso) o SERVICE_DEGRADED (circuito abierto; reintente tras `Retry-After`).",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Segundos para reintentar."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RESOURCE_NOT_FOUND: el recurso no existe o es de otro socio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENCY_CONFLICT: la clave se usó con otro cuerpo (no reintente con ella) o, con `reason` SOLICITUD_EN_PROCESO, la original sigue en curso (reintente con la misma clave tras `Retry-After`).",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Segundos para reintentar."
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -378,8 +428,18 @@
               }
             }
           },
+          "400": {
+            "description": "INVALID_REQUEST: cuerpo, cabecera o parámetro inválido (`details`), o una regla de negocio no se cumple (`reason`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "Token ausente, inválido (INVALID_TOKEN) o vencido (TOKEN_EXPIRED).",
+            "description": "INVALID_TOKEN (token ausente o inválido) o TOKEN_EXPIRED (vencido).",
             "content": {
               "application/json": {
                 "schema": {
@@ -389,37 +449,7 @@
             }
           },
           "403": {
-            "description": "El contrato no habilita el endpoint (ENDPOINT_NOT_AUTHORIZED).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "La venta no existe o es de otro socio (RESOURCE_NOT_FOUND).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflicto con el estado de la venta o clave reutilizada (IDEMPOTENCY_CONFLICT).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Solicitud o cliente no válidos (INVALID_REQUEST); el motivo va en `details`.",
+            "description": "ENDPOINT_NOT_AUTHORIZED: el contrato no habilita el endpoint.",
             "content": {
               "application/json": {
                 "schema": {
@@ -429,7 +459,25 @@
             }
           },
           "429": {
-            "description": "Cuota del contrato excedida (RATE_LIMIT_EXCEEDED).",
+            "description": "RATE_LIMIT_EXCEEDED: cuota del contrato excedida. Reintente tras `Retry-After`.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Segundos para reintentar."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR: fallo no previsto. Reintente con retroceso exponencial.",
             "content": {
               "application/json": {
                 "schema": {
@@ -439,7 +487,25 @@
             }
           },
           "503": {
-            "description": "Suscripción, Identidad u otra dependencia no responde (SERVICE_UNAVAILABLE).",
+            "description": "SERVICE_UNAVAILABLE (una dependencia no responde; reintente con retroceso) o SERVICE_DEGRADED (circuito abierto; reintente tras `Retry-After`).",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Segundos para reintentar."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RESOURCE_NOT_FOUND: el recurso no existe o es de otro socio.",
             "content": {
               "application/json": {
                 "schema": {
@@ -480,8 +546,18 @@
               }
             }
           },
+          "400": {
+            "description": "INVALID_REQUEST: cuerpo, cabecera o parámetro inválido (`details`), o una regla de negocio no se cumple (`reason`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "Token ausente, inválido (INVALID_TOKEN) o vencido (TOKEN_EXPIRED).",
+            "description": "INVALID_TOKEN (token ausente o inválido) o TOKEN_EXPIRED (vencido).",
             "content": {
               "application/json": {
                 "schema": {
@@ -491,37 +567,7 @@
             }
           },
           "403": {
-            "description": "El contrato no habilita el endpoint (ENDPOINT_NOT_AUTHORIZED).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "La venta no existe o es de otro socio (RESOURCE_NOT_FOUND).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflicto con el estado de la venta o clave reutilizada (IDEMPOTENCY_CONFLICT).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Solicitud o cliente no válidos (INVALID_REQUEST); el motivo va en `details`.",
+            "description": "ENDPOINT_NOT_AUTHORIZED: el contrato no habilita el endpoint.",
             "content": {
               "application/json": {
                 "schema": {
@@ -531,7 +577,25 @@
             }
           },
           "429": {
-            "description": "Cuota del contrato excedida (RATE_LIMIT_EXCEEDED).",
+            "description": "RATE_LIMIT_EXCEEDED: cuota del contrato excedida. Reintente tras `Retry-After`.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Segundos para reintentar."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR: fallo no previsto. Reintente con retroceso exponencial.",
             "content": {
               "application/json": {
                 "schema": {
@@ -541,7 +605,25 @@
             }
           },
           "503": {
-            "description": "Suscripción, Identidad u otra dependencia no responde (SERVICE_UNAVAILABLE).",
+            "description": "SERVICE_UNAVAILABLE (una dependencia no responde; reintente con retroceso) o SERVICE_DEGRADED (circuito abierto; reintente tras `Retry-After`).",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Segundos para reintentar."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RESOURCE_NOT_FOUND: el recurso no existe o es de otro socio.",
             "content": {
               "application/json": {
                 "schema": {
@@ -578,8 +660,18 @@
               "application/pdf": {}
             }
           },
+          "400": {
+            "description": "INVALID_REQUEST: cuerpo, cabecera o parámetro inválido (`details`), o una regla de negocio no se cumple (`reason`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "Token ausente, inválido (INVALID_TOKEN) o vencido (TOKEN_EXPIRED).",
+            "description": "INVALID_TOKEN (token ausente o inválido) o TOKEN_EXPIRED (vencido).",
             "content": {
               "application/json": {
                 "schema": {
@@ -589,37 +681,7 @@
             }
           },
           "403": {
-            "description": "El contrato no habilita el endpoint (ENDPOINT_NOT_AUTHORIZED).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "La venta no existe o es de otro socio (RESOURCE_NOT_FOUND).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflicto con el estado de la venta o clave reutilizada (IDEMPOTENCY_CONFLICT).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Solicitud o cliente no válidos (INVALID_REQUEST); el motivo va en `details`.",
+            "description": "ENDPOINT_NOT_AUTHORIZED: el contrato no habilita el endpoint.",
             "content": {
               "application/json": {
                 "schema": {
@@ -629,7 +691,25 @@
             }
           },
           "429": {
-            "description": "Cuota del contrato excedida (RATE_LIMIT_EXCEEDED).",
+            "description": "RATE_LIMIT_EXCEEDED: cuota del contrato excedida. Reintente tras `Retry-After`.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Segundos para reintentar."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR: fallo no previsto. Reintente con retroceso exponencial.",
             "content": {
               "application/json": {
                 "schema": {
@@ -639,7 +719,25 @@
             }
           },
           "503": {
-            "description": "Suscripción, Identidad u otra dependencia no responde (SERVICE_UNAVAILABLE).",
+            "description": "SERVICE_UNAVAILABLE (una dependencia no responde; reintente con retroceso) o SERVICE_DEGRADED (circuito abierto; reintente tras `Retry-After`).",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Segundos para reintentar."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RESOURCE_NOT_FOUND: el recurso no existe o es de otro socio.",
             "content": {
               "application/json": {
                 "schema": {
@@ -678,8 +776,18 @@
               }
             }
           },
+          "400": {
+            "description": "INVALID_REQUEST: cuerpo, cabecera o parámetro inválido (`details`), o una regla de negocio no se cumple (`reason`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "Token ausente, inválido (INVALID_TOKEN) o vencido (TOKEN_EXPIRED).",
+            "description": "INVALID_TOKEN (token ausente o inválido) o TOKEN_EXPIRED (vencido).",
             "content": {
               "application/json": {
                 "schema": {
@@ -689,37 +797,7 @@
             }
           },
           "403": {
-            "description": "El contrato no habilita el endpoint (ENDPOINT_NOT_AUTHORIZED).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "La venta no existe o es de otro socio (RESOURCE_NOT_FOUND).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflicto con el estado de la venta o clave reutilizada (IDEMPOTENCY_CONFLICT).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Solicitud o cliente no válidos (INVALID_REQUEST); el motivo va en `details`.",
+            "description": "ENDPOINT_NOT_AUTHORIZED: el contrato no habilita el endpoint.",
             "content": {
               "application/json": {
                 "schema": {
@@ -729,7 +807,25 @@
             }
           },
           "429": {
-            "description": "Cuota del contrato excedida (RATE_LIMIT_EXCEEDED).",
+            "description": "RATE_LIMIT_EXCEEDED: cuota del contrato excedida. Reintente tras `Retry-After`.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Segundos para reintentar."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR: fallo no previsto. Reintente con retroceso exponencial.",
             "content": {
               "application/json": {
                 "schema": {
@@ -739,7 +835,25 @@
             }
           },
           "503": {
-            "description": "Suscripción, Identidad u otra dependencia no responde (SERVICE_UNAVAILABLE).",
+            "description": "SERVICE_UNAVAILABLE (una dependencia no responde; reintente con retroceso) o SERVICE_DEGRADED (circuito abierto; reintente tras `Retry-After`).",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Segundos para reintentar."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RESOURCE_NOT_FOUND: el recurso no existe o es de otro socio.",
             "content": {
               "application/json": {
                 "schema": {
@@ -808,8 +922,18 @@
               }
             }
           },
+          "400": {
+            "description": "INVALID_REQUEST: cuerpo, cabecera o parámetro inválido (`details`), o una regla de negocio no se cumple (`reason`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "Token ausente, inválido (INVALID_TOKEN) o vencido (TOKEN_EXPIRED).",
+            "description": "INVALID_TOKEN (token ausente o inválido) o TOKEN_EXPIRED (vencido).",
             "content": {
               "application/json": {
                 "schema": {
@@ -819,37 +943,7 @@
             }
           },
           "403": {
-            "description": "El contrato no habilita el endpoint (ENDPOINT_NOT_AUTHORIZED).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "La venta no existe o es de otro socio (RESOURCE_NOT_FOUND).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflicto con el estado de la venta o clave reutilizada (IDEMPOTENCY_CONFLICT).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Solicitud o cliente no válidos (INVALID_REQUEST); el motivo va en `details`.",
+            "description": "ENDPOINT_NOT_AUTHORIZED: el contrato no habilita el endpoint.",
             "content": {
               "application/json": {
                 "schema": {
@@ -859,7 +953,25 @@
             }
           },
           "429": {
-            "description": "Cuota del contrato excedida (RATE_LIMIT_EXCEEDED).",
+            "description": "RATE_LIMIT_EXCEEDED: cuota del contrato excedida. Reintente tras `Retry-After`.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Segundos para reintentar."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR: fallo no previsto. Reintente con retroceso exponencial.",
             "content": {
               "application/json": {
                 "schema": {
@@ -869,7 +981,43 @@
             }
           },
           "503": {
-            "description": "Suscripción, Identidad u otra dependencia no responde (SERVICE_UNAVAILABLE).",
+            "description": "SERVICE_UNAVAILABLE (una dependencia no responde; reintente con retroceso) o SERVICE_DEGRADED (circuito abierto; reintente tras `Retry-After`).",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Segundos para reintentar."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "RESOURCE_NOT_FOUND: el recurso no existe o es de otro socio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENCY_CONFLICT: la clave se usó con otro cuerpo (no reintente con ella) o, con `reason` SOLICITUD_EN_PROCESO, la original sigue en curso (reintente con la misma clave tras `Retry-After`).",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Segundos para reintentar."
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -1209,30 +1357,75 @@
         "properties": {
           "code": {
             "type": "string",
-            "title": "Code"
+            "enum": [
+              "INVALID_REQUEST",
+              "INVALID_TOKEN",
+              "TOKEN_EXPIRED",
+              "ENDPOINT_NOT_AUTHORIZED",
+              "RESOURCE_NOT_FOUND",
+              "IDEMPOTENCY_CONFLICT",
+              "RATE_LIMIT_EXCEEDED",
+              "INTERNAL_ERROR",
+              "SERVICE_UNAVAILABLE",
+              "SERVICE_DEGRADED"
+            ],
+            "title": "Code",
+            "description": "Código estable del catálogo de errores; programe contra él, no contra `message`."
           },
           "message": {
             "type": "string",
-            "title": "Message"
+            "title": "Message",
+            "description": "Mensaje en español para una persona. Puede cambiar; no lo interprete."
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "description": "Identificador de la solicitud. Repórtelo a soporte junto con `X-Correlation-Id`."
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "CLIENTE_NO_REGISTRADO",
+                  "KYC_NO_VERIFICADO",
+                  "CONSENTIMIENTO_NO_VIGENTE",
+                  "COTIZACION_YA_USADA",
+                  "COTIZACION_VENCIDA",
+                  "COTIZACION_SIN_CUENTA",
+                  "SIN_METODO_PAGO",
+                  "POLIZA_NO_LISTA",
+                  "FIRMA_NO_DISPONIBLE",
+                  "FIRMA_VENCIDA",
+                  "DOCUMENTO_ALTERADO",
+                  "OTP_INVALIDO",
+                  "FIRMA_FALLIDA",
+                  "CERTIFICADO_NO_DISPONIBLE",
+                  "SOLICITUD_EN_PROCESO"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "Motivo de negocio, de una lista cerrada, cuando una regla no se cumple."
           },
           "details": {
             "items": {
               "$ref": "#/components/schemas/DetalleErrorOut"
             },
             "type": "array",
-            "title": "Details"
-          },
-          "trace_id": {
-            "type": "string",
-            "title": "Trace Id"
+            "title": "Details",
+            "description": "Campos inválidos, si aplica."
           }
         },
         "type": "object",
         "required": [
           "code",
           "message",
-          "details",
-          "trace_id"
+          "trace_id",
+          "details"
         ],
         "title": "ErrorCuerpoOut"
       },
@@ -1442,19 +1635,6 @@
           "metodo_autenticacion"
         ],
         "title": "FirmaOut"
-      },
-      "HTTPValidationError": {
-        "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "type": "array",
-            "title": "Detail"
-          }
-        },
-        "type": "object",
-        "title": "HTTPValidationError"
       },
       "PolizaConsultaOut": {
         "properties": {
@@ -1815,46 +1995,6 @@
           "scope"
         ],
         "title": "TokenOut"
-      },
-      "ValidationError": {
-        "properties": {
-          "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
-            },
-            "type": "array",
-            "title": "Location"
-          },
-          "msg": {
-            "type": "string",
-            "title": "Message"
-          },
-          "type": {
-            "type": "string",
-            "title": "Error Type"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "ctx": {
-            "type": "object",
-            "title": "Context"
-          }
-        },
-        "type": "object",
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
-        "title": "ValidationError"
       }
     }
   }

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.logs import ganchos_http
 from app.socios.almacen import Almacen, AlmacenMemoria, AlmacenRedis
+from app.socios.circuito import Circuito
 from app.socios.clientes import (
     ClienteCotizacion,
     ClienteIdentidad,
@@ -66,15 +67,19 @@ def construir_ensamblado(config: ConfigSocios) -> Ensamblado:
         timeout=config.timeout_suscripcion_s,
         event_hooks=ganchos_http(),
     )
+
+    def circuito(servicio: str) -> Circuito:
+        return Circuito(servicio, config.circuito_umbral_fallos, config.circuito_enfriamiento_s)
+
     return Ensamblado(
         registro=RegistroSocios(fabrica, ttl_contratos_s=config.ttl_contratos_s),
         tokens=EmisorTokens(config.jwt_secreto, config.jwt_ttl_s),
         almacen=almacen,
         limitador=LimitadorCuota(almacen),
         idempotencia=Idempotencia(almacen, ttl_s=config.ttl_idempotencia_s),
-        cotizaciones=ClienteCotizacion(http),
-        identidad=ClienteIdentidad(http_identidad, config.identidad_service_key),
-        suscripciones=ClienteSuscripcion(http_suscripcion, config.suscripcion_service_key),
+        cotizaciones=ClienteCotizacion(http, circuito("cotizacion")),
+        identidad=ClienteIdentidad(http_identidad, config.identidad_service_key, circuito("identidad")),
+        suscripciones=ClienteSuscripcion(http_suscripcion, config.suscripcion_service_key, circuito("suscripcion")),
         https=(http, http_identidad, http_suscripcion),
     )
 

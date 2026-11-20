@@ -1,4 +1,6 @@
+import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 import fakeredis
 import pytest
@@ -11,6 +13,7 @@ from app.socios.secretos import hash_secreto
 from app.socios.tokens import EmisorTokens
 from app.socios.wiring import Ensamblado, publicar
 from fastapi.testclient import TestClient
+from jsonschema import Draft202012Validator
 from sqlalchemy.orm import sessionmaker
 
 from app.main import app
@@ -95,11 +98,31 @@ def ensamblado(fabrica, almacen, cotizaciones, identidad, suscripciones):
     )
 
 
+def _validador_de_errores() -> Draft202012Validator:
+    """El esquema `ErrorOut` del OpenAPI publicado (HU34): toda respuesta de error de `/partners/v1` debe cumplirlo."""
+    publicado = json.loads((Path(__file__).parents[1] / "docs" / "api" / "openapi.json").read_text(encoding="utf-8"))
+    return Draft202012Validator({"$ref": "#/components/schemas/ErrorOut", "components": publicado["components"]})
+
+
+class ClienteQueValidaErrores(TestClient):
+    """Valida contra `ErrorOut` cada respuesta de error de `/partners/v1` que obtienen las pruebas (contrato de HU34)."""
+
+    _validador = _validador_de_errores()
+
+    def request(self, method, url, *args, **kwargs):  # type: ignore[override]
+        r = super().request(method, url, *args, **kwargs)
+        if r.status_code >= 400 and "/partners/v1" in str(url) and r.headers.get("content-type", "").startswith("application/json"):
+            cuerpo = r.json()
+            if isinstance(cuerpo, dict) and "error" in cuerpo:  # `/status` responde 503 con su propio esquema
+                self._validador.validate(cuerpo)
+        return r
+
+
 @pytest.fixture
 def cliente(ensamblado):
     """TestClient sin lifespan: el ensamblado de prueba reemplaza al del entorno."""
     publicar(app.state, ensamblado)
-    return TestClient(app, raise_server_exceptions=False)
+    return ClienteQueValidaErrores(app, raise_server_exceptions=False)
 
 
 @pytest.fixture

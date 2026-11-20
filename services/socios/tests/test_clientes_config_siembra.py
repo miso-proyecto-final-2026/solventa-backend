@@ -8,7 +8,12 @@ import httpx
 import pytest
 from app.socios.clientes import ClienteCotizacion
 from app.socios.config import SECRETO_JWT_DESARROLLO, ConfigSocios
-from app.socios.errores import ServicioNoDisponible, SolicitudInvalida
+from app.socios.errores import (
+    ErrorInterno,
+    RecursoNoEncontrado,
+    ServicioNoDisponible,
+    SolicitudInvalida,
+)
 from app.socios.repositorio import buscar_cliente, contrato_vigente
 from app.socios.secretos import verificar_secreto
 from app.socios.wiring import construir_ensamblado
@@ -66,10 +71,19 @@ async def test_un_422_sin_cuerpo_json_no_rompe():
     assert error.value.detalles == []
 
 
-@pytest.mark.parametrize("estado", [404, 500, 502, 503])
-async def test_otros_estados_de_cotizacion_son_servicio_no_disponible(estado):
+@pytest.mark.parametrize("estado", [500, 502, 503])
+async def test_un_5xx_de_cotizacion_es_servicio_no_disponible(estado):
     with pytest.raises(ServicioNoDisponible):
         await _cliente(lambda _p: httpx.Response(estado)).crear("c", "x", {})
+
+
+async def test_un_404_sin_codigo_conocido_es_un_error_interno_y_con_su_codigo_es_404():
+    with pytest.raises(ErrorInterno):
+        await _cliente(lambda _p: httpx.Response(404)).crear("c", "x", {})
+    with pytest.raises(RecursoNoEncontrado):
+        await _cliente(
+            lambda _p: httpx.Response(404, json={"error": {"code": "COTIZACION_NO_ENCONTRADA", "message": "x"}})
+        ).crear("c", "x", {})
 
 
 async def test_un_error_de_red_es_servicio_no_disponible():
