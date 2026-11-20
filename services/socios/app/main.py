@@ -9,6 +9,7 @@ from app.socios.config import ConfigSocios
 from app.socios.errores import registrar_errores
 from app.socios.oauth import router as oauth_router
 from app.socios.v1.api import router as v1_router
+from app.socios.v1.suscripciones import router as suscripciones_router
 from app.socios.wiring import construir_ensamblado, publicar
 
 configurar_logs()
@@ -29,12 +30,13 @@ app = FastAPI(
     version="1.0.0",
     description=(
         "API para socios de distribución (HU32). Autenticación OAuth2 client credentials en `/oauth/token`; "
-        "cotización embebida en `/partners/v1`. Cada versión se publica bajo su propio prefijo."
+        "cotización y venta embebida (suscripción, firma y póliza, HU33) en `/partners/v1`. Cada versión se publica bajo su propio prefijo."
     ),
     lifespan=lifespan,
 )
 app.include_router(oauth_router)
 app.include_router(v1_router)
+app.include_router(suscripciones_router)
 registrar_errores(app)
 app.add_middleware(MiddlewareCorrelacion)
 

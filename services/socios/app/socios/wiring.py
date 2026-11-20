@@ -1,4 +1,4 @@
-"""Ensamblado de MS Socios: base, almacén efímero, cliente de Cotización, tokens, cuota e idempotencia."""
+"""Ensamblado de MS Socios: base, almacén efímero, clientes de Cotización, Identidad y Suscripción, tokens, cuota e idempotencia."""
 
 from __future__ import annotations
 
@@ -9,7 +9,14 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.logs import ganchos_http
 from app.socios.almacen import Almacen, AlmacenMemoria, AlmacenRedis
-from app.socios.clientes import ClienteCotizacion, Cotizaciones
+from app.socios.clientes import (
+    ClienteCotizacion,
+    ClienteIdentidad,
+    ClienteSuscripcion,
+    Cotizaciones,
+    Identidad,
+    Suscripciones,
+)
 from app.socios.config import ConfigSocios
 from app.socios.cuota import LimitadorCuota
 from app.socios.idempotencia import Idempotencia
@@ -26,11 +33,14 @@ class Ensamblado:
     limitador: LimitadorCuota
     idempotencia: Idempotencia
     cotizaciones: Cotizaciones
-    http: httpx.AsyncClient | None = None
+    identidad: Identidad
+    suscripciones: Suscripciones
+    # Los clientes HTTP del ensamblado real, para cerrarlos al apagar.
+    https: tuple[httpx.AsyncClient, ...] = ()
 
     async def detener(self) -> None:
-        if self.http is not None:
-            await self.http.aclose()
+        for http in self.https:
+            await http.aclose()
         await self.almacen.cerrar()
 
 
@@ -46,6 +56,16 @@ def construir_ensamblado(config: ConfigSocios) -> Ensamblado:
         timeout=config.timeout_cotizacion_s,
         event_hooks=ganchos_http(),
     )
+    http_identidad = httpx.AsyncClient(
+        base_url=config.identidad_url,
+        timeout=config.timeout_identidad_s,
+        event_hooks=ganchos_http(),
+    )
+    http_suscripcion = httpx.AsyncClient(
+        base_url=config.suscripcion_url,
+        timeout=config.timeout_suscripcion_s,
+        event_hooks=ganchos_http(),
+    )
     return Ensamblado(
         registro=RegistroSocios(fabrica, ttl_contratos_s=config.ttl_contratos_s),
         tokens=EmisorTokens(config.jwt_secreto, config.jwt_ttl_s),
@@ -53,11 +73,13 @@ def construir_ensamblado(config: ConfigSocios) -> Ensamblado:
         limitador=LimitadorCuota(almacen),
         idempotencia=Idempotencia(almacen, ttl_s=config.ttl_idempotencia_s),
         cotizaciones=ClienteCotizacion(http),
-        http=http,
+        identidad=ClienteIdentidad(http_identidad, config.identidad_service_key),
+        suscripciones=ClienteSuscripcion(http_suscripcion, config.suscripcion_service_key),
+        https=(http, http_identidad, http_suscripcion),
     )
 
 
 def publicar(app_state: object, ensamblado: Ensamblado) -> None:
     """Deja cada pieza en `app.state` con el nombre que usan los routers."""
-    for nombre in ("registro", "tokens", "almacen", "limitador", "idempotencia", "cotizaciones"):
+    for nombre in ("registro", "tokens", "almacen", "limitador", "idempotencia", "cotizaciones", "identidad", "suscripciones"):
         setattr(app_state, nombre, getattr(ensamblado, nombre))

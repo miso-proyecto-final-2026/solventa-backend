@@ -69,6 +69,19 @@ class CuotaExcedida(ErrorSocios):
     status, code, mensaje = 429, "RATE_LIMIT_EXCEEDED", "Se excedió la cuota de solicitudes por segundo del contrato."
 
 
+class RecursoNoEncontrado(ErrorSocios):
+    status, code, mensaje = 404, "RESOURCE_NOT_FOUND", "El recurso no existe."
+
+
+class ConflictoDeNegocio(ErrorSocios):
+    """La operación choca con el estado del recurso (cotización ya usada, firma vencida...). El motivo va en `details`.
+
+    Usa el código del catálogo para 409 mientras HU34 define los de negocio (ADR-0026).
+    """
+
+    status, code, mensaje = 409, "IDEMPOTENCY_CONFLICT", "La operación no se puede completar en el estado actual del recurso."
+
+
 class ServicioNoDisponible(ErrorSocios):
     status, code, mensaje = 503, "SERVICE_UNAVAILABLE", "Un servicio necesario no responde; reintente más tarde."
 

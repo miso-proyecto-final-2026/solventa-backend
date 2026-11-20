@@ -109,12 +109,36 @@ def test_lee_la_configuracion_de_staging():
             "DATABASE_URL": "postgresql://u@h/db",
             "REDIS_URL": "rediss://cache:6379",
             "COTIZACION_URL": "http://solventa-backend",
+            "IDENTIDAD_URL": "http://solventa-identidad",
+            "IDENTIDAD_SERVICE_KEY": "clave-identidad",
+            "SUSCRIPCION_URL": "http://solventa-suscripcion",
+            "SUSCRIPCION_SERVICE_KEY": "clave-suscripcion",
             "SOCIOS_JWT_SECRETO": "s" * 40,
             "SOCIOS_JWT_TTL_S": "1800",
         }
     )
 
     assert (config.redis_url, config.cotizacion_url, config.jwt_ttl_s) == ("rediss://cache:6379", "http://solventa-backend", 1800)
+    assert (config.identidad_url, config.identidad_service_key) == ("http://solventa-identidad", "clave-identidad")
+    assert (config.suscripcion_url, config.suscripcion_service_key) == ("http://solventa-suscripcion", "clave-suscripcion")
+
+
+@pytest.mark.parametrize("falta", ["IDENTIDAD_URL", "IDENTIDAD_SERVICE_KEY", "SUSCRIPCION_URL", "SUSCRIPCION_SERVICE_KEY"])
+def test_fuera_de_desarrollo_faltan_las_variables_de_identidad_y_suscripcion(falta):
+    entorno = {
+        "DATABASE_URL": "postgresql://u@h/db",
+        "REDIS_URL": "rediss://cache:6379",
+        "COTIZACION_URL": "http://solventa-backend",
+        "IDENTIDAD_URL": "http://solventa-identidad",
+        "IDENTIDAD_SERVICE_KEY": "clave-identidad",
+        "SUSCRIPCION_URL": "http://solventa-suscripcion",
+        "SUSCRIPCION_SERVICE_KEY": "clave-suscripcion",
+        "SOCIOS_JWT_SECRETO": "s" * 40,
+    }
+    del entorno[falta]
+
+    with pytest.raises(ErrorConfiguracion, match=falta):
+        ConfigSocios.desde_entorno(entorno)
 
 
 def test_un_secreto_jwt_corto_impide_arrancar():

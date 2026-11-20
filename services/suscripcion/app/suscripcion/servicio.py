@@ -6,6 +6,7 @@ Los cambios de la saga y los eventos que provocan se guardan en la misma transac
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import re
 from collections.abc import Callable
@@ -119,6 +120,11 @@ def parece_numero_de_tarjeta(valor: str) -> bool:
     return bool(_PAN_CORRIDO.search(valor) or _PAN_AGRUPADO.search(valor) or _PAN_AMEX.search(valor))
 
 
+def clave_de_socio(socio_client_id: str, clave: str) -> str:
+    """Clave de idempotencia de la saga de un socio: `socio:` + hash de (socio, clave). Cabe en los 100 caracteres de la columna."""
+    return "socio:" + hashlib.sha256(f"{socio_client_id}\n{clave}".encode()).hexdigest()
+
+
 class ServicioSuscripcion:
     def __init__(
         self,
@@ -193,6 +199,37 @@ class ServicioSuscripcion:
             periodicidad_pago=periodicidad_pago,
         )
 
+    async def iniciar_socio(
+        self,
+        socio_client_id: str,
+        cliente_id: str,
+        *,
+        clave: str | None,
+        cotizacion_id: str,
+        metodo_pago: str,
+        acepta_terminos: bool,
+        periodicidad_pago: str = "ANUAL",
+    ) -> tuple[SuscripcionDB, bool]:
+        """HU33: un socio inicia la saga a nombre de un cliente que MS Socios ya identificó (KYC y consentimiento).
+
+        La cotización debe ser de ese cliente: una ajena responde como inexistente, igual que en `iniciar_como`. La clave
+        de idempotencia queda acotada al socio, de modo que dos socios con la misma clave no se confunden y la garantía
+        también vale en la base (`uq_susc_cliente_clave`).
+        """
+        if not clave or not 1 <= len(clave) <= 100:
+            raise SolicitudInvalida(detalles=[{"campo": "Idempotency-Key", "motivo": "es obligatoria (1 a 100 caracteres)"}])
+        if parece_numero_de_tarjeta(metodo_pago):
+            raise SolicitudInvalida(detalles=[{"campo": "metodo_pago", "motivo": "debe ser el token de la pasarela, nunca el número de tarjeta"}])
+        return await self.iniciar_como(
+            cliente_id,
+            clave=clave_de_socio(socio_client_id, clave),
+            cotizacion_id=cotizacion_id,
+            metodo_pago=metodo_pago,
+            acepta_terminos=acepta_terminos,
+            periodicidad_pago=periodicidad_pago,
+            socio_client_id=socio_client_id,
+        )
+
     async def iniciar_como(
         self,
         cliente_id: str,
@@ -202,6 +239,7 @@ class ServicioSuscripcion:
         metodo_pago: str,
         acepta_terminos: bool,
         periodicidad_pago: str = "ANUAL",
+        socio_client_id: str | None = None,
     ) -> tuple[SuscripcionDB, bool]:
         """Inicia la saga para un cliente ya identificado."""
         if not clave or not 1 <= len(clave) <= 100:
@@ -225,7 +263,7 @@ class ServicioSuscripcion:
 
         try:
             creada = await asyncio.to_thread(
-                self._crear, cliente_id, clave, cotizacion, metodo_pago, periodicidad_pago, ahora
+                self._crear, cliente_id, clave, cotizacion, metodo_pago, periodicidad_pago, ahora, socio_client_id
             )
         except IntegrityError:
             creada = None
@@ -248,7 +286,14 @@ class ServicioSuscripcion:
             return repo.buscar_por_clave(s, cliente_id, clave)
 
     def _crear(
-        self, cliente_id: str, clave: str, c: Any, metodo_pago: str, periodicidad_pago: str, ahora: datetime
+        self,
+        cliente_id: str,
+        clave: str,
+        c: Any,
+        metodo_pago: str,
+        periodicidad_pago: str,
+        ahora: datetime,
+        socio_client_id: str | None = None,
     ) -> SuscripcionDB | None:
         with self._fabrica() as s, s.begin():
             if repo.buscar_activa_por_cotizacion(s, c.id) is not None:
@@ -271,6 +316,7 @@ class ServicioSuscripcion:
                 coberturas=[{"tipo": x.tipo, "monto": x.monto, "deducible": x.deducible} for x in c.coberturas] or None,
                 cotizacion_version_reglas=c.version_reglas,
                 asesor_id=c.asesor_id,
+                socio_client_id=socio_client_id,
                 cotizacion_vigente_hasta=c.vigente_hasta,
             )
 

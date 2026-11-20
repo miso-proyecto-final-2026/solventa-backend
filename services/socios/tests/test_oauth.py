@@ -19,7 +19,7 @@ def _pedir(cliente, **datos):
 
 
 def test_emite_un_token_de_una_hora_con_credenciales_en_el_cuerpo(cliente, sembrar):
-    sembrar()
+    sembrar(endpoints=("cotizaciones:crear",))
 
     r = _pedir(cliente, client_id="socio-a", client_secret=SECRETO_PRUEBA)
 

@@ -65,7 +65,17 @@ def test_la_sonda_interna_queda_fuera_del_prefijo_publico(cliente):
 def test_las_rutas_publicas_estan_versionadas():
     rutas = set(app.openapi()["paths"])
 
-    assert rutas == {"/oauth/token", "/partners/v1/cotizaciones", "/partners/v1/status"}
+    assert rutas == {
+        "/oauth/token",
+        "/partners/v1/cotizaciones",
+        "/partners/v1/status",
+        "/partners/v1/suscripciones",
+        "/partners/v1/polizas/{suscripcion_id}",
+        "/partners/v1/suscripciones/{suscripcion_id}/documento-firma",
+        "/partners/v1/suscripciones/{suscripcion_id}/documento-firma/pdf",
+        "/partners/v1/suscripciones/{suscripcion_id}/firma/codigo",
+        "/partners/v1/suscripciones/{suscripcion_id}/firma",
+    }
     assert all(r.startswith("/partners/v1/") for r in rutas - {"/oauth/token"})
 
 
