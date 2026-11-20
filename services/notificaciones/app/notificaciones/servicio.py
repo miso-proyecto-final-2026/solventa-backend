@@ -50,6 +50,9 @@ CANALES_POR_EVENTO = {
     REENVIO_CONFIRMACION: (Canal.CORREO,),
     FIRMA_ENLACE: (Canal.CORREO,),
 }
+# Pagos publica el resultado del pago paramétrico (HU29); solo el pagado avisa al cliente (HU30). El fallido lo ve el operador.
+INDEMNIZACION_PAGADA = "indemnizacion_pagada"
+CAMPOS_PAGO = ("indemnizacion_id", "poliza_id", "cliente_id")
 CAMPOS_REQUERIDOS = ("poliza_id", "suscripcion_id", "cliente_id", "numero_poliza", "producto", "vigencia_desde", "fecha_vencimiento")
 CAMPOS_ENLACE_FIRMA = ("enlace_id", "suscripcion_id", "cliente_id", "numero_poliza", "producto", "vence_en")
 
@@ -143,6 +146,45 @@ class ServicioNotificaciones:
                 "registrado" if creado else "repetido (omitido)", canal.value, tipo.value, datos["suscripcion_id"], evento.event_id,
             )
 
+    async def manejar_pago(self, evento: Evento, sesion: Session) -> None:
+        """Manejador del consumidor de `solventa.pagos.indemnizaciones` (HU30): un push de prioridad alta al titular.
+
+        La clave de idempotencia es la indemnización de origen, no el sobre: Pagos republica el resultado de un pago ya hecho
+        con otro `event_id` (`repeticion`), y el cliente no debe recibir dos avisos por el mismo pago (criterio 2).
+        """
+        if evento.event_type != INDEMNIZACION_PAGADA:
+            log.info("evento ignorado event_type=%s event_id=%s", evento.event_type, evento.event_id)
+            return
+        faltan = [c for c in CAMPOS_PAGO if not evento.payload.get(c)]
+        if faltan:
+            raise ValueError(f"{evento.event_type} sin: {', '.join(faltan)}")
+        datos = {c: str(evento.payload[c]) for c in CAMPOS_PAGO}
+        for opcional in ("monto", "moneda"):
+            if evento.payload.get(opcional):
+                datos[opcional] = str(evento.payload[opcional])
+        ahora = self._reloj()
+        creado = repo.crear_envio(
+            sesion,
+            EnvioDB(
+                id=str(uuid4()),
+                evento_origen_id=datos["indemnizacion_id"],
+                tipo=TipoNotificacion.INDEMNIZACION_PAGADA.value,
+                canal=Canal.PUSH.value,
+                cliente_id=datos["cliente_id"],
+                idioma=repo.idioma_de(sesion, datos["cliente_id"]),
+                datos=datos,
+                estado=EstadoEnvio.PENDIENTE.value,
+                intentos=0,
+                proximo_intento_en=ahora,
+                correlacion_id=evento.correlation_id or correlacion_id.get(),
+                creado_en=ahora,
+            ),
+        )
+        log.info(
+            "envio %s canal=PUSH tipo=INDEMNIZACION_PAGADA poliza_id=%s event_id=%s",
+            "registrado" if creado else "repetido (omitido)", datos["poliza_id"], evento.event_id,
+        )
+
     # --- 2. entregar ----------------------------------------------------------------------------------------------
 
     def espera(self, intento: int) -> float:
@@ -206,6 +248,17 @@ class ServicioNotificaciones:
         log.error("envio fallido envio_id=%s canal=%s intentos=%s error=%s", e.id, e.canal, e.intentos, error)
 
     async def _entregar(self, p: _Pendiente) -> str:
+        if p.canal == Canal.PUSH.value and p.tipo == TipoNotificacion.INDEMNIZACION_PAGADA.value:
+            return await self._push.entregar(
+                plantillas.construir_push_indemnizacion(
+                    envio_id=p.id,
+                    cliente_id=p.cliente_id,
+                    poliza_id=p.datos["poliza_id"],
+                    monto=p.datos.get("monto"),
+                    moneda=p.datos.get("moneda"),
+                    idioma=p.idioma,
+                )
+            )
         if p.canal == Canal.PUSH.value:
             return await self._push.entregar(
                 plantillas.construir_push(

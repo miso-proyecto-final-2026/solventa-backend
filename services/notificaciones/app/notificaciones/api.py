@@ -42,7 +42,8 @@ class NotificacionOut(BaseModel):
     texto_publico: str
     prioridad: Literal["ALTA", "NORMAL"]
     idioma: str
-    suscripcion_id: str
+    suscripcion_id: str | None = Field(default=None, description="Suscripción cuya póliza abre la notificación (emisión de póliza)")
+    poliza_id: str | None = Field(default=None, description="Póliza que abre la notificación (indemnización pagada)")
     creada_en: datetime
     recibida: bool
 
@@ -78,6 +79,7 @@ def _notificacion(b: BandejaPushDB) -> NotificacionOut:
         prioridad=b.prioridad,  # type: ignore[arg-type]
         idioma=b.idioma,
         suscripcion_id=b.suscripcion_id,
+        poliza_id=b.poliza_id,
         creada_en=_utc(b.creado_en),
         recibida=b.recibida_en is not None,
     )

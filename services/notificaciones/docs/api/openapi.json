@@ -434,8 +434,28 @@
             "title": "Idioma"
           },
           "suscripcion_id": {
-            "type": "string",
-            "title": "Suscripcion Id"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suscripcion Id",
+            "description": "Suscripción cuya póliza abre la notificación (emisión de póliza)"
+          },
+          "poliza_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poliza Id",
+            "description": "Póliza que abre la notificación (indemnización pagada)"
           },
           "creada_en": {
             "type": "string",
@@ -457,7 +477,6 @@
           "texto_publico",
           "prioridad",
           "idioma",
-          "suscripcion_id",
           "creada_en",
           "recibida"
         ],
