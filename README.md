@@ -12,13 +12,13 @@ services/
   suscripcion/   MS Suscripción   HU15 y HU18 (saga de suscripción: decisión automática, paso de cobro y documento de la póliza con HU20; la firma y la emisión llegan con HU21; la venta asistida del asesor, con HU39; la revisión asistida de los casos derivados, con HU16)
   siniestros/    MS Siniestros   HU27 (recepción de eventos paramétricos; HU28 validará la condición)
   pagos/         MS Pagos        HU18 (cobro de la prima con pasarela simulada, idempotencia y conciliación)
+  socios/        MS Socios       HU32 (API para socios de distribución: OAuth2 client credentials, cotización embebida en /partners/v1, cuota e idempotencia)
 docs/adr/        decisiones de arquitectura (compartidas)
 pyproject.toml   configuración de ruff
 requirements-dev.txt   dependencias de prueba comunes
 ```
 
-Los demás servicios del ADR (hoy solo Socios) se agregan como
-`services/<nombre>/` con la misma forma.
+Todos los servicios del ADR-0001 ya existen; uno nuevo se agrega como `services/<nombre>/` con la misma forma.
 
 ## Reglas de frontera
 
@@ -57,6 +57,7 @@ El CI corre `test` y `build` en matriz por servicio.
 | `IDENTIDAD_UMBRAL_FALLOS`, `IDENTIDAD_ENFRIAMIENTO_S` | cotizacion | Circuit breaker de la consulta (5 fallos seguidos; 15 s de enfriamiento). |
 | `PERFILES_API_KEYS` | cotizacion | Claves (separadas por coma) con permiso para consultar `GET /perfiles/{cliente_id}` (perfil crudo de HU09, con datos financieros) en `X-Service-Key`. Vacía = nadie accede. Es independiente de `AUDITOR_API_KEYS`: cada rol tiene sus claves. Debe venir de un secreto. |
 | `AUDITOR_API_KEYS` | cotizacion | Claves (separadas por coma) con permiso de auditoría en `X-Service-Key` para `GET /v1/cotizaciones/{id}/desglose` (HU14, ADR-0006). Vacía = nadie accede. Debe venir de un secreto; admite varias claves para rotarla. |
+| `SOCIOS_DATABASE_URL` (o `DATABASE_URL`), `REDIS_URL`, `COTIZACION_URL`, `SOCIOS_JWT_SECRETO` | socios | Base (esquema `socios`), almacén de la cuota y la idempotencia, URL interna de Cotización y secreto que firma los tokens de los socios (≥ 32 caracteres). Obligatorias fuera de desarrollo; detalle en `services/socios/README.md`. |
 | `PERFILAMIENTO_DATABASE_URL` | perfilamiento | Base de datos PostgreSQL (esquema `perfilamiento`, Alembic). Obligatoria fuera de desarrollo; admite `DATABASE_URL`. |
 | `PERFILAMIENTO_API_KEYS` | perfilamiento | Claves de servicio en `X-Service-Key`, como pares `nombre=clave` separados por coma; el nombre queda como «origen» de los intentos bloqueados. Vacía = nadie accede. Debe venir de un secreto. |
 | `REDIS_URL`, `IDENTIDAD_URL`, `IDENTIDAD_SERVICE_KEY` | perfilamiento | Igual que en cotización: caché de fuentes y consulta de consentimiento; obligatorias fuera de desarrollo. |
@@ -116,6 +117,17 @@ Qué debe proveer el ambiente (staging, producción) para que cada servicio arra
 | `PROVEEDORES_*`, `IDENTIDAD_TIMEOUT_S`, `IDENTIDAD_UMBRAL_FALLOS`, `IDENTIDAD_ENFRIAMIENTO_S` | No | Config | Timeouts, circuit breaker y TTL de la caché; los valores por defecto están alineados con el presupuesto de HA01. |
 | `TRAZA_COLA_MAX`, `TRAZA_REINTENTOS` | No | Config | Cola en memoria y reintentos de la trazabilidad de consultas (HU11, ADR-0007). |
 | `SOLVENTA_MODO_DESARROLLO` | **No definirla** | — | Habilita sustitutos locales (consentimiento siempre otorgado, caché en memoria, SQLite). Nunca en staging ni en producción. |
+
+### MS Socios (HU32)
+
+| Variable | Obligatoria | Tipo | Notas |
+|---|---|---|---|
+| `SOCIOS_DATABASE_URL` (o `DATABASE_URL`) | Sí | Secreto | PostgreSQL, esquema `socios` (`clientes_api`, `contratos_api`). |
+| `REDIS_URL` | Sí | Config | Cuota por socio e idempotencia (ADR-0025). Compartido entre réplicas. |
+| `COTIZACION_URL` | Sí | Config | URL interna de MS Cotización (`http://solventa-backend`). |
+| `SOCIOS_JWT_SECRETO` | Sí | Secreto | Firma los tokens de los socios (HS256, ≥ 32 caracteres). Propio de Socios: no se comparte con otro servicio. |
+| `SOCIOS_JWT_TTL_S`, `SOCIOS_TIMEOUT_COTIZACION_S` | No | Config | 3600 s y 3 s por defecto. |
+| `SOCIO_DEMO_CLIENT_SECRET` | Solo el Job de siembra | Secreto | Secreto del socio de prueba (`scripts/sembrar_socio_demo.py`). Solo se guarda su hash. |
 
 ### MS Identidad
 

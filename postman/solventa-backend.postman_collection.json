@@ -11716,6 +11716,512 @@
           }
         }
       ]
+    },
+    {
+      "name": "MS Socios (HU32)",
+      "description": "API de socios: OAuth2 client credentials y cotización embebida en `/partners/v1`. Requiere el socio de prueba sembrado (`scripts/sembrar_socio_demo.py`) y `socio_client_secret` en el entorno (nunca en la colección).",
+      "item": [
+        {
+          "name": "Estado del API (público)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('versión v1 y dependencias', () => { const r = pm.response.json(); pm.expect(r.version).to.eql('v1'); pm.expect(r.dependencias).to.have.all.keys('cotizacion', 'base_datos', 'almacen'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/status",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "status"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Token con un secreto incorrecto (401 invalid_client)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error RFC 6749', () => pm.expect(pm.response.json().error).to.eql('invalid_client'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{socios_url}}/oauth/token",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{socio_client_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "secreto-incorrecto-de-postman",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Obtener token (client credentials)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test('token Bearer de 1 hora', () => { pm.expect(r.token_type).to.eql('Bearer'); pm.expect(r.expires_in).to.eql(3600); });",
+                  "pm.test('no se guarda en caché', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('no-store'));",
+                  "pm.collectionVariables.set('socio_token', r.access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{socios_url}}/oauth/token",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{socio_client_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{socio_client_secret}}",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cotizar sin token (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('INVALID_TOKEN con trace_id', () => { const e = pm.response.json().error; pm.expect(e.code).to.eql('INVALID_TOKEN'); pm.expect(e.trace_id).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Idempotency-Key",
+                "value": "postman-sin-token",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/cotizaciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "cotizaciones"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto\": \"microseguro_vida\",\n  \"referencia_cliente\": \"postman-cliente-001\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cotizar sin X-Idempotency-Key (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('INVALID_REQUEST', () => pm.expect(pm.response.json().error.code).to.eql('INVALID_REQUEST'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{socio_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/cotizaciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "cotizaciones"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto\": \"microseguro_vida\",\n  \"referencia_cliente\": \"postman-cliente-001\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cotizar (201)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('socio_idem', 'postman-' + pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test('precio y coberturas', () => { pm.expect(r.prima_mensual).to.be.above(0); pm.expect(r.coberturas).to.be.an('array').that.is.not.empty; pm.expect(r.referencia_cliente).to.eql('postman-cliente-001'); });",
+                  "pm.test('sin datos internos de Cotización', () => pm.expect(r).to.not.have.any.keys('componentes', 'metadata', 'cliente_id'));",
+                  "pm.collectionVariables.set('socio_cotizacion_id', r.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{socio_token}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{socio_idem}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/cotizaciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "cotizaciones"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto\": \"microseguro_vida\",\n  \"referencia_cliente\": \"postman-cliente-001\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Repetir con la misma clave (misma cotización)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "pm.test('no recalcula', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('socio_cotizacion_id')));",
+                  "pm.test('marca la repetición', () => pm.expect(pm.response.headers.get('X-Idempotent-Replayed')).to.eql('true'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{socio_token}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{socio_idem}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/cotizaciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "cotizaciones"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto\": \"microseguro_vida\",\n  \"referencia_cliente\": \"postman-cliente-001\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Misma clave con otro cuerpo (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('IDEMPOTENCY_CONFLICT', () => pm.expect(pm.response.json().error.code).to.eql('IDEMPOTENCY_CONFLICT'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{socio_token}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{socio_idem}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/cotizaciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "cotizaciones"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto\": \"microseguro_vida\",\n  \"referencia_cliente\": \"postman-cliente-002\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Producto desconocido (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('INVALID_REQUEST', () => pm.expect(pm.response.json().error.code).to.eql('INVALID_REQUEST'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{socio_token}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "postman-{{$guid}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{socios_url}}/partners/v1/cotizaciones",
+              "host": [
+                "{{socios_url}}"
+              ],
+              "path": [
+                "partners",
+                "v1",
+                "cotizaciones"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto\": \"no_existe\",\n  \"referencia_cliente\": \"postman-cliente-001\",\n  \"datos\": {\n    \"edad\": 35,\n    \"suma_asegurada\": 50000000\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   ],
   "variable": [
@@ -11955,6 +12461,30 @@
     },
     {
       "key": "desembolso_id",
+      "value": ""
+    },
+    {
+      "key": "socios_url",
+      "value": "http://localhost:8007"
+    },
+    {
+      "key": "socio_client_id",
+      "value": "socio-demo"
+    },
+    {
+      "key": "socio_client_secret",
+      "value": ""
+    },
+    {
+      "key": "socio_token",
+      "value": ""
+    },
+    {
+      "key": "socio_idem",
+      "value": ""
+    },
+    {
+      "key": "socio_cotizacion_id",
       "value": ""
     }
   ]

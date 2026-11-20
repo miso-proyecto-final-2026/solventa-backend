@@ -1,0 +1,35 @@
+# Entorno local: PostgreSQL y Redis para MS Socios (HU32). Cotización corre aparte (services/cotizacion, puerto 8000).
+#   cd services/socios
+#   docker compose up -d
+#   export SOCIOS_DATABASE_URL=postgresql://solventa:solventa@localhost:5433/solventa
+#   export REDIS_URL=redis://localhost:6380/0
+#   export COTIZACION_URL=http://localhost:8000
+#   export SOLVENTA_MODO_DESARROLLO=1   # sin SOCIOS_JWT_SECRETO: secreto de desarrollo (solo local)
+#   alembic upgrade head
+#   SOCIO_DEMO_CLIENT_SECRET=<uno-propio-de-24-o-mas-caracteres> python scripts/sembrar_socio_demo.py
+#   uvicorn app.main:app --port 8007
+# Puertos distintos a los de Cotización para poder levantar ambos a la vez.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: solventa
+      POSTGRES_PASSWORD: solventa  # solo para desarrollo local
+      POSTGRES_DB: solventa
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U solventa"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

@@ -6,6 +6,7 @@
     { "carpeta": "suscripcion", "servicio": "solventa-suscripcion" },
     { "carpeta": "siniestros", "servicio": "solventa-siniestros" },
     { "carpeta": "pagos", "servicio": "solventa-pagos" },
-    { "carpeta": "notificaciones", "servicio": "solventa-notificaciones" }
+    { "carpeta": "notificaciones", "servicio": "solventa-notificaciones" },
+    { "carpeta": "socios", "servicio": "solventa-socios" }
   ]
 }
