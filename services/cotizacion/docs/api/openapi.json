@@ -599,6 +599,126 @@
         }
       }
     },
+    "/v1/asesor/clientes/{cliente_id}/ofertas-vida-hipotecario": {
+      "post": {
+        "tags": [
+          "asesor"
+        ],
+        "summary": "Genera la oferta de vida hipotecario del cliente y la registra como cotización",
+        "operationId": "oferta_vida_hipotecario_v1_asesor_clientes__cliente_id__ofertas_vida_hipotecario_post",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "title": "Cliente Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfertaVidaHipotecarioIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfertaVidaHipotecarioOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token del asesor, no es válido o venció.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El token no es de un asesor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El cliente no tiene un perfil enriquecido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "El cliente no tiene consentimiento vigente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "El servicio de perfilamiento no está disponible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Solicitud no válida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRespuestaOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/asesor/cotizaciones": {
       "post": {
         "tags": [
@@ -703,6 +823,52 @@
   },
   "components": {
     "schemas": {
+      "AjusteOfertaOut": {
+        "properties": {
+          "paso": {
+            "type": "string",
+            "title": "Paso"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "factor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factor"
+          },
+          "ajuste": {
+            "type": "integer",
+            "title": "Ajuste"
+          },
+          "acumulado": {
+            "type": "integer",
+            "title": "Acumulado"
+          },
+          "sin_dato": {
+            "type": "boolean",
+            "title": "Sin Dato"
+          }
+        },
+        "type": "object",
+        "required": [
+          "paso",
+          "nombre",
+          "factor",
+          "ajuste",
+          "acumulado",
+          "sin_dato"
+        ],
+        "title": "AjusteOfertaOut",
+        "description": "Un paso del precio: qué regla se aplicó y cuánto movió la prima, sin la cifra del cliente (ADR-0006)."
+      },
       "CampoOut": {
         "properties": {
           "nombre": {
@@ -791,6 +957,29 @@
           "productos"
         ],
         "title": "CatalogoOut"
+      },
+      "CoberturaOfertaOut": {
+        "properties": {
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "monto": {
+            "type": "integer",
+            "title": "Monto"
+          },
+          "deducible": {
+            "type": "integer",
+            "title": "Deducible"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tipo",
+          "monto",
+          "deducible"
+        ],
+        "title": "CoberturaOfertaOut"
       },
       "CoberturaOut": {
         "properties": {
@@ -1653,6 +1842,144 @@
           "latencia_interna_ms"
         ],
         "title": "MetadataOut"
+      },
+      "OfertaVidaHipotecarioIn": {
+        "properties": {
+          "suma_asegurada": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000000000.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suma Asegurada"
+          },
+          "enriquecer": {
+            "type": "boolean",
+            "title": "Enriquecer",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "OfertaVidaHipotecarioIn",
+        "description": "Sin suma asegurada, Perfilamiento usa la de sus reglas (ingreso por meses, HU25)."
+      },
+      "OfertaVidaHipotecarioOut": {
+        "properties": {
+          "cotizacion_id": {
+            "type": "string",
+            "title": "Cotizacion Id"
+          },
+          "oferta_id": {
+            "type": "string",
+            "title": "Oferta Id"
+          },
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "producto": {
+            "type": "string",
+            "title": "Producto"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "suma_asegurada": {
+            "type": "integer",
+            "title": "Suma Asegurada"
+          },
+          "prima_anual": {
+            "type": "integer",
+            "title": "Prima Anual"
+          },
+          "prima_mensual": {
+            "type": "integer",
+            "title": "Prima Mensual"
+          },
+          "etapa_de_vida": {
+            "type": "string",
+            "title": "Etapa De Vida"
+          },
+          "version_reglas": {
+            "type": "string",
+            "title": "Version Reglas"
+          },
+          "perfil_id": {
+            "type": "string",
+            "title": "Perfil Id"
+          },
+          "perfil_creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Perfil Creado En"
+          },
+          "degradado": {
+            "type": "boolean",
+            "title": "Degradado"
+          },
+          "coberturas": {
+            "items": {
+              "$ref": "#/components/schemas/CoberturaOfertaOut"
+            },
+            "type": "array",
+            "title": "Coberturas"
+          },
+          "ajustes": {
+            "items": {
+              "$ref": "#/components/schemas/AjusteOfertaOut"
+            },
+            "type": "array",
+            "title": "Ajustes"
+          },
+          "vigente_hasta": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Vigente Hasta"
+          },
+          "creada_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creada En"
+          },
+          "asesor_id": {
+            "type": "string",
+            "title": "Asesor Id"
+          },
+          "canal": {
+            "type": "string",
+            "title": "Canal"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cotizacion_id",
+          "oferta_id",
+          "cliente_id",
+          "producto",
+          "moneda",
+          "suma_asegurada",
+          "prima_anual",
+          "prima_mensual",
+          "etapa_de_vida",
+          "version_reglas",
+          "perfil_id",
+          "perfil_creado_en",
+          "degradado",
+          "coberturas",
+          "ajustes",
+          "vigente_hasta",
+          "creada_en",
+          "asesor_id",
+          "canal"
+        ],
+        "title": "OfertaVidaHipotecarioOut",
+        "description": "La oferta de Perfilamiento (HU25), ya registrada como cotización para la suscripción asistida."
       },
       "PerfilAsesorOut": {
         "properties": {

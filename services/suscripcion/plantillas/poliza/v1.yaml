@@ -16,11 +16,20 @@ productos:
       Riesgo de daño accidental o de robo del dispositivo asegurado durante la vigencia de la póliza. La aseguradora
       asume el costo de la reparación o de la reposición del dispositivo, hasta el valor asegurado y descontado el
       deducible que corresponda.
+  # HU26: la oferta de Perfilamiento (HU25) registrada como cotización. Texto propio del servicio, a confirmar con el
+  # equipo junto con el producto (ADR-0029 del backend).
+  vida_hipotecario:
+    nombre: Seguro de vida hipotecario
+    naturaleza_riesgo: >-
+      Riesgo de fallecimiento o de incapacidad total y permanente del asegurado durante la vigencia de la póliza. La
+      aseguradora asume el pago del valor asegurado, que corresponde al saldo del crédito hipotecario declarado, cuando
+      ocurra alguno de los amparos cubiertos.
 
 # Nombre legible de cada tipo de cobertura de la cotización.
 amparos:
   muerte: Muerte
   incapacidad_total: Incapacidad total
+  incapacidad_total_permanente: Incapacidad total y permanente
   dano_accidental: Daño accidental
   robo: Robo
 
