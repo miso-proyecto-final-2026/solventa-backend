@@ -6,6 +6,7 @@ Los cambios de la saga y los eventos que provocan se guardan en la misma transac
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import re
 from collections.abc import Callable
@@ -62,6 +63,46 @@ def clave_cobro(suscripcion_id: str) -> str:
     return f"cobro_prima:{suscripcion_id}"
 
 
+def encolar(s: Session, susc: SuscripcionDB, tipo: str, topic: str, ahora: datetime, extra: dict[str, Any]) -> None:
+    """Deja el evento en el outbox, en la misma transacción que el cambio de la saga."""
+    evento = Evento(
+        event_type=tipo,
+        source=FUENTE,
+        timestamp=ahora,
+        correlation_id=susc.correlacion_id or susc.id,
+        payload={
+            "suscripcion_id": susc.id,
+            "cotizacion_id": susc.cotizacion_id,
+            "cliente_id": susc.cliente_id,
+            "decision": susc.decision,
+            **extra,
+        },
+    )
+    repo.encolar_evento(
+        s, event_id=evento.event_id, topic=topic, clave=susc.id,
+        payload=evento.model_dump(mode="json"), ahora=ahora,
+    )
+
+
+def encolar_cobro(s: Session, susc: SuscripcionDB, ahora: datetime) -> None:
+    """El comando `cobro_prima_solicitado` (HU15, HU16 y HU18) y el borrado del token, que solo viaja en el evento."""
+    encolar(
+        s, susc, "cobro_prima_solicitado", TOPIC_COMANDOS, ahora,
+        {
+            "moneda": susc.moneda,
+            # Se conservan las dos primas por compatibilidad con consumidores de HU15.
+            "prima_mensual": int(susc.prima_mensual),
+            "prima_anual": int(susc.prima_anual),
+            # HU18: lo que se cobra (el primer período de la periodicidad elegida) y la clave del cobro.
+            "periodicidad_pago": susc.periodicidad_pago,
+            "monto": f"{monto_a_cobrar(susc):.2f}",
+            "idempotency_key": clave_cobro(susc.id),
+            "metodo_pago": susc.metodo_pago_token,
+        },
+    )
+    susc.metodo_pago_token = None  # el token solo viaja en el evento y se redacta al publicarlo
+
+
 def redactar(sobre: dict[str, Any]) -> dict[str, Any]:
     """Copia del evento sin el token de pago, para conservarlo como evidencia una vez publicado."""
     copia = {**sobre, "payload": {**sobre["payload"]}}
@@ -77,6 +118,11 @@ def parece_numero_de_tarjeta(valor: str) -> bool:
     cobrar se rechaza aquí, cuando todavía se le puede responder al asesor.
     """
     return bool(_PAN_CORRIDO.search(valor) or _PAN_AGRUPADO.search(valor) or _PAN_AMEX.search(valor))
+
+
+def clave_de_socio(socio_client_id: str, clave: str) -> str:
+    """Clave de idempotencia de la saga de un socio: `socio:` + hash de (socio, clave). Cabe en los 100 caracteres de la columna."""
+    return "socio:" + hashlib.sha256(f"{socio_client_id}\n{clave}".encode()).hexdigest()
 
 
 class ServicioSuscripcion:
@@ -153,6 +199,37 @@ class ServicioSuscripcion:
             periodicidad_pago=periodicidad_pago,
         )
 
+    async def iniciar_socio(
+        self,
+        socio_client_id: str,
+        cliente_id: str,
+        *,
+        clave: str | None,
+        cotizacion_id: str,
+        metodo_pago: str,
+        acepta_terminos: bool,
+        periodicidad_pago: str = "ANUAL",
+    ) -> tuple[SuscripcionDB, bool]:
+        """HU33: un socio inicia la saga a nombre de un cliente que MS Socios ya identificó (KYC y consentimiento).
+
+        La cotización debe ser de ese cliente: una ajena responde como inexistente, igual que en `iniciar_como`. La clave
+        de idempotencia queda acotada al socio, de modo que dos socios con la misma clave no se confunden y la garantía
+        también vale en la base (`uq_susc_cliente_clave`).
+        """
+        if not clave or not 1 <= len(clave) <= 100:
+            raise SolicitudInvalida(detalles=[{"campo": "Idempotency-Key", "motivo": "es obligatoria (1 a 100 caracteres)"}])
+        if parece_numero_de_tarjeta(metodo_pago):
+            raise SolicitudInvalida(detalles=[{"campo": "metodo_pago", "motivo": "debe ser el token de la pasarela, nunca el número de tarjeta"}])
+        return await self.iniciar_como(
+            cliente_id,
+            clave=clave_de_socio(socio_client_id, clave),
+            cotizacion_id=cotizacion_id,
+            metodo_pago=metodo_pago,
+            acepta_terminos=acepta_terminos,
+            periodicidad_pago=periodicidad_pago,
+            socio_client_id=socio_client_id,
+        )
+
     async def iniciar_como(
         self,
         cliente_id: str,
@@ -162,6 +239,7 @@ class ServicioSuscripcion:
         metodo_pago: str,
         acepta_terminos: bool,
         periodicidad_pago: str = "ANUAL",
+        socio_client_id: str | None = None,
     ) -> tuple[SuscripcionDB, bool]:
         """Inicia la saga para un cliente ya identificado."""
         if not clave or not 1 <= len(clave) <= 100:
@@ -185,7 +263,7 @@ class ServicioSuscripcion:
 
         try:
             creada = await asyncio.to_thread(
-                self._crear, cliente_id, clave, cotizacion, metodo_pago, periodicidad_pago, ahora
+                self._crear, cliente_id, clave, cotizacion, metodo_pago, periodicidad_pago, ahora, socio_client_id
             )
         except IntegrityError:
             creada = None
@@ -208,7 +286,14 @@ class ServicioSuscripcion:
             return repo.buscar_por_clave(s, cliente_id, clave)
 
     def _crear(
-        self, cliente_id: str, clave: str, c: Any, metodo_pago: str, periodicidad_pago: str, ahora: datetime
+        self,
+        cliente_id: str,
+        clave: str,
+        c: Any,
+        metodo_pago: str,
+        periodicidad_pago: str,
+        ahora: datetime,
+        socio_client_id: str | None = None,
     ) -> SuscripcionDB | None:
         with self._fabrica() as s, s.begin():
             if repo.buscar_activa_por_cotizacion(s, c.id) is not None:
@@ -231,6 +316,8 @@ class ServicioSuscripcion:
                 coberturas=[{"tipo": x.tipo, "monto": x.monto, "deducible": x.deducible} for x in c.coberturas] or None,
                 cotizacion_version_reglas=c.version_reglas,
                 asesor_id=c.asesor_id,
+                socio_client_id=socio_client_id,
+                cotizacion_vigente_hasta=c.vigente_hasta,
             )
 
     # --- consultar ----------------------------------------------------------------------------------------------
@@ -338,21 +425,7 @@ class ServicioSuscripcion:
                 ahora=ahora,
             )
             if resultado.decision is Decision.APROBADA:
-                self._encolar(
-                    s, susc, "cobro_prima_solicitado", TOPIC_COMANDOS, ahora,
-                    {
-                        "moneda": susc.moneda,
-                        # Se conservan las dos primas por compatibilidad con consumidores de HU15.
-                        "prima_mensual": int(susc.prima_mensual),
-                        "prima_anual": int(susc.prima_anual),
-                        # HU18: lo que se cobra (el primer período de la periodicidad elegida) y la clave del cobro.
-                        "periodicidad_pago": susc.periodicidad_pago,
-                        "monto": f"{monto_a_cobrar(susc):.2f}",
-                        "idempotency_key": clave_cobro(susc.id),
-                        "metodo_pago": susc.metodo_pago_token,
-                    },
-                )
-                susc.metodo_pago_token = None  # el token solo viaja en el evento y se redacta al publicarlo
+                encolar_cobro(s, susc, ahora)
             elif resultado.decision is Decision.RECHAZADA:
                 susc.metodo_pago_token = None
             elif resultado.decision is Decision.DERIVADA:
@@ -368,23 +441,7 @@ class ServicioSuscripcion:
 
     @staticmethod
     def _encolar(s: Session, susc: SuscripcionDB, tipo: str, topic: str, ahora: datetime, extra: dict[str, Any]) -> None:
-        evento = Evento(
-            event_type=tipo,
-            source=FUENTE,
-            timestamp=ahora,
-            correlation_id=susc.correlacion_id or susc.id,
-            payload={
-                "suscripcion_id": susc.id,
-                "cotizacion_id": susc.cotizacion_id,
-                "cliente_id": susc.cliente_id,
-                "decision": susc.decision,
-                **extra,
-            },
-        )
-        repo.encolar_evento(
-            s, event_id=evento.event_id, topic=topic, clave=susc.id,
-            payload=evento.model_dump(mode="json"), ahora=ahora,
-        )
+        encolar(s, susc, tipo, topic, ahora, extra)
 
     # --- barrido ------------------------------------------------------------------------------------------------
 

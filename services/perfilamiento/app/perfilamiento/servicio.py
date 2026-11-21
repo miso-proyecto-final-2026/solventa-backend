@@ -13,6 +13,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 from app.contexto import correlacion_id
@@ -21,11 +22,15 @@ from app.perfilamiento.errores import (
     ConsentimientoNoVigente,
     ConsultorInvalido,
     PerfilNoEncontrado,
+    SumaAseguradaInvalida,
 )
 from app.perfilamiento.normalizacion import PerfilCanonico, normalizar
+from app.perfilamiento.precio import OfertaCalculada, SumaFueraDeRango, calcular_oferta
+from app.perfilamiento.reglas_precio import ReglasPrecio, cargar_reglas
 from app.perfilamiento.repositorio import (
     LinajeGuardado,
     LineaLinaje,
+    OfertaGuardada,
     PerfilGuardado,
     RepositorioPerfiles,
 )
@@ -80,9 +85,11 @@ class Enriquecedor:
         fuentes: ServicioFuentes,
         repositorio: RepositorioPerfiles,
         reloj: Callable[[], datetime] | None = None,
+        reglas_precio: ReglasPrecio | None = None,
     ) -> None:
         self._fuentes = fuentes
         self._repo = repositorio
+        self._reglas = reglas_precio or cargar_reglas()
         self._reloj = reloj or (lambda: datetime.now(UTC))
 
     async def enriquecer(self, cliente_id: str, origen: str) -> PerfilEnriquecido:
@@ -109,6 +116,46 @@ class Enriquecedor:
         if guardado is None:
             raise PerfilNoEncontrado
         return PerfilEnriquecido(guardado)
+
+    async def oferta(
+        self, cliente_id: str, origen: str, suma_asegurada: int | None = None
+    ) -> tuple[OfertaGuardada, OfertaCalculada, datetime]:
+        """Oferta de vida hipotecario con el perfil vigente (HU25).
+
+        Exige consentimiento vigente (sin él no se calcula y el intento queda registrado) y un perfil ya
+        enriquecido: no se inventa un precio sin perfil. Guarda el desglose y el perfil usado, para auditoría.
+        """
+        verificacion = await self._exigir_consentimiento(cliente_id, "OFERTA", origen)
+        perfil = await asyncio.to_thread(self._repo.ultimo, cliente_id)
+        if perfil is None:
+            raise PerfilNoEncontrado
+        try:
+            calculada = calcular_oferta(
+                perfil.perfil["campos"],
+                degradado=perfil.degradado,
+                suma_asegurada=None if suma_asegurada is None else Decimal(suma_asegurada),
+                reglas=self._reglas,
+            )
+        except SumaFueraDeRango as error:
+            raise SumaAseguradaInvalida(str(error)) from error
+        guardada = await asyncio.to_thread(
+            self._repo.guardar_oferta,
+            cliente_id=cliente_id,
+            perfil_id=perfil.id,
+            producto=calculada.producto,
+            version_reglas=calculada.version_reglas,
+            moneda=calculada.moneda,
+            suma_asegurada=int(calculada.suma_asegurada),
+            etapa_de_vida=calculada.etapa_de_vida,
+            prima_anual=int(calculada.prima_anual),
+            prima_mensual=int(calculada.prima_mensual),
+            desglose=calculada.desglose(),
+            degradado=calculada.degradado,
+            consentimiento_id=verificacion.consentimiento_id,
+            correlacion_id=correlacion_id.get(),
+            creado_en=self._reloj(),
+        )
+        return guardada, calculada, perfil.creado_en
 
     async def linaje(
         self,

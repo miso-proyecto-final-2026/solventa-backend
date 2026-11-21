@@ -23,6 +23,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     event,
+    inspect,
     text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -85,6 +86,10 @@ class SuscripcionDB(BaseSuscripcion):
     compensacion_solicitada_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Asesor que hizo la cotización (HU39): decide quién puede gestionar esta saga. Nulo si no es asistida.
     asesor_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # Socio que inició la venta embebida (HU33), para conciliación y auditoría: su `client_id` OAuth. Nulo si no es de un socio.
+    socio_client_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Hasta cuándo es válida la cotización aceptada (HU16): la bandeja marca los casos vencidos sin consultar a Cotización.
+    cotizacion_vigente_hasta: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -101,6 +106,7 @@ class SuscripcionDB(BaseSuscripcion):
         ),
         Index("ix_susc_pendientes", "decision", "created_at"),
         Index("ix_susc_asesor", "asesor_id", "created_at"),
+        Index("ix_susc_socio", "socio_client_id", "created_at"),
     )
 
 
@@ -169,6 +175,8 @@ class FirmaDB(BaseSuscripcion):
     # Firma asistida (HU39): el firmante sigue siendo el cliente; aquí queda quién lo asistió.
     modalidad: Mapped[str] = mapped_column(String(20), default="CLIENTE", server_default="CLIENTE")
     asesor_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # Firma desde la app del socio (HU33): el firmante sigue siendo el cliente; aquí queda desde qué socio firmó.
+    socio_client_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
@@ -206,6 +214,34 @@ def _auditoria_inmutable(*_args: object) -> None:
     raise RuntimeError("La auditoría del asesor es inmutable")
 
 
+class AuditoriaSocioDB(BaseSuscripcion):
+    """Acciones del socio sobre la venta embebida (HU33), también las rechazadas. Sin OTP, token de pago ni datos personales.
+
+    Solo se agrega. `suscripcion_id` es nulo si la acción no llegó a tener suscripción (un inicio rechazado): queda `cotizacion_id`.
+    """
+
+    __tablename__ = "auditoria_socio"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    socio_client_id: Mapped[str] = mapped_column(String(64))
+    suscripcion_id: Mapped[str | None] = mapped_column(String(36), ForeignKey(f"{SCHEMA}.suscripciones.id"), nullable=True)
+    cotizacion_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    accion: Mapped[str] = mapped_column(String(30))
+    resultado: Mapped[str] = mapped_column(String(40))  # EXITO o el código del error
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("ix_auditoria_socio_suscripcion", "suscripcion_id"),
+        Index("ix_auditoria_socio", "socio_client_id", "created_at"),
+    )
+
+
+@event.listens_for(AuditoriaSocioDB, "before_update")
+@event.listens_for(AuditoriaSocioDB, "before_delete")
+def _auditoria_socio_inmutable(*_args: object) -> None:
+    raise RuntimeError("La auditoría del socio es inmutable")
+
+
 class EnlaceFirmaDB(BaseSuscripcion):
     """Enlace de firma enviado por correo (HU39). No guarda el token: se recalcula con la clave del servicio."""
 
@@ -233,7 +269,7 @@ class EnlaceFirmaDB(BaseSuscripcion):
 
 
 class RevisionAsistidaDB(BaseSuscripcion):
-    """Caso derivado a una persona (HU15 solo lo registra; resolverlo es de otra historia)."""
+    """Caso derivado a una persona (HU15 lo registra; HU16 lo decide). Una vez decidido es inmutable."""
 
     __tablename__ = "revisiones_asistidas"
 
@@ -244,10 +280,36 @@ class RevisionAsistidaDB(BaseSuscripcion):
     justificacion: Mapped[str | None] = mapped_column(Text, nullable=True)
     ajustes: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     asesor_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    asesor_nombre: Mapped[str | None] = mapped_column(String(120), nullable=True)
     decidido_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
-    __table_args__ = (Index("ix_revision_suscripcion", "suscripcion_id"),)
+    __table_args__ = (
+        Index("ix_revision_suscripcion", "suscripcion_id"),
+        # Un solo caso abierto por saga.
+        Index(
+            "uq_revision_abierta",
+            "suscripcion_id",
+            unique=True,
+            postgresql_where=text("decision IS NULL"),
+            sqlite_where=text("decision IS NULL"),
+        ),
+        Index("ix_revision_bandeja", "decision", "created_at"),
+    )
+
+
+@event.listens_for(RevisionAsistidaDB, "before_update")
+def _revision_decidida_inmutable(_mapper: object, _conexion: object, objetivo: RevisionAsistidaDB) -> None:
+    # `decision` en el historial: si ya traía valor antes de este cambio, la fila estaba decidida.
+    previo = inspect(objetivo).attrs.decision.history
+    ya_decidida = (previo.unchanged or previo.deleted or [None])[0] is not None
+    if ya_decidida:
+        raise RuntimeError("Una revisión asistida decidida es inmutable")
+
+
+@event.listens_for(RevisionAsistidaDB, "before_delete")
+def _revision_no_se_borra(*_args: object) -> None:
+    raise RuntimeError("Una revisión asistida no se puede borrar")
 
 
 class EventoSalidaDB(BaseSuscripcion):

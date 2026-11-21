@@ -256,6 +256,7 @@ async def test_ha08_1_y_2_reentregas_no_duplican_pagos_y_quedan_registradas(fabr
             )
         finally:
             await _detener(consumidor)
+            tarea.cancel()
             await asyncio.gather(tarea, return_exceptions=True)
     despues = _medir(fabrica_pg, pasarela)
     EVIDENCIA["4_reposicion_de_offsets"] = {

@@ -39,11 +39,14 @@ from app.suscripcion.documento import cargar_plantilla
 from app.suscripcion.enlace_firma import ServicioEnlaceFirma
 from app.suscripcion.firma import ServicioFirma
 from app.suscripcion.firma_asistida import ServicioFirmaAsistida
+from app.suscripcion.firma_socio import ServicioFirmaSocio
 from app.suscripcion.modelos_db import TABLA_EVENTOS_PROCESADOS
 from app.suscripcion.polizas import GeneradorDocumentos
 from app.suscripcion.proveedor_firma import ProveedorFirmaSimulado
 from app.suscripcion.reglas import cargar_reglas
 from app.suscripcion.repositorio import crear_engine, crear_tablas_locales
+from app.suscripcion.revision import UmbralesPrioridad
+from app.suscripcion.revision_asistida import ServicioRevisionAsistida
 from app.suscripcion.servicio import ServicioSuscripcion
 
 
@@ -129,6 +132,21 @@ def construir_servicio_asistida(
         certificados=certificados,
         enlaces=enlaces,
         espera_correo=timedelta(seconds=cargar_reglas().correo_espera_segundos),
+    )
+
+
+def construir_servicio_socio(servicio: ServicioSuscripcion, firma: ServicioFirma, engine: Engine) -> ServicioFirmaSocio:
+    """Venta embebida del socio (HU33): lo que hace el socio sobre la saga, con los mismos servicios de HU15 y HU21."""
+    return ServicioFirmaSocio(fabrica=sessionmaker(bind=engine, expire_on_commit=False), suscripciones=servicio, firma=firma)
+
+
+def construir_servicio_revision(engine: Engine, clientes: list[httpx.AsyncClient], config: ConfigSuscripcion) -> ServicioRevisionAsistida:
+    """Revisión asistida (HU16): bandeja y decisión del asesor sobre los casos derivados."""
+    return ServicioRevisionAsistida(
+        fabrica=sessionmaker(bind=engine, expire_on_commit=False),
+        identidad=ClienteIdentidad(clientes[0], config.identidad_key),
+        cotizaciones=ClienteCotizacion(clientes[1]),
+        umbrales=UmbralesPrioridad(config.revision_prioridad_alta_horas, config.revision_prioridad_media_horas),
     )
 
 

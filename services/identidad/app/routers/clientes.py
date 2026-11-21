@@ -121,14 +121,14 @@ def crear_cliente(
     return _cliente_out(cliente, access_token)
 
 
-@router.get("/clientes/busqueda", response_model=ClienteBusquedaOut)
-def buscar_cliente_por_documento(
-    tipo_documento: str,
-    numero_documento: str,
-    db: Session = Depends(get_db),
-    _asesor: ClaimsInternos = Depends(exigir_rol("ASESOR")),
-) -> ClienteBusquedaOut:
-    """Identifica a un cliente para la venta asistida (HU38). Solo asesores."""
+def identificar_cliente(
+    db: Session, tipo_documento: str, numero_documento: str
+) -> tuple[Cliente, ConsentimientoResumenOut]:
+    """Busca al cliente por documento y resume su consentimiento Open Finance (HU38, HU33).
+
+    Lo comparten la búsqueda del asesor y la identificación interna que pide MS Socios, para que las dos digan lo
+    mismo. 422 si el documento es inválido; 404 si no hay cliente.
+    """
     try:
         tipo = validar_tipo_documento(tipo_documento)
         numero = validar_documento(numero_documento)
@@ -151,6 +151,18 @@ def buscar_cliente_por_documento(
             fecha_otorgamiento=c.fecha_otorgamiento,
         )
     )
+    return cliente, consentimiento
+
+
+@router.get("/clientes/busqueda", response_model=ClienteBusquedaOut)
+def buscar_cliente_por_documento(
+    tipo_documento: str,
+    numero_documento: str,
+    db: Session = Depends(get_db),
+    _asesor: ClaimsInternos = Depends(exigir_rol("ASESOR")),
+) -> ClienteBusquedaOut:
+    """Identifica a un cliente para la venta asistida (HU38). Solo asesores."""
+    cliente, consentimiento = identificar_cliente(db, tipo_documento, numero_documento)
     return ClienteBusquedaOut(
         cliente_id=cliente.id,
         nombre=cliente.nombre,

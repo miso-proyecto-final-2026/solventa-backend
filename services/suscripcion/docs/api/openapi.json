@@ -714,6 +714,676 @@
         }
       }
     },
+    "/v1/interno/socios/suscripciones": {
+      "post": {
+        "tags": [
+          "socios"
+        ],
+        "summary": "Inicia la saga de una cotización del cliente",
+        "operationId": "iniciar_v1_interno_socios_suscripciones_post",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuscripcionSocioIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuscripcionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/interno/socios/suscripciones/{suscripcion_id}": {
+      "get": {
+        "tags": [
+          "socios"
+        ],
+        "summary": "Estado de la saga y de la póliza",
+        "operationId": "detalle_v1_interno_socios_suscripciones__suscripcion_id__get",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "socio_client_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "`client_id` OAuth del socio",
+              "title": "Socio Client Id"
+            },
+            "description": "`client_id` OAuth del socio"
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuscripcionSocioOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/interno/socios/suscripciones/{suscripcion_id}/documento-firma": {
+      "get": {
+        "tags": [
+          "socios"
+        ],
+        "summary": "Documento por firmar (hash y vencimiento)",
+        "operationId": "documento_firma_v1_interno_socios_suscripciones__suscripcion_id__documento_firma_get",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "socio_client_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "`client_id` OAuth del socio",
+              "title": "Socio Client Id"
+            },
+            "description": "`client_id` OAuth del socio"
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentoFirmaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/interno/socios/suscripciones/{suscripcion_id}/documento-firma/pdf": {
+      "get": {
+        "tags": [
+          "socios"
+        ],
+        "summary": "PDF de la póliza por firmar",
+        "operationId": "documento_firma_pdf_v1_interno_socios_suscripciones__suscripcion_id__documento_firma_pdf_get",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "socio_client_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "`client_id` OAuth del socio",
+              "title": "Socio Client Id"
+            },
+            "description": "`client_id` OAuth del socio"
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/pdf": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/interno/socios/suscripciones/{suscripcion_id}/firma/codigo": {
+      "post": {
+        "tags": [
+          "socios"
+        ],
+        "summary": "Envía el código de un solo uso al cliente",
+        "operationId": "solicitar_codigo_v1_interno_socios_suscripciones__suscripcion_id__firma_codigo_post",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodigoFirmaIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/interno/socios/suscripciones/{suscripcion_id}/firma": {
+      "post": {
+        "tags": [
+          "socios"
+        ],
+        "summary": "Firma del cliente desde la app del socio; repetirla devuelve la misma firma",
+        "operationId": "firmar_v1_interno_socios_suscripciones__suscripcion_id__firma_post",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FirmaSocioIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirmaSocioOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/revisiones": {
+      "get": {
+        "tags": [
+          "revision-asistida"
+        ],
+        "summary": "Bandeja de revisión asistida",
+        "operationId": "bandeja_v1_suscripciones_revisiones_get",
+        "parameters": [
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "PENDIENTE",
+                "DECIDIDA"
+              ],
+              "type": "string",
+              "default": "PENDIENTE",
+              "title": "Estado"
+            }
+          },
+          {
+            "name": "categoria",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CategoriaMotivo"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Categoria"
+            }
+          },
+          {
+            "name": "mias",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Solo las cotizaciones de este asesor",
+              "default": false,
+              "title": "Mias"
+            },
+            "description": "Solo las cotizaciones de este asesor"
+          },
+          {
+            "name": "vencidas",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Solo pendientes con la cotización vencida",
+              "default": false,
+              "title": "Vencidas"
+            },
+            "description": "Solo pendientes con la cotización vencida"
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Pagina"
+            }
+          },
+          {
+            "name": "tamano",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Tamano"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaRevisionesOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/revisiones/{suscripcion_id}": {
+      "get": {
+        "tags": [
+          "revision-asistida"
+        ],
+        "summary": "Detalle de un caso derivado",
+        "operationId": "detalle_v1_suscripciones_revisiones__suscripcion_id__get",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionDetalleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suscripciones/revisiones/{suscripcion_id}/decision": {
+      "post": {
+        "tags": [
+          "revision-asistida"
+        ],
+        "summary": "Aprobar, rechazar o ajustar un caso",
+        "operationId": "decidir_v1_suscripciones_revisiones__suscripcion_id__decision_post",
+        "parameters": [
+          {
+            "name": "suscripcion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suscripcion Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionRevisionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionDetalleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/suscripciones/enlace-firma/documento": {
       "get": {
         "tags": [
@@ -1915,6 +2585,15 @@
         ],
         "title": "BilleteraOut"
       },
+      "CategoriaMotivo": {
+        "type": "string",
+        "enum": [
+          "PERFIL_FUERA_DE_RANGO",
+          "MONTO_SOBRE_LIMITE",
+          "DATOS_INCOMPLETOS_O_INCONSISTENTES"
+        ],
+        "title": "CategoriaMotivo"
+      },
       "ClienteResumenOut": {
         "properties": {
           "nombre": {
@@ -2055,6 +2734,23 @@
         "title": "CobroOut",
         "description": "Resultado del paso COBRO según MS Pagos. Nunca incluye el token ni datos de la tarjeta."
       },
+      "CodigoFirmaIn": {
+        "properties": {
+          "socio_client_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Socio Client Id",
+            "description": "`client_id` OAuth del socio"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "socio_client_id"
+        ],
+        "title": "CodigoFirmaIn"
+      },
       "CompensacionOut": {
         "properties": {
           "estado": {
@@ -2092,6 +2788,186 @@
           "solicitada_en"
         ],
         "title": "CompensacionOut"
+      },
+      "CotizacionResumenOut": {
+        "properties": {
+          "cotizacion_id": {
+            "type": "string",
+            "title": "Cotizacion Id"
+          },
+          "producto": {
+            "type": "string",
+            "title": "Producto"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "monto_asegurado": {
+            "type": "integer",
+            "title": "Monto Asegurado"
+          },
+          "prima_mensual": {
+            "type": "integer",
+            "title": "Prima Mensual"
+          },
+          "prima_anual": {
+            "type": "integer",
+            "title": "Prima Anual"
+          },
+          "periodicidad_pago": {
+            "type": "string",
+            "title": "Periodicidad Pago"
+          },
+          "coberturas": {
+            "items": {
+              "$ref": "#/components/schemas/CoberturaOut"
+            },
+            "type": "array",
+            "title": "Coberturas"
+          },
+          "vigente_hasta": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Hasta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cotizacion_id",
+          "producto",
+          "moneda",
+          "monto_asegurado",
+          "prima_mensual",
+          "prima_anual",
+          "periodicidad_pago",
+          "coberturas",
+          "vigente_hasta"
+        ],
+        "title": "CotizacionResumenOut"
+      },
+      "DecisionAutomaticaOut": {
+        "properties": {
+          "motivos": {
+            "items": {
+              "$ref": "#/components/schemas/MotivoOut"
+            },
+            "type": "array",
+            "title": "Motivos"
+          },
+          "reglas_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reglas Version"
+          },
+          "decidido_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decidido En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "motivos",
+          "reglas_version",
+          "decidido_en"
+        ],
+        "title": "DecisionAutomaticaOut"
+      },
+      "DecisionHumanaOut": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "justificacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Justificacion"
+          },
+          "asesor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asesor Id"
+          },
+          "asesor_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asesor Nombre"
+          },
+          "decidido_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decidido En"
+          },
+          "ajuste": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ajuste"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision",
+          "justificacion",
+          "asesor_id",
+          "asesor_nombre",
+          "decidido_en",
+          "ajuste"
+        ],
+        "title": "DecisionHumanaOut"
       },
       "DecisionOut": {
         "properties": {
@@ -2163,6 +3039,46 @@
           "duracion_decision_ms"
         ],
         "title": "DecisionOut"
+      },
+      "DecisionRevisionIn": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "APROBADA",
+              "RECHAZADA",
+              "AJUSTADA"
+            ],
+            "title": "Decision"
+          },
+          "justificacion": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 20,
+            "title": "Justificacion",
+            "description": "Interna: el cliente no la ve"
+          },
+          "monto_asegurado": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monto Asegurado",
+            "description": "El nuevo monto asegurado; solo al ajustar"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "decision",
+          "justificacion"
+        ],
+        "title": "DecisionRevisionIn"
       },
       "DocumentoFirmaOut": {
         "properties": {
@@ -2551,6 +3467,137 @@
         "title": "FirmaResumenOut",
         "description": "Estado del paso FIRMA dentro de la saga (HU21). `compensacion`: el cobro se devuelve por una firma vencida o fallida."
       },
+      "FirmaSocioIn": {
+        "properties": {
+          "socio_client_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Socio Client Id",
+            "description": "`client_id` OAuth del socio"
+          },
+          "documento_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Documento Sha256"
+          },
+          "documento_revisado": {
+            "type": "boolean",
+            "title": "Documento Revisado"
+          },
+          "codigo": {
+            "type": "string",
+            "maxLength": 12,
+            "minLength": 1,
+            "title": "Codigo",
+            "description": "Código de un solo uso del cliente (OTP)"
+          },
+          "canal": {
+            "type": "string",
+            "enum": [
+              "MOVIL",
+              "WEB"
+            ],
+            "title": "Canal"
+          },
+          "ip": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 45
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip",
+            "description": "IP del cliente, para la evidencia de no repudio"
+          },
+          "dispositivo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dispositivo"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "socio_client_id",
+          "documento_sha256",
+          "documento_revisado",
+          "codigo",
+          "canal"
+        ],
+        "title": "FirmaSocioIn"
+      },
+      "FirmaSocioOut": {
+        "properties": {
+          "suscripcion_id": {
+            "type": "string",
+            "title": "Suscripcion Id"
+          },
+          "poliza_id": {
+            "type": "string",
+            "title": "Poliza Id"
+          },
+          "estado_saga": {
+            "type": "string",
+            "title": "Estado Saga"
+          },
+          "documento_sha256": {
+            "type": "string",
+            "title": "Documento Sha256"
+          },
+          "firmada_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Firmada En"
+          },
+          "canal": {
+            "type": "string",
+            "title": "Canal"
+          },
+          "metodo_autenticacion": {
+            "type": "string",
+            "title": "Metodo Autenticacion"
+          },
+          "modalidad": {
+            "type": "string",
+            "title": "Modalidad"
+          },
+          "socio_client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Socio Client Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "suscripcion_id",
+          "poliza_id",
+          "estado_saga",
+          "documento_sha256",
+          "firmada_en",
+          "canal",
+          "metodo_autenticacion",
+          "modalidad",
+          "socio_client_id"
+        ],
+        "title": "FirmaSocioOut"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -2563,6 +3610,23 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "MotivoOut": {
+        "properties": {
+          "categoria": {
+            "$ref": "#/components/schemas/CategoriaMotivo"
+          },
+          "texto": {
+            "type": "string",
+            "title": "Texto"
+          }
+        },
+        "type": "object",
+        "required": [
+          "categoria",
+          "texto"
+        ],
+        "title": "MotivoOut"
       },
       "PaginaAsistidasOut": {
         "properties": {
@@ -2594,6 +3658,43 @@
           "tamano"
         ],
         "title": "PaginaAsistidasOut"
+      },
+      "PaginaRevisionesOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RevisionResumenOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "total_vencidas": {
+            "type": "integer",
+            "title": "Total Vencidas",
+            "description": "Pendientes con la cotización vencida, para el aviso de la bandeja"
+          },
+          "pagina": {
+            "type": "integer",
+            "title": "Pagina"
+          },
+          "tamano": {
+            "type": "integer",
+            "title": "Tamano"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "total_vencidas",
+          "pagina",
+          "tamano"
+        ],
+        "title": "PaginaRevisionesOut"
       },
       "PolizaOut": {
         "properties": {
@@ -2762,6 +3863,265 @@
         ],
         "title": "PolizaResumenOut",
         "description": "La póliza dentro de la saga: lo que el operador necesita ver si el documento no se genera."
+      },
+      "PolizaSocioOut": {
+        "properties": {
+          "numero_poliza": {
+            "type": "string",
+            "title": "Numero Poliza"
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "vigencia_desde": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Vigencia Desde"
+          },
+          "fecha_vencimiento": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Vencimiento"
+          },
+          "fecha_emision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Emision"
+          },
+          "documento_estado": {
+            "type": "string",
+            "title": "Documento Estado"
+          },
+          "documento_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documento Sha256"
+          }
+        },
+        "type": "object",
+        "required": [
+          "numero_poliza",
+          "estado",
+          "vigencia_desde",
+          "fecha_vencimiento",
+          "fecha_emision",
+          "documento_estado",
+          "documento_sha256"
+        ],
+        "title": "PolizaSocioOut",
+        "description": "La póliza de la venta: lo que el socio necesita para informarle al cliente. Sin claves de almacenamiento."
+      },
+      "Prioridad": {
+        "type": "string",
+        "enum": [
+          "ALTA",
+          "MEDIA",
+          "BAJA"
+        ],
+        "title": "Prioridad"
+      },
+      "RevisionDetalleOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id",
+            "description": "Para que la consola pida los niveles del perfil a Cotización"
+          },
+          "cliente": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClienteResumenOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cotizacion": {
+            "$ref": "#/components/schemas/CotizacionResumenOut"
+          },
+          "decision_automatica": {
+            "$ref": "#/components/schemas/DecisionAutomaticaOut"
+          },
+          "decision_humana": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecisionHumanaOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prioridad": {
+            "$ref": "#/components/schemas/Prioridad"
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "PENDIENTE",
+              "DECIDIDA"
+            ],
+            "title": "Estado"
+          },
+          "creada_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creada En"
+          },
+          "cotizacion_vencida": {
+            "type": "boolean",
+            "title": "Cotizacion Vencida"
+          },
+          "puede_decidir": {
+            "type": "boolean",
+            "title": "Puede Decidir"
+          },
+          "decisiones_permitidas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Decisiones Permitidas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "cliente_id",
+          "cliente",
+          "cotizacion",
+          "decision_automatica",
+          "decision_humana",
+          "prioridad",
+          "estado",
+          "creada_en",
+          "cotizacion_vencida",
+          "puede_decidir",
+          "decisiones_permitidas"
+        ],
+        "title": "RevisionDetalleOut"
+      },
+      "RevisionResumenOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "El de la suscripción (saga)"
+          },
+          "cliente": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClienteResumenOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Nulo si MS Identidad no responde"
+          },
+          "producto": {
+            "type": "string",
+            "title": "Producto"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "monto_asegurado": {
+            "type": "integer",
+            "title": "Monto Asegurado"
+          },
+          "categorias": {
+            "items": {
+              "$ref": "#/components/schemas/CategoriaMotivo"
+            },
+            "type": "array",
+            "title": "Categorias"
+          },
+          "motivo": {
+            "type": "string",
+            "title": "Motivo"
+          },
+          "creada_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creada En"
+          },
+          "prioridad": {
+            "$ref": "#/components/schemas/Prioridad"
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "PENDIENTE",
+              "DECIDIDA"
+            ],
+            "title": "Estado"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
+          "cotizacion_vencida": {
+            "type": "boolean",
+            "title": "Cotizacion Vencida"
+          },
+          "vigente_hasta": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Hasta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "cliente",
+          "producto",
+          "moneda",
+          "monto_asegurado",
+          "categorias",
+          "motivo",
+          "creada_en",
+          "prioridad",
+          "estado",
+          "decision",
+          "cotizacion_vencida",
+          "vigente_hasta"
+        ],
+        "title": "RevisionResumenOut"
       },
       "SuscripcionAsistidaIn": {
         "properties": {
@@ -3116,6 +4476,167 @@
           "creada_en"
         ],
         "title": "SuscripcionOut"
+      },
+      "SuscripcionSocioIn": {
+        "properties": {
+          "socio_client_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Socio Client Id",
+            "description": "`client_id` OAuth del socio"
+          },
+          "cliente_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Cliente Id",
+            "description": "Cliente que MS Socios ya identificó en MS Identidad"
+          },
+          "cotizacion_id": {
+            "type": "string",
+            "maxLength": 36,
+            "minLength": 1,
+            "title": "Cotizacion Id"
+          },
+          "metodo_pago": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Metodo Pago",
+            "description": "Token de la pasarela; nunca el número de tarjeta"
+          },
+          "acepta_terminos": {
+            "type": "boolean",
+            "title": "Acepta Terminos",
+            "description": "El socio declara que el cliente aceptó; la prueba es la firma con OTP"
+          },
+          "periodicidad_pago": {
+            "type": "string",
+            "enum": [
+              "ANUAL",
+              "MENSUAL"
+            ],
+            "title": "Periodicidad Pago",
+            "default": "ANUAL"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "socio_client_id",
+          "cliente_id",
+          "cotizacion_id",
+          "metodo_pago",
+          "acepta_terminos"
+        ],
+        "title": "SuscripcionSocioIn"
+      },
+      "SuscripcionSocioOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "cotizacion_id": {
+            "type": "string",
+            "title": "Cotizacion Id"
+          },
+          "estado_saga": {
+            "type": "string",
+            "title": "Estado Saga"
+          },
+          "paso_actual": {
+            "type": "string",
+            "title": "Paso Actual"
+          },
+          "pasos": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pasos"
+          },
+          "producto": {
+            "type": "string",
+            "title": "Producto"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "monto_asegurado": {
+            "type": "integer",
+            "title": "Monto Asegurado"
+          },
+          "periodicidad_pago": {
+            "type": "string",
+            "title": "Periodicidad Pago"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecisionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cobro": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CobroOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "firma": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FirmaResumenOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "poliza": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PolizaSocioOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "creada_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Creada En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "cotizacion_id",
+          "estado_saga",
+          "paso_actual",
+          "pasos",
+          "producto",
+          "moneda",
+          "monto_asegurado",
+          "periodicidad_pago",
+          "decision",
+          "cobro",
+          "firma",
+          "poliza",
+          "creada_en"
+        ],
+        "title": "SuscripcionSocioOut"
       },
       "TokenEnlaceIn": {
         "properties": {

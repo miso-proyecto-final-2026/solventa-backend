@@ -17,6 +17,7 @@ from app.perfilamiento.modelos_db import (
     ConsultaLinajeDB,
     IntentoBloqueadoDB,
     LinajeFuenteDB,
+    OfertaCalculadaDB,
     PerfilEnriquecidoDB,
 )
 
@@ -98,6 +99,24 @@ class ConsultaLinaje:
     resultado: str
     consultado_en: datetime
     correlacion_id: str | None
+
+
+@dataclass(frozen=True)
+class OfertaGuardada:
+    id: str
+    cliente_id: str
+    perfil_id: str
+    producto: str
+    version_reglas: str
+    moneda: str
+    suma_asegurada: int
+    etapa_de_vida: str
+    prima_anual: int
+    prima_mensual: int
+    desglose: list[dict[str, Any]]
+    degradado: bool
+    consentimiento_id: str | None
+    creado_en: datetime
 
 
 @dataclass(frozen=True)
@@ -292,6 +311,66 @@ class RepositorioPerfiles:
                     f.resultado,
                     _utc(f.consultado_en),  # type: ignore[arg-type]
                     f.correlacion_id,
+                )
+                for f in filas
+            ]
+
+    def guardar_oferta(
+        self,
+        *,
+        cliente_id: str,
+        perfil_id: str,
+        producto: str,
+        version_reglas: str,
+        moneda: str,
+        suma_asegurada: int,
+        etapa_de_vida: str,
+        prima_anual: int,
+        prima_mensual: int,
+        desglose: list[dict[str, Any]],
+        degradado: bool,
+        consentimiento_id: str | None,
+        correlacion_id: str | None,
+        creado_en: datetime,
+    ) -> OfertaGuardada:
+        oferta_id = str(uuid.uuid4())
+        with self._fabrica() as sesion, sesion.begin():
+            sesion.add(
+                OfertaCalculadaDB(
+                    id=oferta_id,
+                    cliente_id=cliente_id,
+                    perfil_id=perfil_id,
+                    producto=producto,
+                    version_reglas=version_reglas,
+                    moneda=moneda,
+                    suma_asegurada=suma_asegurada,
+                    etapa_de_vida=etapa_de_vida,
+                    prima_anual=prima_anual,
+                    prima_mensual=prima_mensual,
+                    desglose=desglose,
+                    degradado=degradado,
+                    consentimiento_id=consentimiento_id,
+                    correlacion_id=correlacion_id,
+                    creado_en=creado_en,
+                )
+            )
+        return OfertaGuardada(
+            oferta_id, cliente_id, perfil_id, producto, version_reglas, moneda, suma_asegurada, etapa_de_vida,
+            prima_anual, prima_mensual, desglose, degradado, consentimiento_id, creado_en,
+        )
+
+    def ofertas_de(self, cliente_id: str) -> list[OfertaGuardada]:
+        with self._fabrica() as sesion:
+            filas = sesion.scalars(
+                select(OfertaCalculadaDB)
+                .where(OfertaCalculadaDB.cliente_id == cliente_id)
+                .order_by(OfertaCalculadaDB.creado_en)
+            ).all()
+            return [
+                OfertaGuardada(
+                    f.id, f.cliente_id, f.perfil_id, f.producto, f.version_reglas, f.moneda, int(f.suma_asegurada),
+                    f.etapa_de_vida, int(f.prima_anual), int(f.prima_mensual), f.desglose, f.degradado,
+                    f.consentimiento_id, _utc(f.creado_en),  # type: ignore[arg-type]
                 )
                 for f in filas
             ]

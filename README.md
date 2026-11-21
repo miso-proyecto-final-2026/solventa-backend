@@ -8,17 +8,17 @@ por separado, tiene su propio paquete `app`, su `Dockerfile` y su propio esquema
 services/
   identidad/     MS Identidad    HU01–HU08 (registro, KYC, consentimiento)
   cotizacion/    MS Cotización   HU09–HU14, HU37–HU38 (proveedores de datos, perfil, motor de rating)
-  perfilamiento/ MS Perfilamiento HU23 (enriquecimiento del perfil de riesgo, linaje)
-  suscripcion/   MS Suscripción   HU15 y HU18 (saga de suscripción: decisión automática, paso de cobro y documento de la póliza con HU20; la firma y la emisión llegan con HU21; la venta asistida del asesor, con HU39)
+  perfilamiento/ MS Perfilamiento HU23 (enriquecimiento del perfil de riesgo, linaje) y HU25 (oferta de vida hipotecario con precio individualizado)
+  suscripcion/   MS Suscripción   HU15 y HU18 (saga de suscripción: decisión automática, paso de cobro y documento de la póliza con HU20; la firma y la emisión llegan con HU21; la venta asistida del asesor, con HU39; la revisión asistida de los casos derivados, con HU16)
   siniestros/    MS Siniestros   HU27 (recepción de eventos paramétricos; HU28 validará la condición)
   pagos/         MS Pagos        HU18 (cobro de la prima con pasarela simulada, idempotencia y conciliación)
+  socios/        MS Socios       HU32 (API para socios de distribución: OAuth2 client credentials, cotización embebida en /partners/v1, cuota e idempotencia)
 docs/adr/        decisiones de arquitectura (compartidas)
 pyproject.toml   configuración de ruff
 requirements-dev.txt   dependencias de prueba comunes
 ```
 
-Los demás servicios del ADR (hoy solo Socios) se agregan como
-`services/<nombre>/` con la misma forma.
+Todos los servicios del ADR-0001 ya existen; uno nuevo se agrega como `services/<nombre>/` con la misma forma.
 
 ## Reglas de frontera
 
@@ -57,6 +57,7 @@ El CI corre `test` y `build` en matriz por servicio.
 | `IDENTIDAD_UMBRAL_FALLOS`, `IDENTIDAD_ENFRIAMIENTO_S` | cotizacion | Circuit breaker de la consulta (5 fallos seguidos; 15 s de enfriamiento). |
 | `PERFILES_API_KEYS` | cotizacion | Claves (separadas por coma) con permiso para consultar `GET /perfiles/{cliente_id}` (perfil crudo de HU09, con datos financieros) en `X-Service-Key`. Vacía = nadie accede. Es independiente de `AUDITOR_API_KEYS`: cada rol tiene sus claves. Debe venir de un secreto. |
 | `AUDITOR_API_KEYS` | cotizacion | Claves (separadas por coma) con permiso de auditoría en `X-Service-Key` para `GET /v1/cotizaciones/{id}/desglose` (HU14, ADR-0006). Vacía = nadie accede. Debe venir de un secreto; admite varias claves para rotarla. |
+| `SOCIOS_DATABASE_URL` (o `DATABASE_URL`), `REDIS_URL`, `COTIZACION_URL`, `SOCIOS_JWT_SECRETO` | socios | Base (esquema `socios`), almacén de la cuota y la idempotencia, URL interna de Cotización y secreto que firma los tokens de los socios (≥ 32 caracteres). Obligatorias fuera de desarrollo; detalle en `services/socios/README.md`. |
 | `PERFILAMIENTO_DATABASE_URL` | perfilamiento | Base de datos PostgreSQL (esquema `perfilamiento`, Alembic). Obligatoria fuera de desarrollo; admite `DATABASE_URL`. |
 | `PERFILAMIENTO_API_KEYS` | perfilamiento | Claves de servicio en `X-Service-Key`, como pares `nombre=clave` separados por coma; el nombre queda como «origen» de los intentos bloqueados. Vacía = nadie accede. Debe venir de un secreto. |
 | `REDIS_URL`, `IDENTIDAD_URL`, `IDENTIDAD_SERVICE_KEY` | perfilamiento | Igual que en cotización: caché de fuentes y consulta de consentimiento; obligatorias fuera de desarrollo. |
@@ -70,6 +71,7 @@ El CI corre `test` y `build` en matriz por servicio.
 | `POLIZAS_DOCUMENTOS_DIR` | suscripcion | Carpeta local de los PDF cuando no hay bucket (solo desarrollo; por defecto `./polizas-local`). |
 | `POLIZAS_VIGENCIA_MESES`, `POLIZAS_MAX_INTENTOS`, `POLIZAS_REINTENTO_BASE_S`, `POLIZAS_REINTENTO_MAXIMO_S` | suscripcion | Vigencia de la póliza desde el cobro (12 meses, provisional), intentos de generar el documento antes de `FALLIDO` (5) y espera inicial y máxima entre intentos (5 s y 300 s). |
 | `SUSCRIPCION_ESPERA_BARRIDO_S`, `SUSCRIPCION_TIMEOUT_S` | suscripcion | Segundos tras los que el barrido retoma una saga sin decidir (30) y timeout de las llamadas a servicios vecinos (2). |
+| `REVISION_PRIORIDAD_ALTA_HORAS`, `REVISION_PRIORIDAD_MEDIA_HORAS` | suscripcion | Horas en la bandeja de revisión asistida (HU16) desde las que un caso es de prioridad ALTA (24) o MEDIA (4). Provisionales: a validar con el negocio. |
 | `SINIESTROS_DATABASE_URL` | siniestros | Base de datos PostgreSQL (esquema `siniestros`, Alembic). Obligatoria fuera de desarrollo; admite `DATABASE_URL`. |
 | `SINIESTROS_API_KEYS` | siniestros | Llaves de los proveedores de eventos en `X-Service-Key`, como pares `fuente=clave` separados por coma; el evento debe traer esa misma `fuente`. Una clave sin nombre (la que entrega la plataforma en staging) es de la fuente `proveedor-simulado`. Vacía = nadie accede. Debe venir de un secreto. |
 | `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SEGURIDAD` | siniestros | Brokers de MSK (los inyecta la plataforma a los servicios con `eventos`) y `IAM` (por defecto) o `PLAINTEXT` (solo local). Obligatorias fuera de desarrollo; sin ellas, en desarrollo se publica en memoria y no hay consumidor. Ver ADR-0010 y ADR-0011. |
@@ -115,6 +117,17 @@ Qué debe proveer el ambiente (staging, producción) para que cada servicio arra
 | `PROVEEDORES_*`, `IDENTIDAD_TIMEOUT_S`, `IDENTIDAD_UMBRAL_FALLOS`, `IDENTIDAD_ENFRIAMIENTO_S` | No | Config | Timeouts, circuit breaker y TTL de la caché; los valores por defecto están alineados con el presupuesto de HA01. |
 | `TRAZA_COLA_MAX`, `TRAZA_REINTENTOS` | No | Config | Cola en memoria y reintentos de la trazabilidad de consultas (HU11, ADR-0007). |
 | `SOLVENTA_MODO_DESARROLLO` | **No definirla** | — | Habilita sustitutos locales (consentimiento siempre otorgado, caché en memoria, SQLite). Nunca en staging ni en producción. |
+
+### MS Socios (HU32)
+
+| Variable | Obligatoria | Tipo | Notas |
+|---|---|---|---|
+| `SOCIOS_DATABASE_URL` (o `DATABASE_URL`) | Sí | Secreto | PostgreSQL, esquema `socios` (`clientes_api`, `contratos_api`). |
+| `REDIS_URL` | Sí | Config | Cuota por socio e idempotencia (ADR-0025). Compartido entre réplicas. |
+| `COTIZACION_URL` | Sí | Config | URL interna de MS Cotización (`http://solventa-backend`). |
+| `SOCIOS_JWT_SECRETO` | Sí | Secreto | Firma los tokens de los socios (HS256, ≥ 32 caracteres). Propio de Socios: no se comparte con otro servicio. |
+| `SOCIOS_JWT_TTL_S`, `SOCIOS_TIMEOUT_COTIZACION_S` | No | Config | 3600 s y 3 s por defecto. |
+| `SOCIO_DEMO_CLIENT_SECRET` | Solo el Job de siembra | Secreto | Secreto del socio de prueba (`scripts/sembrar_socio_demo.py`). Solo se guarda su hash. |
 
 ### MS Identidad
 

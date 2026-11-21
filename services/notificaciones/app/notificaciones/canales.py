@@ -46,6 +46,7 @@ class PushSimulado:
             cliente_id=push.cliente_id,
             tipo=push.tipo.value,
             suscripcion_id=push.suscripcion_id,
+            poliza_id=push.poliza_id,
             titulo=push.titulo,
             texto=push.texto,
             titulo_publico=push.titulo_publico,

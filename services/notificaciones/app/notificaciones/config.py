@@ -12,6 +12,8 @@ SQLITE_LOCAL = "sqlite:///./notificaciones.db"
 TOPIC_CICLO_VIDA = "solventa.polizas.ciclovida"
 # El grupo de consumo debe empezar por el nombre del servicio: es lo único que permite su política de IAM.
 GRUPO_POLIZAS = "solventa-notificaciones.polizas"
+TOPIC_INDEMNIZACIONES = "solventa.pagos.indemnizaciones"
+GRUPO_PAGOS = "solventa-notificaciones.pagos"
 CORREO_PROVEEDORES = ("simulado", "ses")
 
 

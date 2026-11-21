@@ -15,11 +15,14 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from app.eventos import PublicadorMemoria
 from app.suscripcion import repositorio as repo
+from app.suscripcion.acceso import Asesor
 from app.suscripcion.cobros import manejar_resultado_cobro
-from app.suscripcion.errores import CotizacionYaUsada
+from app.suscripcion.dominio import PerfilRiesgo
+from app.suscripcion.errores import CotizacionYaUsada, RevisionYaDecidida
 from app.suscripcion.modelos_db import SCHEMA, BaseSuscripcion
 from app.suscripcion.reglas import cargar_reglas
 from app.suscripcion.relay import RelayEventos
+from app.suscripcion.revision_asistida import ServicioRevisionAsistida
 from app.suscripcion.servicio import ServicioSuscripcion
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
@@ -32,7 +35,7 @@ from tests.test_polizas import AlmacenMemoria, _generador
 pytestmark = pytest.mark.contenedores
 
 RAIZ = Path(__file__).parents[1]
-TABLAS = {"suscripciones", "revisiones_asistidas", "eventos_salida", "eventos_procesados", "polizas", "firmas", "auditoria_asesor", "enlaces_firma"}
+TABLAS = {"suscripciones", "revisiones_asistidas", "eventos_salida", "eventos_procesados", "polizas", "firmas", "auditoria_asesor", "auditoria_socio", "enlaces_firma"}
 REPLICAS = 8
 PEDIDO = {"token": "token-1", "cotizacion_id": "cot-1", "metodo_pago": "tok_visa_123", "acepta_terminos": True}
 
@@ -341,6 +344,46 @@ def test_la_base_no_deja_corregir_ni_borrar_la_auditoria_del_asesor(fabrica_pg):
         s.execute(text(f"DELETE FROM {SCHEMA}.auditoria_asesor"))
 
 
+def test_la_base_no_deja_corregir_ni_borrar_la_auditoria_del_socio(fabrica_pg):
+    from sqlalchemy.exc import DBAPIError
+
+    with fabrica_pg() as s, s.begin():
+        s.execute(
+            text(
+                f"INSERT INTO {SCHEMA}.auditoria_socio (socio_client_id, accion, resultado, created_at) "
+                "VALUES ('socio-a', 'FIRMAR', 'EXITO', now())"
+            )
+        )
+
+    with pytest.raises(DBAPIError, match="inmutable"), fabrica_pg() as s, s.begin():
+        s.execute(text(f"UPDATE {SCHEMA}.auditoria_socio SET resultado = 'OTRO'"))
+    with pytest.raises(DBAPIError, match="inmutable"), fabrica_pg() as s, s.begin():
+        s.execute(text(f"DELETE FROM {SCHEMA}.auditoria_socio"))
+
+
+def test_la_base_acepta_la_modalidad_socio_y_guarda_el_socio_de_la_saga(fabrica_pg):
+    from dataclasses import replace
+
+    from tests.test_firma import ORIGEN, OTP
+
+    susc, nueva_firma = _lista_para_firmar(fabrica_pg)
+    firma = nueva_firma()
+    with fabrica_pg() as s, s.begin():
+        s.execute(text(f"UPDATE {SCHEMA}.suscripciones SET socio_client_id = 'socio-a' WHERE id = :i"), {"i": susc.id})
+    origen = replace(ORIGEN, canal="WEB", modalidad="SOCIO", socio_client_id="socio-a")
+    documento = asyncio.run(firma.documento_para_firmar_como(susc.id, susc.cliente_id))
+
+    firma_db, creada = asyncio.run(
+        firma.firmar_como(
+            susc.id, susc.cliente_id, documento_sha256=documento.documento_sha256, documento_revisado=True, codigo=OTP, origen=origen
+        )
+    )
+
+    assert creada and (firma_db.modalidad, firma_db.socio_client_id) == ("SOCIO", "socio-a")
+    with fabrica_pg() as s:
+        assert s.execute(text(f"SELECT socio_client_id FROM {SCHEMA}.suscripciones WHERE id = :i"), {"i": susc.id}).scalar() == "socio-a"
+
+
 def test_la_base_rechaza_una_modalidad_de_firma_invalida(fabrica_pg):
     from sqlalchemy.exc import DBAPIError
 
@@ -453,3 +496,79 @@ def test_la_base_acepta_la_firma_por_enlace_con_su_evidencia(fabrica_pg):
     assert creada and (firma_db.modalidad, firma_db.asesor_id) == (MODALIDAD_ASISTIDA_ENLACE, "ase-1")
     with fabrica_pg() as s:
         assert s.execute(text(f"SELECT estado FROM {SCHEMA}.enlaces_firma")).scalar() == "USADO"
+
+
+# --- revisión asistida (HU16) ---------------------------------------------------------------------------------------
+
+def _derivada(fabrica_pg):
+    servicio = _servicio(fabrica_pg, PerfilesFalsos(PerfilRiesgo.no_disponible("Perfilamiento no responde.")))
+    susc, _ = asyncio.run(servicio.iniciar(clave="k", **PEDIDO))
+    asyncio.run(servicio.decidir(susc.id))
+    return susc
+
+
+def _revisiones(fabrica_pg):
+    return ServicioRevisionAsistida(
+        fabrica=fabrica_pg, identidad=IdentidadFalsa(), cotizaciones=CotizacionesFalsas(), reloj=lambda: AHORA
+    )
+
+
+def test_ocho_replicas_decidiendo_el_mismo_caso_dejan_exactamente_una_ganadora(fabrica_pg):
+    susc = _derivada(fabrica_pg)
+    asesor = Asesor("ase-1", "Laura Gómez")
+
+    async def replica(i):
+        decision = "APROBADA" if i % 2 == 0 else "RECHAZADA"
+        return await _revisiones(fabrica_pg).decidir(asesor, susc.id, decision, "Justificación suficientemente larga.")
+
+    resultados = _en_paralelo(REPLICAS, replica)
+
+    errores = [r for r in resultados if isinstance(r, Exception)]
+    assert all(isinstance(e, RevisionYaDecidida) for e in errores), errores
+    assert len(errores) == REPLICAS - 1
+    with fabrica_pg() as s:
+        assert s.execute(text(f"SELECT count(*) FROM {SCHEMA}.revisiones_asistidas WHERE decision IS NOT NULL")).scalar() == 1
+        cobros = s.execute(text(f"SELECT count(*) FROM {SCHEMA}.eventos_salida WHERE payload->>'event_type' = 'cobro_prima_solicitado'")).scalar()
+        resueltas = s.execute(text(f"SELECT count(*) FROM {SCHEMA}.eventos_salida WHERE payload->>'event_type' = 'revision_asistida_resuelta'")).scalar()
+    assert cobros <= 1
+    assert resueltas == 1
+
+
+def test_el_indice_parcial_deja_una_sola_revision_abierta_por_saga(fabrica_pg):
+    susc = _derivada(fabrica_pg)
+    with pytest.raises(IntegrityError), fabrica_pg() as s, s.begin():
+        repo.crear_revision_asistida(s, susc.id, "otro motivo", AHORA)
+
+
+def test_la_base_no_deja_corregir_ni_borrar_una_revision_decidida(fabrica_pg):
+    from sqlalchemy.exc import DBAPIError
+
+    susc = _derivada(fabrica_pg)
+    # Abierta: se puede completar. Decidida: ya no se toca.
+    with fabrica_pg() as s, s.begin():
+        s.execute(text(f"UPDATE {SCHEMA}.revisiones_asistidas SET decision = 'APROBADA', justificacion = 'x' WHERE suscripcion_id = :i"), {"i": susc.id})
+    with pytest.raises(DBAPIError, match="inmutable"), fabrica_pg() as s, s.begin():
+        s.execute(text(f"UPDATE {SCHEMA}.revisiones_asistidas SET justificacion = 'otra'"))
+    with pytest.raises(DBAPIError, match="no se puede borrar"), fabrica_pg() as s, s.begin():
+        s.execute(text(f"DELETE FROM {SCHEMA}.revisiones_asistidas"))
+
+
+def test_la_migracion_0007_se_puede_revertir_a_0006(base_migrada):
+    engine, cfg = base_migrada
+    command.downgrade(cfg, "0006")
+    columnas = {c["name"] for c in inspect(engine).get_columns("suscripciones", schema=SCHEMA)}
+    assert "cotizacion_vigente_hasta" not in columnas
+    command.upgrade(cfg, "head")
+    columnas = {c["name"] for c in inspect(engine).get_columns("suscripciones", schema=SCHEMA)}
+    assert "cotizacion_vigente_hasta" in columnas
+
+
+def test_la_migracion_0008_se_puede_revertir_a_0007(base_migrada):
+    engine, cfg = base_migrada
+    command.downgrade(cfg, "0007")
+    assert "auditoria_socio" not in set(inspect(engine).get_table_names(schema=SCHEMA))
+    assert "socio_client_id" not in {c["name"] for c in inspect(engine).get_columns("suscripciones", schema=SCHEMA)}
+    assert "socio_client_id" not in {c["name"] for c in inspect(engine).get_columns("firmas", schema=SCHEMA)}
+    command.upgrade(cfg, "head")
+    assert "auditoria_socio" in set(inspect(engine).get_table_names(schema=SCHEMA))
+    assert "socio_client_id" in {c["name"] for c in inspect(engine).get_columns("suscripciones", schema=SCHEMA)}

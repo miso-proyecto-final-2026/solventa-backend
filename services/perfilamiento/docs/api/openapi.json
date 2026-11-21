@@ -218,6 +218,79 @@
         }
       }
     },
+    "/v1/perfilamiento/{cliente_id}/oferta": {
+      "get": {
+        "tags": [
+          "perfilamiento"
+        ],
+        "summary": "Oferta de vida hipotecario con el precio individualizado por el perfil (exige consentimiento vigente)",
+        "operationId": "oferta_v1_perfilamiento__cliente_id__oferta_get",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cliente Id"
+            }
+          },
+          {
+            "name": "suma_asegurada",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Saldo a asegurar en COP. Sin ella se usa el ingreso por los meses de las reglas.",
+              "title": "Suma Asegurada"
+            },
+            "description": "Saldo a asegurar en COP. Sin ella se usa el ingreso por los meses de las reglas."
+          },
+          {
+            "name": "x-service-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfertaOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El cliente no tiene perfil enriquecido: no se inventa un precio."
+          },
+          "422": {
+            "description": "Suma asegurada fuera de los límites de las reglas."
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -279,6 +352,29 @@
           "obtenido_en"
         ],
         "title": "CampoOut"
+      },
+      "CoberturaOut": {
+        "properties": {
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "monto_cubierto": {
+            "type": "integer",
+            "title": "Monto Cubierto"
+          },
+          "deducible_porcentaje": {
+            "type": "string",
+            "title": "Deducible Porcentaje"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tipo",
+          "monto_cubierto",
+          "deducible_porcentaje"
+        ],
+        "title": "CoberturaOut"
       },
       "ConflictoOut": {
         "properties": {
@@ -453,6 +549,155 @@
           "estado_consentimiento"
         ],
         "title": "LineaLinajeOut"
+      },
+      "OfertaOut": {
+        "properties": {
+          "oferta_id": {
+            "type": "string",
+            "title": "Oferta Id"
+          },
+          "cliente_id": {
+            "type": "string",
+            "title": "Cliente Id"
+          },
+          "producto": {
+            "type": "string",
+            "title": "Producto"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "suma_asegurada": {
+            "type": "integer",
+            "title": "Suma Asegurada"
+          },
+          "prima_anual": {
+            "type": "integer",
+            "title": "Prima Anual"
+          },
+          "prima_mensual": {
+            "type": "integer",
+            "title": "Prima Mensual"
+          },
+          "etapa_de_vida": {
+            "type": "string",
+            "title": "Etapa De Vida"
+          },
+          "version_reglas": {
+            "type": "string",
+            "title": "Version Reglas"
+          },
+          "perfil_id": {
+            "type": "string",
+            "title": "Perfil Id"
+          },
+          "perfil_creado_en": {
+            "type": "string",
+            "title": "Perfil Creado En"
+          },
+          "degradado": {
+            "type": "boolean",
+            "title": "Degradado"
+          },
+          "desglose": {
+            "items": {
+              "$ref": "#/components/schemas/PasoOut"
+            },
+            "type": "array",
+            "title": "Desglose"
+          },
+          "coberturas": {
+            "items": {
+              "$ref": "#/components/schemas/CoberturaOut"
+            },
+            "type": "array",
+            "title": "Coberturas"
+          },
+          "creado_en": {
+            "type": "string",
+            "title": "Creado En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "oferta_id",
+          "cliente_id",
+          "producto",
+          "moneda",
+          "suma_asegurada",
+          "prima_anual",
+          "prima_mensual",
+          "etapa_de_vida",
+          "version_reglas",
+          "perfil_id",
+          "perfil_creado_en",
+          "degradado",
+          "desglose",
+          "coberturas",
+          "creado_en"
+        ],
+        "title": "OfertaOut"
+      },
+      "PasoOut": {
+        "properties": {
+          "paso": {
+            "type": "string",
+            "title": "Paso"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "factor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factor"
+          },
+          "valor_perfil": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Perfil"
+          },
+          "ajuste": {
+            "type": "integer",
+            "title": "Ajuste"
+          },
+          "acumulado": {
+            "type": "integer",
+            "title": "Acumulado"
+          },
+          "sin_dato": {
+            "type": "boolean",
+            "title": "Sin Dato"
+          }
+        },
+        "type": "object",
+        "required": [
+          "paso",
+          "nombre",
+          "factor",
+          "valor_perfil",
+          "ajuste",
+          "acumulado",
+          "sin_dato"
+        ],
+        "title": "PasoOut"
       },
       "PerfilOut": {
         "properties": {
