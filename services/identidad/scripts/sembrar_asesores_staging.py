@@ -1,21 +1,21 @@
-"""Siembra 5 asesores en staging. Uso manual; no forma parte del despliegue. Es idempotente.
+"""Siembra 5 asesores en staging. Lo ejecuta el Job `solventa-identidad-seed` de la infra. Es idempotente.
 
-Solo crea usuarios internos con rol ASESOR (sin clientes ni operador). Si el correo ya existe no se toca,
-tampoco su clave.
+Solo crea usuarios internos con rol ASESOR (sin clientes ni operador).
 
-Uso: la imagen no incluye scripts/, así que se envía por stdin al Pod de identidad (que ya trae DATABASE_URL):
-    kubectl -n staging exec -i deploy/solventa-identidad -- env ENTORNO=staging python - < sembrar_asesores_staging.py
+Variables de entorno:
+    ENTORNO                   obligatoria; debe valer "staging" (salvaguarda contra otros entornos).
+    ASESORES_PASSWORD         obligatoria; clave compartida de los asesores. Viene de Secrets Manager
+                              (solventa/staging/asesores-password) por un ExternalSecret; no tiene valor por defecto.
+    ASESORES_ACTUALIZAR_CLAVE "1" para reescribir la clave de los asesores que ya existen (cambio de clave del demo).
+                              Sin ella, los existentes no se tocan.
+    ASESORES_DOMINIO          dominio de los correos (por defecto solventa.test).
 
-Claves:
-    - Con ASESORES_PASSWORD todos los asesores nuevos usan esa clave.
-    - Sin ella se genera una clave aleatoria por asesor y se imprime UNA sola vez al terminar.
-    No hay claves por defecto ni se guardan en el repositorio.
-
-Salvaguarda: se niega a correr si ENTORNO no es "staging".
+Uso manual (la imagen incluye scripts/; DATABASE_URL ya lo define el Deployment):
+    kubectl -n staging exec -i deploy/solventa-identidad -- \
+        env ENTORNO=staging ASESORES_PASSWORD='<clave>' python scripts/sembrar_asesores_staging.py
 """
 
 import os
-import secrets
 import sys
 from pathlib import Path
 
@@ -30,6 +30,10 @@ from app.security import hash_password
 ENTORNO_PERMITIDO = "staging"
 DOMINIO = os.environ.get("ASESORES_DOMINIO", "solventa.test")
 
+CREADO = "creado"
+ACTUALIZADO = "clave actualizada"
+SIN_CAMBIOS = "ya existía (sin cambios)"
+
 # (usuario del correo, nombre)
 ASESORES_STAGING = [
     ("asesor1", "Asesor Staging 1"),
@@ -40,17 +44,23 @@ ASESORES_STAGING = [
 ]
 
 
-def sembrar(db, dominio: str = DOMINIO, password: str | None = None) -> list[tuple[str, str | None]]:
-    """Crea los asesores que falten. Devuelve (email, clave) de los creados y (email, None) de los que ya existían."""
-    resultado: list[tuple[str, str | None]] = []
+def sembrar(db, password: str, dominio: str = DOMINIO, actualizar_clave: bool = False) -> list[tuple[str, str]]:
+    """Crea los asesores que falten. Con `actualizar_clave`, reescribe la clave de los que ya existen.
+
+    Devuelve (email, resultado) con resultado CREADO, ACTUALIZADO o SIN_CAMBIOS.
+    """
+    resultado: list[tuple[str, str]] = []
     for usuario, nombre in ASESORES_STAGING:
         email = f"{usuario}@{dominio}".lower()
-        if db.query(UsuarioInterno).filter_by(email=email).first() is not None:
-            resultado.append((email, None))
-            continue
-        clave = password or secrets.token_urlsafe(12)
-        db.add(UsuarioInterno(email=email, nombre=nombre, password_hash=hash_password(clave), rol=ROL_ASESOR))
-        resultado.append((email, clave))
+        existente = db.query(UsuarioInterno).filter_by(email=email).first()
+        if existente is None:
+            db.add(UsuarioInterno(email=email, nombre=nombre, password_hash=hash_password(password), rol=ROL_ASESOR))
+            resultado.append((email, CREADO))
+        elif actualizar_clave:
+            existente.password_hash = hash_password(password)
+            resultado.append((email, ACTUALIZADO))
+        else:
+            resultado.append((email, SIN_CAMBIOS))
     db.commit()
     return resultado
 
@@ -59,18 +69,14 @@ def main() -> None:
     entorno = os.environ.get("ENTORNO", "")
     if entorno != ENTORNO_PERMITIDO:
         sys.exit(f'ENTORNO="{entorno}": este script solo corre con ENTORNO={ENTORNO_PERMITIDO}.')
-    password = os.environ.get("ASESORES_PASSWORD") or None
+    password = os.environ.get("ASESORES_PASSWORD", "")
+    if not password:
+        sys.exit("Defina ASESORES_PASSWORD (la clave compartida de los asesores).")
+    actualizar = os.environ.get("ASESORES_ACTUALIZAR_CLAVE", "") == "1"
     with SessionLocal() as db:
-        resultado = sembrar(db, DOMINIO, password)
-    for email, clave in resultado:
-        if clave is None:
-            print(f"{email}: ya existía (sin cambios)")
-        elif password:
-            print(f"{email}: creado (clave de ASESORES_PASSWORD)")
-        else:
-            print(f"{email}: creado, clave {clave}")
-    if not password and any(c for _, c in resultado):
-        print("Guarde las claves ahora: no se vuelven a mostrar.")
+        resultado = sembrar(db, password, DOMINIO, actualizar)
+    for email, estado in resultado:
+        print(f"{email}: {estado}")
 
 
 if __name__ == "__main__":
