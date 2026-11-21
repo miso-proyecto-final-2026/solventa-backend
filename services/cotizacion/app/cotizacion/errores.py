@@ -67,6 +67,25 @@ class LinajeNoDisponible(Exception):
     """Perfilamiento no respondió, falló o rechazó la credencial de Cotización (HU24)."""
 
 
+class OfertaSinConsentimiento(Exception):
+    """El cliente no tiene consentimiento vigente: no se genera la oferta (HU26, criterio 6)."""
+
+
+class OfertaSinPerfil(Exception):
+    """El cliente no tiene un perfil enriquecido y no se pidió enriquecerlo (HU26)."""
+
+
+class OfertaNoDisponible(Exception):
+    """Perfilamiento no respondió, falló o rechazó la credencial de Cotización (HU26)."""
+
+
+class SumaAseguradaFueraDeRango(ErrorValidacion):
+    """Perfilamiento rechazó la suma asegurada por estar fuera de los límites de sus reglas (HU25)."""
+
+    def __init__(self, motivo: str) -> None:
+        super().__init__([DetalleError("suma_asegurada", motivo)])
+
+
 class ErrorReglas(Exception):
     """Las reglas versionadas no existen o son inválidas (error de configuración)."""
 
@@ -144,6 +163,37 @@ def registrar_errores(app: FastAPI) -> None:
             content=cuerpo_error(
                 "LINAJE_NO_DISPONIBLE",
                 "El linaje no está disponible en este momento. Intente de nuevo más tarde.",
+            ),
+        )
+
+    @app.exception_handler(OfertaSinConsentimiento)
+    async def _oferta_sin_consentimiento(
+        _req: Request, _exc: OfertaSinConsentimiento
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content=cuerpo_error(
+                "CONSENTIMIENTO_REQUERIDO",
+                "El cliente no ha otorgado el consentimiento de datos: sin él no se genera la oferta.",
+            ),
+        )
+
+    @app.exception_handler(OfertaSinPerfil)
+    async def _oferta_sin_perfil(_req: Request, _exc: OfertaSinPerfil) -> JSONResponse:
+        return JSONResponse(
+            status_code=404,
+            content=cuerpo_error(
+                "PERFIL_NO_ENCONTRADO", "El cliente no tiene un perfil enriquecido."
+            ),
+        )
+
+    @app.exception_handler(OfertaNoDisponible)
+    async def _oferta_no_disponible(_req: Request, _exc: OfertaNoDisponible) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content=cuerpo_error(
+                "OFERTA_NO_DISPONIBLE",
+                "La oferta no está disponible en este momento. Intente de nuevo más tarde.",
             ),
         )
 

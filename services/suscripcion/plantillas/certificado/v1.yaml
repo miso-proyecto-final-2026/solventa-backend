@@ -29,9 +29,11 @@ idiomas:
     productos:
       microseguro_vida: Microseguro de vida
       proteccion_dispositivos: Protección de dispositivos
+      vida_hipotecario: Seguro de vida hipotecario
     amparos:
       muerte: Muerte
       incapacidad_total: Incapacidad total
+      incapacidad_total_permanente: Incapacidad total y permanente
       dano_accidental: Daño accidental
       robo: Robo
   en-US:
@@ -59,8 +61,10 @@ idiomas:
     productos:
       microseguro_vida: Micro life insurance
       proteccion_dispositivos: Device protection
+      vida_hipotecario: Mortgage life insurance
     amparos:
       muerte: Death
       incapacidad_total: Total disability
+      incapacidad_total_permanente: Total and permanent disability
       dano_accidental: Accidental damage
       robo: Theft
