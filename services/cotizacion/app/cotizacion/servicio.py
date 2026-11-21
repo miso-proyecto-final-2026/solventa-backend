@@ -15,13 +15,17 @@ import uuid
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 
 from app.contexto import cotizacion_en_curso
 from app.cotizacion.desglose import verificar_invariante
 from app.cotizacion.dominio import (
     ESTADO_EMITIDA,
+    CoberturaCalculada,
     CotizacionEmitida,
     DesglosePrecio,
+    OrigenCotizacion,
     PerfilUnificado,
     SolicitudCotizacion,
 )
@@ -31,6 +35,7 @@ from app.cotizacion.errores import (
     ErrorDesglose,
 )
 from app.cotizacion.motor import calcular_prima, validar_solicitud
+from app.cotizacion.oferta import OfertaPerfilamiento
 from app.cotizacion.perfil import PerfilPort
 from app.cotizacion.reglas import ReglasTarifarias
 from app.cotizacion.repositorio import RepositorioCotizaciones, RepositorioTrazabilidad
@@ -124,6 +129,58 @@ class ServicioCotizacion:
             emitida, hit_cache=perfil.hit_cache, latencia_interna_ms=latencia_ms
         )
         await self._registrar_latencia(emitida)
+        return emitida
+
+    async def registrar_oferta(
+        self, oferta: OfertaPerfilamiento, origen: OrigenCotizacion
+    ) -> CotizacionEmitida:
+        """Registra la oferta de vida hipotecario de Perfilamiento como cotización (HU26, ADR-0029).
+
+        El precio y las coberturas son los que calculó Perfilamiento (HU25): aquí no se recalculan. Así
+        la suscripción asistida (HU39) lee la cotización como cualquier otra y el importe de la póliza
+        coincide con el de la oferta. Sin desglose propio: el de la oferta queda en Perfilamiento
+        (`ofertas_calculadas`), y `datos` guarda `oferta_id` y `perfil_id` para llegar a él.
+        """
+        ahora = self._reloj()
+        emitida = CotizacionEmitida(
+            id=self._generar_id(),
+            cliente_id=oferta.cliente_id,
+            producto=oferta.producto,
+            estado=ESTADO_EMITIDA,
+            moneda=oferta.moneda,
+            prima_anual=Decimal(oferta.prima_anual),
+            prima_mensual=Decimal(oferta.prima_mensual),
+            coberturas=tuple(
+                CoberturaCalculada(
+                    tipo=c.tipo,
+                    monto=Decimal(c.monto_cubierto),
+                    deducible=(Decimal(c.monto_cubierto) * Decimal(c.deducible_porcentaje)).quantize(
+                        Decimal(1), rounding=ROUND_HALF_UP
+                    ),
+                )
+                for c in oferta.coberturas
+            ),
+            version_reglas=oferta.version_reglas,
+            degradado=oferta.degradado,
+            aproximada=False,
+            vigente_hasta=ahora + timedelta(days=self._reglas.vigencia_dias),
+            creada_en=ahora,
+            origen=origen,
+        )
+        datos: dict[str, Any] = {
+            "suma_asegurada": oferta.suma_asegurada,
+            "etapa_de_vida": oferta.etapa_de_vida,
+            "oferta_id": oferta.oferta_id,
+            "perfil_id": oferta.perfil_id,
+            "precio_calculado_por": "perfilamiento",
+        }
+        await asyncio.to_thread(self._repo.guardar, emitida, datos)
+        log.info(
+            "oferta_registrada producto=%s oferta_id=%s cotizacion_id=%s",
+            emitida.producto,
+            oferta.oferta_id,
+            emitida.id,
+        )
         return emitida
 
     async def _registrar_latencia(self, c: CotizacionEmitida) -> None:

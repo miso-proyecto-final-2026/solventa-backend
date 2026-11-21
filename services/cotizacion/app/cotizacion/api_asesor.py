@@ -1,4 +1,5 @@
-"""Endpoints de la cotización asistida por un asesor (HU38) y el linaje del perfil (HU24).
+"""Endpoints de la cotización asistida por un asesor (HU38), el linaje del perfil (HU24) y la
+oferta de vida hipotecario (HU26).
 
 Todo el router exige el rol de asesor. El precio lo calcula el mismo motor que usa móvil
 (`ServicioCotizacion.cotizar`): aquí solo se identifica quién cotiza y a nombre de quién.
@@ -31,6 +32,7 @@ from app.cotizacion.dominio import (
 from app.cotizacion.errores import LinajeNoDisponible
 from app.cotizacion.linaje import LinajePort
 from app.cotizacion.niveles import ClasificadorSenales
+from app.cotizacion.oferta import OfertaPort
 from app.cotizacion.perfil import PerfilPort
 
 router = APIRouter(
@@ -117,6 +119,55 @@ class LinajeAsesorOut(BaseModel):
     conflictos: list[ConflictoLinajeOut]
 
 
+class OfertaVidaHipotecarioIn(BaseModel):
+    """Sin suma asegurada, Perfilamiento usa la de sus reglas (ingreso por meses, HU25)."""
+
+    suma_asegurada: int | None = Field(default=None, gt=0, le=10_000_000_000)
+    # Al abrir el flujo se enriquece el perfil (criterio 1); al solo cambiar la suma, no hace falta.
+    enriquecer: bool = True
+
+
+class CoberturaOfertaOut(BaseModel):
+    tipo: str
+    monto: int
+    deducible: int
+
+
+class AjusteOfertaOut(BaseModel):
+    """Un paso del precio: qué regla se aplicó y cuánto movió la prima, sin la cifra del cliente (ADR-0006)."""
+
+    paso: str
+    nombre: str
+    factor: str | None
+    ajuste: int
+    acumulado: int
+    sin_dato: bool
+
+
+class OfertaVidaHipotecarioOut(BaseModel):
+    """La oferta de Perfilamiento (HU25), ya registrada como cotización para la suscripción asistida."""
+
+    cotizacion_id: str
+    oferta_id: str
+    cliente_id: str
+    producto: str
+    moneda: str
+    suma_asegurada: int
+    prima_anual: int
+    prima_mensual: int
+    etapa_de_vida: str
+    version_reglas: str
+    perfil_id: str
+    perfil_creado_en: datetime
+    degradado: bool
+    coberturas: list[CoberturaOfertaOut]
+    ajustes: list[AjusteOfertaOut]
+    vigente_hasta: datetime
+    creada_en: datetime
+    asesor_id: str
+    canal: str
+
+
 class CotizacionAsistidaOut(CotizacionOut):
     perfil_fuente: str
     canal: str
@@ -173,6 +224,67 @@ async def linaje_del_cliente(
     except ValidationError as exc:
         # Se filtra lo que no esté en el contrato y se rechaza lo que no lo cumpla.
         raise LinajeNoDisponible from exc
+
+
+@router.post(
+    "/clientes/{cliente_id}/ofertas-vida-hipotecario",
+    status_code=201,
+    response_model=OfertaVidaHipotecarioOut,
+    summary="Genera la oferta de vida hipotecario del cliente y la registra como cotización",
+    responses={
+        404: {"model": ErrorRespuestaOut, "description": "El cliente no tiene un perfil enriquecido."},
+        409: {"model": ErrorRespuestaOut, "description": "El cliente no tiene consentimiento vigente."},
+        503: {"model": ErrorRespuestaOut, "description": "El servicio de perfilamiento no está disponible."},
+        **_ERROR_422,
+    },
+)
+async def oferta_vida_hipotecario(
+    cliente_id: ClienteIdRuta,
+    cuerpo: OfertaVidaHipotecarioIn,
+    request: Request,
+    servicio: Servicio,
+    asesor: AsesorActual,
+) -> OfertaVidaHipotecarioOut:
+    ofertas: OfertaPort = request.app.state.ofertas
+    if cuerpo.enriquecer:
+        await ofertas.enriquecer(cliente_id, asesor.id)
+    oferta = await ofertas.calcular(cliente_id, asesor.id, cuerpo.suma_asegurada)
+    origen = OrigenCotizacion(canal=CANAL_WEB_ASESOR, asesor_id=asesor.id)
+    emitida = await servicio.registrar_oferta(oferta, origen)
+    return OfertaVidaHipotecarioOut(
+        cotizacion_id=emitida.id,
+        oferta_id=oferta.oferta_id,
+        cliente_id=emitida.cliente_id,
+        producto=emitida.producto,
+        moneda=emitida.moneda,
+        suma_asegurada=oferta.suma_asegurada,
+        prima_anual=oferta.prima_anual,
+        prima_mensual=oferta.prima_mensual,
+        etapa_de_vida=oferta.etapa_de_vida,
+        version_reglas=oferta.version_reglas,
+        perfil_id=oferta.perfil_id,
+        perfil_creado_en=oferta.perfil_creado_en,
+        degradado=oferta.degradado,
+        coberturas=[
+            CoberturaOfertaOut(tipo=c.tipo, monto=int(c.monto), deducible=int(c.deducible))
+            for c in emitida.coberturas
+        ],
+        ajustes=[
+            AjusteOfertaOut(
+                paso=p.paso,
+                nombre=p.nombre,
+                factor=p.factor,
+                ajuste=p.ajuste,
+                acumulado=p.acumulado,
+                sin_dato=p.sin_dato,
+            )
+            for p in oferta.desglose
+        ],
+        vigente_hasta=emitida.vigente_hasta,
+        creada_en=emitida.creada_en,
+        asesor_id=asesor.id,
+        canal=origen.canal,
+    )
 
 
 @router.post(
