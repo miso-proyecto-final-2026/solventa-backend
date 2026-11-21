@@ -1,4 +1,4 @@
-# ADR-0024 — Validación del perfilamiento en línea (HA02)
+# ADR-0028 — Validación del perfilamiento en línea (HA02)
 
 - **Estado:** Propuesta, **no aceptada**.
   - Fija cómo se valida HA02 y qué se acepta como evidencia.
