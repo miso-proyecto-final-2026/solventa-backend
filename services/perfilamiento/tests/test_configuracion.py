@@ -57,3 +57,16 @@ def test_las_claves_de_servicio_se_leen_con_su_nombre():
 
 def test_sin_claves_configuradas_el_mapa_queda_vacio():
     assert ConfigPerfilamiento.desde_entorno({}).api_keys == {}
+
+
+def test_cada_llamador_puede_traer_su_clave_en_su_propia_variable():
+    config = ConfigPerfilamiento.desde_entorno(
+        {
+            "PERFILAMIENTO_API_KEYS": "k1",
+            "PERFILAMIENTO_API_KEY_COTIZACION": " k2 ",
+            "PERFILAMIENTO_API_KEY_VACIA": "",
+            "PERFILAMIENTO_API_KEY_": "k3",
+        }
+    )
+
+    assert config.api_keys == {"k1": "servicio", "k2": "cotizacion"}

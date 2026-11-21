@@ -4922,6 +4922,93 @@
               }
             },
             {
+              "name": "Linaje del cliente (asesor)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// 200 si el cliente tiene un perfil enriquecido en Perfilamiento (ver la carpeta MS Perfilamiento); si no, 404.",
+                      "pm.test('Responde 200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));",
+                      "if (pm.response.code === 200) {",
+                      "  const d = pm.response.json();",
+                      "  pm.test('una línea por fuente, con tipo de dato y marcas', () => d.fuentes.forEach(f => {",
+                      "    pm.expect(f.tipo_dato).to.be.oneOf(['FINANCIERO', 'SOCIOECONOMICO']);",
+                      "    ['hit_cache', 'degradado', 'por_defecto'].forEach(k => pm.expect(f[k]).to.be.a('boolean'));",
+                      "  }));",
+                      "  pm.test('sin valores de los datos', () => pm.expect(JSON.stringify(d)).to.not.include('4500000'));",
+                      "} else {",
+                      "  pm.test('código PERFIL_NO_ENCONTRADO', () => pm.expect(pm.response.json().error.code).to.eql('PERFIL_NO_ENCONTRADO'));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{asesor_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/asesor/clientes/{{cliente_demo_id}}/linaje",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "asesor",
+                    "clientes",
+                    "{{cliente_demo_id}}",
+                    "linaje"
+                  ]
+                },
+                "description": "HU24: linaje del último perfil enriquecido en Perfilamiento. Cotización lo consulta con su clave propia y le informa el asesor, que queda en la auditoría de consultas."
+              }
+            },
+            {
+              "name": "Linaje sin token",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                      "pm.test('código NO_AUTENTICADO', () => pm.expect(pm.response.json().error.code).to.eql('NO_AUTENTICADO'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{cotizacion_url}}/v1/asesor/clientes/{{cliente_demo_id}}/linaje",
+                  "host": [
+                    "{{cotizacion_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "asesor",
+                    "clientes",
+                    "{{cliente_demo_id}}",
+                    "linaje"
+                  ]
+                }
+              }
+            },
+            {
               "name": "Cotizar a un cliente (asesor)",
               "event": [
                 {
@@ -5309,6 +5396,8 @@
                   "  pm.expect(d.fuentes).to.have.length(2);",
                   "  d.fuentes.forEach(f => { pm.expect(f.ttl_s).to.be.a('number'); pm.expect(f.campos).to.be.an('array'); });",
                   "});",
+                  "pm.test('cada fuente trae tipo de dato y estado del consentimiento (HU24)', () => d.fuentes.forEach(f => { pm.expect(f.tipo_dato).to.be.oneOf(['FINANCIERO', 'SOCIOECONOMICO']); pm.expect(f.estado_consentimiento).to.eql('OTORGADO'); }));",
+                  "pm.test('explica lo que faltó y los conflictos (HU24)', () => { pm.expect(d.ausentes).to.be.an('object'); pm.expect(d.conflictos).to.be.an('array'); });",
                   "pm.test('solo metadatos: sin valores de los datos', () => pm.expect(JSON.stringify(d)).to.not.include('4500000'));"
                 ]
               }
@@ -5338,7 +5427,7 @@
                 "linaje"
               ]
             },
-            "description": "Para auditoría: de qué fuente salió cada campo, cuándo se consultó, su TTL y el consentimiento vigente en ese momento."
+            "description": "Para auditoría: de qué fuente salió cada campo, su tipo de dato, cuándo se consultó, su TTL y el consentimiento vigente en ese momento, más los campos ausentes. Cada consulta queda registrada con la clave que llamó y, si se envía `X-Consultado-Por`, la persona (HU24)."
           }
         },
         {

@@ -59,6 +59,14 @@ class SinPermiso(Exception):
         self.mensaje = mensaje
 
 
+class LinajeNoEncontrado(Exception):
+    """El cliente no tiene un perfil enriquecido en Perfilamiento (HU24)."""
+
+
+class LinajeNoDisponible(Exception):
+    """Perfilamiento no respondió, falló o rechazó la credencial de Cotización (HU24)."""
+
+
 class ErrorReglas(Exception):
     """Las reglas versionadas no existen o son inválidas (error de configuración)."""
 
@@ -117,6 +125,25 @@ def registrar_errores(app: FastAPI) -> None:
             content=cuerpo_error(
                 "DESGLOSE_INCONSISTENTE",
                 "No se pudo emitir la cotización. Intente de nuevo más tarde.",
+            ),
+        )
+
+    @app.exception_handler(LinajeNoEncontrado)
+    async def _linaje_no_encontrado(_req: Request, _exc: LinajeNoEncontrado) -> JSONResponse:
+        return JSONResponse(
+            status_code=404,
+            content=cuerpo_error(
+                "PERFIL_NO_ENCONTRADO", "El cliente no tiene un perfil enriquecido."
+            ),
+        )
+
+    @app.exception_handler(LinajeNoDisponible)
+    async def _linaje_no_disponible(_req: Request, _exc: LinajeNoDisponible) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content=cuerpo_error(
+                "LINAJE_NO_DISPONIBLE",
+                "El linaje no está disponible en este momento. Intente de nuevo más tarde.",
             ),
         )
 
