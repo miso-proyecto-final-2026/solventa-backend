@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from app.correlacion import MiddlewareCorrelacion
 from app.logs import configurar_logs
+from app.socios.acceso import publicar_seguridad_bearer
 from app.socios.config import ConfigSocios
 from app.socios.errores import publicar_openapi_sin_422, registrar_errores
 from app.socios.oauth import router as oauth_router
@@ -39,6 +40,7 @@ app.include_router(v1_router)
 app.include_router(suscripciones_router)
 registrar_errores(app)
 publicar_openapi_sin_422(app)
+publicar_seguridad_bearer(app)
 app.add_middleware(MiddlewareCorrelacion)
 
 
