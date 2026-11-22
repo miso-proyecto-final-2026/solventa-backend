@@ -498,6 +498,120 @@ paths:
                   message: El linaje no está disponible en este momento. Intente de nuevo más tarde.
                   details: []
                   trace_id: 7f6c2f5e-0e4d-4d61-9a3e-2d1f0b7c8e55
+  /v1/asesor/clientes/{cliente_id}/ofertas-vida-hipotecario:
+    post:
+      tags: [asesor]
+      operationId: ofertaVidaHipotecario
+      summary: Genera la oferta de vida hipotecario del cliente y la registra como cotización
+      description: |
+        HU26. Cotización hace de fachada hacia MS Perfilamiento (HU25) con su clave de servicio propia y a nombre del
+        asesor. Con `enriquecer` (por defecto) primero enriquece el perfil; luego pide la oferta y la registra como una
+        cotización del producto `vida_hipotecario` con la prima de Perfilamiento, para iniciar la suscripción asistida
+        con `cotizacion_id`. El precio nunca viene del navegador. Los ajustes no traen las cifras del cliente.
+      security:
+        - tokenAsesor: []
+      parameters:
+        - name: cliente_id
+          in: path
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 36}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolicitudOfertaVidaHipotecario'
+            examples:
+              al_abrir_el_flujo:
+                value: {}
+              cambiar_la_suma:
+                value: {suma_asegurada: 150000000, enriquecer: false}
+      responses:
+        '201':
+          description: Oferta calculada por Perfilamiento y registrada como cotización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfertaVidaHipotecario'
+              example:
+                cotizacion_id: 3c1d9e2a-5b6f-4a7c-8d9e-0f1a2b3c4d5e
+                oferta_id: 0f6c2a9e-7d41-4b8a-9e1f-3a2b4c5d6e7f
+                cliente_id: 00000000-0000-4000-8000-0000000000a1
+                producto: vida_hipotecario
+                moneda: COP
+                suma_asegurada: 200000000
+                prima_anual: 360000
+                prima_mensual: 30000
+                etapa_de_vida: desarrollo
+                version_reglas: 2026.11.1-prototipo
+                perfil_id: 6a1f0c4e-2b7d-4e9a-8c3f-1d2e3f4a5b6c
+                perfil_creado_en: '2026-11-20T15:00:00Z'
+                degradado: false
+                coberturas:
+                  - {tipo: muerte, monto: 200000000, deducible: 0}
+                  - {tipo: incapacidad_total_permanente, monto: 200000000, deducible: 0}
+                ajustes:
+                  - {paso: prima_base, nombre: 0.0018 sobre la suma asegurada, factor: null, ajuste: 360000, acumulado: 360000, sin_dato: false}
+                  - {paso: etapa_de_vida, nombre: desarrollo, factor: '1.00', ajuste: 0, acumulado: 360000, sin_dato: false}
+                vigente_hasta: '2026-12-20T15:00:01Z'
+                creada_en: '2026-11-20T15:00:01Z'
+                asesor_id: 9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a
+                canal: WEB_ASESOR
+        '401':
+          $ref: '#/components/responses/ErrorAsesorNoAutenticado'
+        '403':
+          $ref: '#/components/responses/ErrorAsesorSinPermiso'
+        '404':
+          description: El cliente no tiene un perfil enriquecido y se pidió no enriquecerlo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+              example:
+                error:
+                  code: PERFIL_NO_ENCONTRADO
+                  message: El cliente no tiene un perfil enriquecido.
+                  details: []
+                  trace_id: 7f6c2f5e-0e4d-4d61-9a3e-2d1f0b7c8e55
+        '409':
+          description: El cliente no tiene consentimiento vigente; no se genera la oferta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+              example:
+                error:
+                  code: CONSENTIMIENTO_REQUERIDO
+                  message: 'El cliente no ha otorgado el consentimiento de datos: sin él no se genera la oferta.'
+                  details: []
+                  trace_id: 7f6c2f5e-0e4d-4d61-9a3e-2d1f0b7c8e55
+        '422':
+          description: |
+            La solicitud no es válida, o Perfilamiento rechazó la suma asegurada por estar fuera de los límites de sus
+            reglas (`details[].campo` = `suma_asegurada`, con el motivo).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+              example:
+                error:
+                  code: VALIDATION_ERROR
+                  message: La solicitud no es válida.
+                  details:
+                    - {campo: suma_asegurada, motivo: 'debe estar entre 20000000 y 800000000'}
+                  trace_id: 7f6c2f5e-0e4d-4d61-9a3e-2d1f0b7c8e55
+        '503':
+          description: Perfilamiento no respondió, falló o rechazó la credencial de Cotización. Se puede reintentar.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+              example:
+                error:
+                  code: OFERTA_NO_DISPONIBLE
+                  message: La oferta no está disponible en este momento. Intente de nuevo más tarde.
+                  details: []
+                  trace_id: 7f6c2f5e-0e4d-4d61-9a3e-2d1f0b7c8e55
   /v1/asesor/cotizaciones:
     post:
       tags: [asesor]
@@ -958,6 +1072,57 @@ components:
               descartadas:
                 type: array
                 items: {type: string}
+    SolicitudOfertaVidaHipotecario:
+      type: object
+      properties:
+        suma_asegurada:
+          type: [integer, 'null']
+          exclusiveMinimum: 0
+          maximum: 10000000000
+          description: Saldo a asegurar en COP. Sin ella, Perfilamiento usa la de sus reglas (ingreso por meses).
+        enriquecer:
+          type: boolean
+          default: true
+          description: Enriquecer el perfil antes de calcular (al abrir el flujo). Al solo cambiar la suma, `false`.
+    OfertaVidaHipotecario:
+      type: object
+      required: [cotizacion_id, oferta_id, cliente_id, producto, moneda, suma_asegurada, prima_anual, prima_mensual,
+        etapa_de_vida, version_reglas, perfil_id, perfil_creado_en, degradado, coberturas, ajustes, vigente_hasta,
+        creada_en, asesor_id, canal]
+      properties:
+        cotizacion_id: {type: string, description: La cotización registrada; se usa para la suscripción asistida.}
+        oferta_id: {type: string, description: La oferta guardada en Perfilamiento (ofertas_calculadas), con su desglose.}
+        cliente_id: {type: string}
+        producto: {type: string, enum: [vida_hipotecario]}
+        moneda: {type: string, enum: [COP]}
+        suma_asegurada: {type: integer}
+        prima_anual: {type: integer}
+        prima_mensual: {type: integer}
+        etapa_de_vida: {type: string}
+        version_reglas: {type: string, description: Versión de las reglas de precio de Perfilamiento.}
+        perfil_id: {type: string}
+        perfil_creado_en: {type: string, format: date-time}
+        degradado: {type: boolean, description: El perfil usó datos de respaldo; la prima lleva el recargo.}
+        coberturas:
+          type: array
+          items: {$ref: '#/components/schemas/Cobertura'}
+        ajustes:
+          type: array
+          description: Pasos del precio (regla, factor y cuánto movió la prima), sin las cifras del cliente.
+          items:
+            type: object
+            required: [paso, nombre, factor, ajuste, acumulado, sin_dato]
+            properties:
+              paso: {type: string}
+              nombre: {type: string}
+              factor: {type: [string, 'null']}
+              ajuste: {type: integer}
+              acumulado: {type: integer}
+              sin_dato: {type: boolean}
+        vigente_hasta: {type: string, format: date-time}
+        creada_en: {type: string, format: date-time}
+        asesor_id: {type: string}
+        canal: {type: string, enum: [WEB_ASESOR]}
     SolicitudAsistida:
       type: object
       required: [producto, datos]

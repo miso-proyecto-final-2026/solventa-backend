@@ -14,6 +14,7 @@ from app.cotizacion.config import ConfigCotizacion
 from app.cotizacion.errores import registrar_errores
 from app.cotizacion.linaje import construir_linaje
 from app.cotizacion.niveles import ClasificadorSenales
+from app.cotizacion.oferta import construir_oferta
 from app.cotizacion.perfil import AdaptadorPerfilProveedores
 from app.cotizacion.reglas import cargar_reglas
 from app.cotizacion.wiring import construir_servicio_cotizacion
@@ -42,6 +43,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Linaje del perfil para el asesor (HU24): fachada hacia MS Perfilamiento.
     linajes = construir_linaje()
     app.state.linajes = linajes
+    # Oferta de vida hipotecario para el asesor (HU26): misma fachada y misma clave que el linaje.
+    ofertas = construir_oferta()
+    app.state.ofertas = ofertas
     app.state.clasificador_senales = ClasificadorSenales.desde_archivo()
     app.state.catalogo = construir_catalogo(
         cargar_reglas(config.reglas_version, config.reglas_dir)
@@ -54,6 +58,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await escritor.detener()  # escribe la trazabilidad pendiente antes de cerrar
         await servicio.cerrar()
         await linajes.cerrar()
+        await ofertas.cerrar()
         engine_cotizacion.dispose()
 
 
