@@ -53,7 +53,14 @@ Errores de `/partners/v1`, con el formato `{"error": {"code", "message", "trace_
 El **OTP es simulado y fijo** en el prototipo: el socio podría firmar sin el cliente. Es un riesgo aceptado que debe revisarse con
 un proveedor de firma real (ADR-0026).
 
-El contrato completo está en `docs/api/openapi.json` (lo verifica `tests/test_contrato.py`).
+El contrato completo está en `docs/api/openapi.json`, y la guía para el integrador en
+[`docs/api/guia-de-inicio.md`](docs/api/guia-de-inicio.md). Lo verifican (HA07, [ADR-0030](../../docs/adr/0030-contratos-de-la-api-de-socios.md)):
+
+- `tests/test_contrato.py`: el archivo publicado coincide con la app.
+- `tests/test_conformidad_contrato.py`: Schemathesis valida las respuestas reales contra el contrato, y que todo error traiga
+  un código del catálogo.
+- `scripts/contrato/compatibilidad.py` (job `contrato (socios)` del CI): oasdiff hace fallar un cambio incompatible frente a
+  la rama base. Para probarlo en local: `python scripts/contrato/compatibilidad.py casos` (requiere Docker u `oasdiff`).
 
 ## Modelo
 
