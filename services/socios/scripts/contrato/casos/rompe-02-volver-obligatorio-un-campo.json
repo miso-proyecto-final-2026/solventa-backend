@@ -1,0 +1,11 @@
+{
+  "descripcion": "Volver obligatoria `periodicidad_pago` al suscribir",
+  "esperado": "rompe",
+  "parche": [
+    {
+      "op": "add",
+      "path": "/components/schemas/SuscripcionIn/required/-",
+      "value": "periodicidad_pago"
+    }
+  ]
+}

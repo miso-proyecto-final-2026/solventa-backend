@@ -1,0 +1,20 @@
+{
+  "descripcion": "Agregar una ruta nueva",
+  "esperado": "compatible",
+  "parche": [
+    {
+      "op": "add",
+      "path": "/paths/~1partners~1v1~1productos",
+      "value": {
+        "get": {
+          "summary": "Productos",
+          "responses": {
+            "200": {
+              "description": "ok"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

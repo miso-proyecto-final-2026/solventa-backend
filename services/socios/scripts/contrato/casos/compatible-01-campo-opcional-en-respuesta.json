@@ -1,0 +1,13 @@
+{
+  "descripcion": "Agregar un campo opcional a la cotización",
+  "esperado": "compatible",
+  "parche": [
+    {
+      "op": "add",
+      "path": "/components/schemas/CotizacionOut/properties/nota",
+      "value": {
+        "type": "string"
+      }
+    }
+  ]
+}

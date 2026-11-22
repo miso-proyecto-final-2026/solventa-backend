@@ -1,0 +1,18 @@
+{
+  "descripcion": "Exigir un encabezado nuevo al cotizar",
+  "esperado": "rompe",
+  "parche": [
+    {
+      "op": "add",
+      "path": "/paths/~1partners~1v1~1cotizaciones/post/parameters/-",
+      "value": {
+        "name": "X-Canal",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    }
+  ]
+}

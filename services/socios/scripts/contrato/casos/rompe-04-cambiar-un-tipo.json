@@ -1,0 +1,11 @@
+{
+  "descripcion": "Cambiar `prima_anual` de entero a texto",
+  "esperado": "rompe",
+  "parche": [
+    {
+      "op": "replace",
+      "path": "/components/schemas/CotizacionOut/properties/prima_anual/type",
+      "value": "string"
+    }
+  ]
+}
