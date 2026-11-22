@@ -10625,6 +10625,547 @@
       ]
     },
     {
+      "name": "MS Pagos — indemnización automática (HU29)",
+      "description": "Flujo completo en Postman: sembrar la póliza, enviar un evento que cumple, ver que Siniestros decide el pago y que Pagos lo ejecuta solo, con un único pago aunque el evento se reenvíe. Requiere Kafka (staging o local con brokers). Ejecutar en orden; los pasos 3, 4 y 7 son asíncronos: repítalos si aún no hay resultado.",
+      "item": [
+        {
+          "name": "0. Login del operador (para leer los pagos)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test('token Bearer con rol OPERADOR', () => { pm.expect(r.access_token).to.be.a('string').and.not.empty; pm.expect(r.usuario.rol).to.eql('OPERADOR'); });",
+                  "pm.collectionVariables.set('operador_token', r.access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{identidad_url}}/v1/sesiones-internas",
+              "host": [
+                "{{identidad_url}}"
+              ],
+              "path": [
+                "v1",
+                "sesiones-internas"
+              ]
+            },
+            "description": "Requiere el operador demo: `OPERADOR_DEMO_EMAIL`/`OPERADOR_DEMO_PASSWORD` con `services/identidad/scripts/sembrar_demo.py`. Guarda `operador_token`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{operador_email}}\",\n  \"password\": \"{{operador_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "1. Sembrar la póliza de la prueba (con cliente, número y monto)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('sembró la póliza', () => pm.expect(pm.response.json().sembradas).to.eql(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/polizas-demo",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "polizas-demo"
+              ]
+            },
+            "description": "Los datos de cliente, número y monto son opcionales; con ellos la conciliación (HU31) muestra la póliza completa.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"polizas\": [\n    {\n      \"poliza_id\": \"{{hu29_poliza_id}}\",\n      \"producto\": \"parametrico_clima\",\n      \"zona\": \"bogota\",\n      \"cliente_id\": \"cliente-hu29-demo\",\n      \"numero_poliza\": \"POL-HU29-0001\",\n      \"monto_asegurado\": 50000000,\n      \"vigencia_desde\": \"2026-01-01T00:00:00Z\",\n      \"fecha_vencimiento\": \"2027-12-31T00:00:00Z\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "2. Evento que cumple - sismo 6.4 en la zona asegurada",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('hu29_evento_id', 'pm-hu29-' + Date.now());",
+                  "pm.collectionVariables.set('hu29_desde', new Date(Date.now() - 60000).toISOString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 202', () => pm.response.to.have.status(202));",
+                  "const d = pm.response.json();",
+                  "pm.test('acuse de recibido, no duplicado', () => { pm.expect(d.estado).to.eql('recibido'); pm.expect(d.duplicado).to.eql(false); });",
+                  "pm.collectionVariables.set('hu29_evento_uuid', d.evento_uuid);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/eventos",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "eventos"
+              ]
+            },
+            "description": "Genera un evento nuevo en cada ejecución. Siniestros lo evalúa y, si cumple, emite el comando de indemnización que Pagos consume.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"evento_id\": \"{{hu29_evento_id}}\",\n  \"tipo\": \"sismo\",\n  \"fuente\": \"{{siniestros_fuente}}\",\n  \"ocurrido_en\": \"{{$isoTimestamp}}\",\n  \"poliza_id\": \"{{hu29_poliza_id}}\",\n  \"datos\": {\n    \"magnitud\": 6.4,\n    \"zona\": \"{{param_zona_evento}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "3. Siniestros decide que corresponde el pago (CORRESPONDE_PAGO)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const filas = pm.response.json();",
+                  "// El consumidor procesa de forma asíncrona: si sale vacío, espere unos segundos y repita.",
+                  "pm.test('hay una evaluación (si no, repita: el consumidor aún no procesa el evento)', () => pm.expect(filas.length).to.be.above(0));",
+                  "if (filas.length) {",
+                  "  pm.test('resultado CORRESPONDE_PAGO', () => pm.expect(filas[0].resultado).to.eql('CORRESPONDE_PAGO'));",
+                  "  pm.test('trae versión de reglas y valores', () => { pm.expect(filas[0].version_reglas).to.be.a('string'); pm.expect(filas[0].valores).to.be.an('object'); });",
+                  "  pm.test('comando_id emitido', () => pm.expect(filas[0].comando_id).to.be.a('string'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/evaluaciones?evento_id={{hu29_evento_id}}&poliza_id={{hu29_poliza_id}}",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "evaluaciones"
+              ],
+              "query": [
+                {
+                  "key": "evento_id",
+                  "value": "{{hu29_evento_id}}"
+                },
+                {
+                  "key": "poliza_id",
+                  "value": "{{hu29_poliza_id}}"
+                }
+              ]
+            },
+            "description": "Criterios 2 y 7: resultado, valores evaluados, versión de reglas y comando emitido."
+          }
+        },
+        {
+          "name": "4. Pagos pagó la indemnización (PAGADA)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const mios = pm.response.json().items.filter(d => d.evento_id === pm.collectionVariables.get('hu29_evento_id'));",
+                  "pm.test('hay un desembolso del evento (si no, repita: Pagos aún no lo procesa)', () => pm.expect(mios.length).to.eql(1));",
+                  "if (mios.length) { const d = mios[0];",
+                  "  pm.test('pagada por el monto del comando', () => { pm.expect(d.estado).to.eql('PAGADA'); pm.expect(Number(d.monto)).to.be.above(0); pm.expect(d.moneda).to.eql('COP'); });",
+                  "  pm.test('con referencia de la pasarela y clave de idempotencia', () => { pm.expect(d.referencia_pasarela).to.be.a('string').and.not.empty; pm.expect(d.idempotency_key).to.be.a('string').and.not.empty; });",
+                  "  pm.test('conserva el evento y la póliza de origen', () => { pm.expect(d.tipo_evento).to.eql('sismo'); pm.expect(d.poliza_id).to.eql(pm.collectionVariables.get('hu29_poliza_id')); pm.expect(d.numero_poliza).to.eql('POL-HU29-0001'); });",
+                  "  pm.test('cliente enmascarado y sin cuenta en claro', () => { pm.expect(d.cliente).to.include('*'); pm.expect(JSON.stringify(d)).to.not.match(/cta_/); });",
+                  "  pm.collectionVariables.set('hu29_desembolso_id', d.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operador_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{pagos_url}}/v1/pagos/conciliacion/desembolsos?estado=PAGADA&desde={{hu29_desde}}&tamano=100",
+              "host": [
+                "{{pagos_url}}"
+              ],
+              "path": [
+                "v1",
+                "pagos",
+                "conciliacion",
+                "desembolsos"
+              ],
+              "query": [
+                {
+                  "key": "estado",
+                  "value": "PAGADA"
+                },
+                {
+                  "key": "desde",
+                  "value": "{{hu29_desde}}"
+                },
+                {
+                  "key": "tamano",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": "El consumidor y el procesador de Pagos trabajan de forma asíncrona: si no aparece, espere unos segundos y repita. Sin intervención humana entre el evento y el pago (HU29)."
+          }
+        },
+        {
+          "name": "5. Trazabilidad - los intentos de pago del desembolso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('cada pago conserva sus intentos', () => { pm.expect(d.intentos_de_pago).to.be.an('array').and.not.empty; pm.expect(d.intentos_de_pago[0].numero).to.eql(1); });",
+                  "pm.test('sin cuentas ni tokens en claro', () => { pm.expect(pm.response.text()).to.not.match(/cta_sim_/); pm.expect(pm.response.text()).to.not.include('tok_sim_'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operador_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{pagos_url}}/v1/pagos/conciliacion/desembolsos/{{hu29_desembolso_id}}",
+              "host": [
+                "{{pagos_url}}"
+              ],
+              "path": [
+                "v1",
+                "pagos",
+                "conciliacion",
+                "desembolsos",
+                "{{hu29_desembolso_id}}"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "6. Reenviar el mismo evento (duplicado)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('es el mismo evento', () => { pm.expect(d.duplicado).to.eql(true); pm.expect(d.evento_uuid).to.eql(pm.collectionVariables.get('hu29_evento_uuid')); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{siniestros_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{siniestros_url}}/v1/siniestros/eventos",
+              "host": [
+                "{{siniestros_url}}"
+              ],
+              "path": [
+                "v1",
+                "siniestros",
+                "eventos"
+              ]
+            },
+            "description": "Reenvía el `evento_id` del caso 1: 200 con `duplicado: true`, el mismo `evento_uuid`, y no se crea otra evaluación ni otro comando. (La reentrega del bus al consumidor, EC-D1.1, no se puede forzar por la API: se verifica en la base con una sola fila por par evento–póliza.)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"evento_id\": \"{{hu29_evento_id}}\",\n  \"tipo\": \"sismo\",\n  \"fuente\": \"{{siniestros_fuente}}\",\n  \"ocurrido_en\": \"{{$isoTimestamp}}\",\n  \"poliza_id\": \"{{hu29_poliza_id}}\",\n  \"datos\": {\n    \"magnitud\": 6.4,\n    \"zona\": \"{{param_zona_evento}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "7. Un solo pago por evento y póliza",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const mios = pm.response.json().items.filter(d => d.evento_id === pm.collectionVariables.get('hu29_evento_id'));",
+                  "pm.test('sigue habiendo un solo desembolso del evento', () => pm.expect(mios.length).to.eql(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operador_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{pagos_url}}/v1/pagos/conciliacion/desembolsos?estado=PAGADA&desde={{hu29_desde}}&tamano=100",
+              "host": [
+                "{{pagos_url}}"
+              ],
+              "path": [
+                "v1",
+                "pagos",
+                "conciliacion",
+                "desembolsos"
+              ],
+              "query": [
+                {
+                  "key": "estado",
+                  "value": "PAGADA"
+                },
+                {
+                  "key": "desde",
+                  "value": "{{hu29_desde}}"
+                },
+                {
+                  "key": "tamano",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": "Espere unos segundos después del reenvío: un segundo pago no debe aparecer (EC-D1.1)."
+          }
+        },
+        {
+          "name": "8. Resumen - ninguna clave con más de un pago",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test('ninguna clave pagó dos veces', () => pm.expect(r.claves_con_mas_de_un_pago).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operador_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{pagos_url}}/v1/pagos/conciliacion/desembolsos/resumen",
+              "host": [
+                "{{pagos_url}}"
+              ],
+              "path": [
+                "v1",
+                "pagos",
+                "conciliacion",
+                "desembolsos",
+                "resumen"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Pagos - sin token no ve los desembolsos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{pagos_url}}/v1/pagos/conciliacion/desembolsos?estado=PAGADA&desde={{hu29_desde}}&tamano=100",
+              "host": [
+                "{{pagos_url}}"
+              ],
+              "path": [
+                "v1",
+                "pagos",
+                "conciliacion",
+                "desembolsos"
+              ],
+              "query": [
+                {
+                  "key": "estado",
+                  "value": "PAGADA"
+                },
+                {
+                  "key": "desde",
+                  "value": "{{hu29_desde}}"
+                },
+                {
+                  "key": "tamano",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
       "name": "MS Pagos — conciliación de indemnizaciones (HU31)",
       "description": "Consola de operaciones: listar con filtros, detalle, conciliar contra el extracto simulado, escalar diferencias y exportar CSV/PDF. Solo JWT de operador (Identidad). Ejecutar en orden, después de pagar una indemnización (HU28 + HU29).",
       "item": [
@@ -14384,6 +14925,26 @@
     },
     {
       "key": "socio_cuota_token",
+      "value": ""
+    },
+    {
+      "key": "hu29_poliza_id",
+      "value": "pol-demo-hu29"
+    },
+    {
+      "key": "hu29_evento_id",
+      "value": ""
+    },
+    {
+      "key": "hu29_evento_uuid",
+      "value": ""
+    },
+    {
+      "key": "hu29_desde",
+      "value": ""
+    },
+    {
+      "key": "hu29_desembolso_id",
       "value": ""
     }
   ]
