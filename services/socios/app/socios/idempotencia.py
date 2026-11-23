@@ -21,12 +21,42 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from fastapi import FastAPI
+
 from app.socios.almacen import Almacen, ErrorAlmacen
 from app.socios.errores import (
     ConflictoIdempotencia,
     ServicioNoDisponible,
     SolicitudEnProceso,
 )
+
+CABECERA = "X-Idempotency-Key"
+DESCRIPCION_CLAVE_IDEMPOTENCIA = (
+    "Obligatoria: un valor único por operación que genera el socio (p. ej. un UUID), de 1 a 128 caracteres (letras, dígitos "
+    "y `. _ : -`). Sin ella responde 400 `INVALID_REQUEST`. Repetirla con el mismo cuerpo devuelve la respuesta original "
+    "(`X-Idempotent-Replayed: true`); con otro cuerpo, 409 `IDEMPOTENCY_CONFLICT`."
+)
+
+
+def publicar_idempotencia_obligatoria(app: FastAPI) -> None:
+    """Marca `X-Idempotency-Key` como obligatoria en el OpenAPI (HA07, D-02): solo documenta, no cambia la validación.
+
+    La cabecera se declara opcional en FastAPI porque su ausencia se responde con el catálogo (400 `INVALID_REQUEST`,
+    `FaltaClaveIdempotencia`) y no con la validación de FastAPI; el contrato debe decir que es obligatoria.
+    """
+    original = app.openapi
+
+    def openapi() -> dict[str, Any]:
+        if app.openapi_schema is None:
+            esquema = original()
+            for metodos in esquema["paths"].values():
+                for operacion in metodos.values():
+                    for parametro in operacion.get("parameters", []):
+                        if parametro.get("in") == "header" and parametro.get("name") == CABECERA:
+                            parametro["required"] = True
+        return app.openapi_schema or esquema
+
+    app.openapi = openapi  # type: ignore[method-assign]
 
 PREFIJO = "socios:idem"
 EN_PROCESO = "en_proceso"

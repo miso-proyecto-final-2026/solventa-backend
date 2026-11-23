@@ -1,8 +1,8 @@
 # Errores y reintentos de la API de socios
 
-Referencia de los errores de `/partners/v1` y de cómo reintentar (HU34, [ADR-0027](../../../../docs/adr/0027-ms-socios-catalogo-de-errores.md)).
-El contrato máquina-legible está en [`openapi.json`](openapi.json) (esquema `ErrorOut`). Este documento es la referencia del catálogo:
-reemplaza a los 8 códigos de la guía de integración §4.5, que no incluía `INVALID_TOKEN` ni `SERVICE_UNAVAILABLE` ni el campo `reason`.
+Referencia de los errores de `/partners/v1` y de cómo reintentar. El contrato máquina-legible está en
+[`openapi.json`](openapi.json) (esquema `ErrorOut`); el recorrido de una venta y sus estados, en
+[`guia-de-inicio.md`](guia-de-inicio.md). Este documento es la referencia completa del catálogo de errores.
 
 ## Estructura del error
 
@@ -90,8 +90,9 @@ Reglas generales:
 
 - **Tiempo de espera:** espere hasta 10 s por respuesta. La suma de los tiempos internos de una operación (Identidad 3 s + Suscripción 6 s)
   queda por debajo de ese tiempo.
-- **Misma clave al reintentar.** Las escrituras (`POST` de cotizaciones, suscripciones y firma) exigen `X-Idempotency-Key`. Al reintentar
-  un 5xx, un 429 o un tiempo agotado, use la **misma** clave: si la operación ya se hizo, recibe la respuesta original
+- **Misma clave al reintentar.** `POST /partners/v1/cotizaciones`, `POST /partners/v1/suscripciones` y `POST .../firma` exigen
+  `X-Idempotency-Key`; sin ella responden 400 `INVALID_REQUEST`. `POST .../firma/codigo` no la lleva. Al reintentar un 5xx,
+  un 429 o un tiempo agotado, use la **misma** clave: si la operación ya se hizo, recibe la respuesta original
   (`X-Idempotent-Replayed: true`). Una clave nueva crea una operación nueva.
 - **Cuándo no reutilizar la clave:** si recibe 409 `IDEMPOTENCY_CONFLICT` sin `reason`, esa clave ya se usó con otro cuerpo.
 - **Servicio degradado:** una cotización puede volver con `degradado: true` (perfil por defecto) y sigue siendo 201. Un 503
@@ -107,14 +108,3 @@ Los mensajes son en español. `code` y `reason` son estables y no se localizan; 
 Envíe a soporte el `trace_id` del cuerpo y el `X-Correlation-Id` de la respuesta, la ruta, la hora (UTC) y el `code`. Con el `trace_id`
 se llega al log de Socios y, desde allí, al del servicio interno que falló. No envíe documentos de clientes, números de tarjeta,
 tokens ni secretos.
-
-## Qué cambió respecto a HU32 y HU33
-
-- La validación pasa de 422 a **400** `INVALID_REQUEST`.
-- Los conflictos de negocio (cotización usada o vencida, firma vencida, OTP...) pasan de 409/422 a **400** con `reason`.
-  El 409 `IDEMPOTENCY_CONFLICT` queda solo para la clave de idempotencia.
-- El motivo de negocio pasa de `details` a `error.reason`; `details` solo lleva campos inválidos.
-- Rutas inexistentes y métodos no permitidos responden en este formato (antes, `{"detail": "Not Found"}`).
-- El 500 conserva el `trace_id` y la cabecera `X-Correlation-Id`.
-- Nuevo 503 `SERVICE_DEGRADED` con `Retry-After` (circuito abierto).
-- El tiempo máximo hacia Suscripción baja de 10 a 6 s.

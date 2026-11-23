@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.socios.acceso import ENDPOINT_COTIZACIONES, SocioAutorizado, exigir_endpoint
 from app.socios.almacen import ErrorAlmacen
 from app.socios.errores import CATALOGO, MOTIVOS, FaltaClaveIdempotencia
-from app.socios.idempotencia import huella
+from app.socios.idempotencia import DESCRIPCION_CLAVE_IDEMPOTENCIA, huella
 from app.socios.identificacion import ClienteIn, identificar_exigiendo
 
 log = logging.getLogger(__name__)
@@ -40,7 +40,12 @@ router = APIRouter(prefix=f"/partners/{VERSION}", tags=["partners-v1"])
 class SolicitudCotizacionIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    producto: str = Field(min_length=1, max_length=50, examples=["microseguro_vida"])
+    producto: str = Field(
+        min_length=1,
+        max_length=50,
+        description="Producto a cotizar: `microseguro_vida` o `proteccion_dispositivos`. Los campos de cada uno van en `datos`.",
+        examples=["microseguro_vida"],
+    )
     referencia_cliente: str = Field(
         min_length=1,
         max_length=64,
@@ -48,12 +53,22 @@ class SolicitudCotizacionIn(BaseModel):
         description="Identificador del cliente en el sistema del socio. No envíe documentos ni datos personales.",
         examples=["cli-000123"],
     )
-    datos: dict[str, Any] = Field(examples=[{"edad": 35, "suma_asegurada": 50000000}])
+    datos: dict[str, Any] = Field(
+        description=(
+            "Campos del producto, todos obligatorios. `microseguro_vida`: `edad` (entero, 18 a 65) y `suma_asegurada` "
+            "(entero en COP, 5.000.000 a 100.000.000). `proteccion_dispositivos`: `tipo_dispositivo` (`celular`, `portatil` "
+            "o `tableta`), `valor_dispositivo` (entero en COP, 300.000 a 15.000.000) y `antiguedad_meses` (entero, 0 a 36). "
+            "Un campo que falta o fuera de rango responde 400 `INVALID_REQUEST` con `details`."
+        ),
+        examples=[{"edad": 35, "suma_asegurada": 50000000}],
+    )
     cliente: ClienteIn | None = Field(
         default=None,
         description=(
             "Cliente registrado en Solventa (KYC verificado y consentimiento vigente). Con él la cotización se puede "
-            "suscribir (HU33); sin él es informativa y no se puede suscribir."
+            "suscribir; sin él es informativa y no se puede suscribir. Con `cliente`, las condiciones se validan aquí mismo "
+            "y otra vez al vender, en este orden: registro (`CLIENTE_NO_REGISTRADO`), KYC (`KYC_NO_VERIFICADO`) y "
+            "consentimiento (`CONSENTIMIENTO_NO_VIGENTE`); la primera que falla responde 400 con ese `reason`."
         ),
     )
 
@@ -74,8 +89,12 @@ class CotizacionOut(BaseModel):
     coberturas: list[CoberturaOut]
     vigente_hasta: datetime
     degradado: bool = Field(description="True si se calculó con un perfil por defecto porque un proveedor no respondió.")
-    aproximada: bool
-    aviso: str | None = None
+    aproximada: bool = Field(
+        description=(
+            "True si el precio no usó el perfil financiero del cliente (cotización sin `cliente`): puede cambiar al comprar."
+        )
+    )
+    aviso: str | None = Field(default=None, description="Texto para mostrar al cliente cuando `aproximada` es true.")
 
 
 class DependenciasOut(BaseModel):
@@ -199,7 +218,7 @@ async def cotizar(
     socio: Annotated[SocioAutorizado, Depends(exigir_endpoint(ENDPOINT_COTIZACIONES, VERSION))],
     x_idempotency_key: Annotated[
         str | None,
-        Header(alias="X-Idempotency-Key", description="Obligatoria. Repetirla devuelve la respuesta original."),
+        Header(alias="X-Idempotency-Key", description=DESCRIPCION_CLAVE_IDEMPOTENCIA),
     ] = None,
 ) -> JSONResponse:
     clave = _clave_idempotencia(x_idempotency_key)

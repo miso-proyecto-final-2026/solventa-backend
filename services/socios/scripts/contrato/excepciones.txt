@@ -4,3 +4,10 @@
 # recibe el socio (p. ej. corregir el contrato para que describa lo que la API ya hacía). Cada excepción lleva encima un
 # comentario con su justificación, se justifica también en el PR y se vacía cuando ese PR se mezcla (ver ADR-0030).
 # Un cambio de comportamiento incompatible no va aquí: se publica como v2 (ADR-0025 §8).
+#
+# HA07 (D-02, transitorias: se vacían al mezclar el PR de la documentación del socio). El contrato pasa a marcar
+# `X-Idempotency-Key` como obligatoria, como ya lo era: sin ella la API responde 400 `INVALID_REQUEST`
+# (`FaltaClaveIdempotencia`, `details` con `"motivo": "requerida"`). Un socio que ya funciona la envía siempre.
+POST /partners/v1/cotizaciones the `header` request parameter `x-idempotency-key` became required
+POST /partners/v1/suscripciones the `header` request parameter `x-idempotency-key` became required
+POST /partners/v1/suscripciones/{suscripcion_id}/firma the `header` request parameter `x-idempotency-key` became required
