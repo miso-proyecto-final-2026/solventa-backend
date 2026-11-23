@@ -36,10 +36,13 @@ nueva se publica al lado, sin cambiar la `v1`.
 
 ## 3. Reglas que aplican a todas las llamadas
 
-- **Idempotencia.** Las escrituras (`POST` de cotizaciones, suscripciones y firma) exigen `X-Idempotency-Key`, un valor único
-  por operación que usted genera (por ejemplo, un UUID). Si una respuesta no le llega, repita la solicitud **con la misma
-  clave y el mismo cuerpo**: recibirá la respuesta original sin que la operación se repita. Usar la clave con otro cuerpo es
-  un error (409).
+- **Idempotencia.** Tres escrituras exigen `X-Idempotency-Key`: `POST /partners/v1/cotizaciones`,
+  `POST /partners/v1/suscripciones` y `POST .../firma`. Es un valor único por operación que usted genera (por ejemplo, un
+  UUID), de 1 a 128 caracteres (letras, dígitos y `. _ : -`). Sin ella, la respuesta es 400 `INVALID_REQUEST`.
+  - Si una respuesta no le llega, repita la solicitud **con la misma clave y el mismo cuerpo**: recibirá la respuesta original
+    (`X-Idempotent-Replayed: true`) sin que la operación se repita.
+  - Usar la clave con otro cuerpo es un error (409 `IDEMPOTENCY_CONFLICT`).
+  - `POST .../firma/codigo` **no** lleva clave ni cuerpo.
 - **Cuota.** Su contrato fija cuántas solicitudes por segundo puede hacer. Si la supera, recibe 429 con `Retry-After`.
 - **Errores.** Todo error de `/partners/v1` tiene la misma forma, con un `code` de un catálogo cerrado y un `trace_id` para
   reportarlo. Qué significa cada código y cuándo reintentar está en `errores-y-reintentos.md`.
@@ -50,19 +53,87 @@ nueva se publica al lado, sin cambiar la `v1`.
 
 El contrato describe cada campo; este es el orden de las llamadas.
 
-1. **Cotizar** — `POST /partners/v1/cotizaciones`. Con `cliente` (tipo y número de documento de un cliente registrado en
-   Solventa), la cotización se puede vender; sin él, es solo informativa.
+1. **Cotizar** — `POST /partners/v1/cotizaciones`, con un `producto` y sus `datos` (ver «Productos»).
+   - **Con `cliente`** (tipo y número de documento de un cliente registrado en Solventa), la cotización se puede vender.
+   - **Sin `cliente`**, es solo informativa: sale con `aproximada: true` y un `aviso` para mostrar, porque no usó el perfil
+     del cliente y el precio puede cambiar al comprar.
+   - `degradado: true` significa que un proveedor de datos no respondió y el precio usó un perfil por defecto. Sigue siendo
+     una cotización válida (201).
 2. **Vender** — `POST /partners/v1/suscripciones`, con la cotización, el mismo `cliente`, el token de pago (`metodo_pago`) y
-   `acepta_terminos`. Responde 202 con el `id` de la venta: el proceso sigue en segundo plano (decisión y cobro).
-3. **Consultar** — `GET /partners/v1/polizas/{id}` con ese `id`. Solventa no le avisa: consulte hasta que la venta esté lista
-   para firmar.
-4. **Firmar dentro de su app** — muestre al cliente el documento (`GET .../documento-firma` y `.../documento-firma/pdf`), pida
-   que Solventa le envíe el código de un solo uso (`POST .../firma/codigo`) y envíe la firma con el código que el cliente le
-   da (`POST .../firma`).
-5. **Consultar la póliza emitida** — `GET /partners/v1/polizas/{id}` hasta que el estado sea `EMITIDA`. El cliente recibe su
-   certificado directamente de Solventa.
+   `acepta_terminos`. Responde 202 con el `id` de la venta: la decisión y el cobro siguen en segundo plano.
+3. **Consultar** — `GET /partners/v1/polizas/{id}` con ese `id`. Solventa no le avisa: consulte cada 2 a 5 segundos, sin
+   pasar su cuota, hasta que la venta esté **lista para firmar**, es decir, cuando se cumple todo esto:
+   - `estado` es `COBRO_REALIZADO`;
+   - `paso_actual` es `FIRMA`;
+   - `firma.estado` es `PENDIENTE`;
+   - `poliza.documento_estado` es `GENERADO`.
 
-## 5. Datos del ambiente de pruebas
+   Si la venta queda en revisión manual (`decision.decision` = `DERIVADA`) o termina, vea «Estados de una venta».
+4. **Firmar dentro de su app:**
+   1. muestre al cliente el documento (`GET .../documento-firma` y `.../documento-firma/pdf`);
+   2. pida que Solventa le envíe el código de un solo uso (`POST .../firma/codigo`, sin cuerpo ni clave, responde 202);
+   3. envíe la firma con el código que el cliente le da (`POST .../firma`).
+
+   La firma vence 24 horas después del cobro (`firma.vence_en`).
+5. **Consultar la póliza emitida** — `GET /partners/v1/polizas/{id}` hasta que `estado` sea `EMITIDA` (`poliza.estado`
+   `VIGENTE`). El cliente recibe su certificado directamente de Solventa.
+
+### Productos
+
+| `producto` | Campos de `datos` (todos obligatorios) |
+|---|---|
+| `microseguro_vida` | `edad`: entero, de 18 a 65. `suma_asegurada`: entero en COP, de 5.000.000 a 100.000.000. |
+| `proteccion_dispositivos` | `tipo_dispositivo`: `celular`, `portatil` o `tableta`. `valor_dispositivo`: entero en COP, de 300.000 a 15.000.000. `antiguedad_meses`: entero, de 0 a 36. |
+
+Un producto desconocido, un campo que falta o un valor fuera de rango responden 400 `INVALID_REQUEST` con `details`.
+
+### Condiciones del cliente
+
+Cuando se envía `cliente`, Solventa revisa sus condiciones **al cotizar y otra vez al vender**, en este orden. La primera que
+falla responde 400 `INVALID_REQUEST` con su `reason`:
+
+1. el cliente está registrado (`CLIENTE_NO_REGISTRADO`);
+2. verificó su identidad (`KYC_NO_VERIFICADO`);
+3. tiene un consentimiento de datos vigente (`CONSENTIMIENTO_NO_VIGENTE`).
+
+Por eso un cliente sin consentimiento se rechaza ya al cotizar y nunca llega a tener una cotización vendible.
+
+## 5. Estados de una venta
+
+`GET /partners/v1/polizas/{id}` devuelve `estado`, `paso_actual`, y `decision`, `cobro`, `firma` y `poliza` a medida que
+existen.
+
+| Situación | `estado` / `paso_actual` | Qué hacer |
+|---|---|---|
+| Decidiendo | `EN_PROGRESO` / `DECISION`, sin `decision` | Siga consultando. |
+| **En revisión manual** | `EN_PROGRESO` / `DECISION`, `decision.decision` = `DERIVADA` | Siga consultando; vea abajo. |
+| Aprobada, cobrando | `APROBADA` / `COBRO` | Siga consultando. |
+| Cobro rechazado | `APROBADA` / `COBRO`, `cobro.estado` = `RECHAZADO` | La venta no avanza a la firma. Informe el `cobro.motivo` al cliente. Para intentar con otro medio de pago, cotice de nuevo y haga una venta nueva: la cotización ya quedó usada. |
+| Lista para firmar | `COBRO_REALIZADO` / `FIRMA`, `firma.estado` = `PENDIENTE` y `poliza.documento_estado` = `GENERADO` | Haga la firma (paso 4). |
+| Firmada | `FIRMADA` / `EMISION` | Siga consultando hasta `EMITIDA`. |
+| **Emitida** (terminal) | `EMITIDA` | La póliza está vigente. |
+| **Rechazada** (terminal) | `RECHAZADA` / `DECISION` | La venta termina; los motivos están en `decision.motivos`. |
+| **Compensada** (terminal) | `COMPENSADA`, `firma.estado` = `VENCIDA` o `FALLIDA` | La firma venció o falló; Solventa devolvió el cobro y anuló la póliza. |
+
+**Valores de `decision.decision`:**
+
+- **`APROBADA`:** la venta sigue sola al cobro.
+- **`RECHAZADA`:** la venta termina.
+- **`DERIVADA`:** Solventa no puede decidir sola (por ejemplo, porque el perfil financiero del cliente está incompleto) y la
+  venta **pasa a revisión manual de un asesor de Solventa**.
+  - No es un error ni hay que enviar nada más: la venta queda en `DECISION` hasta que el asesor la resuelva.
+  - Siga consultando con un intervalo más largo (por ejemplo, cada 30 a 60 segundos) y muéstrele al cliente que su solicitud
+    está en revisión.
+  - No hay un plazo automático. Si necesita apurarla, escriba a soporte con el `id` de la venta.
+  - Si el asesor aprueba, `decision.decision` cambia a `APROBADA` y la venta sigue al cobro. Si la ajusta, sigue al cobro
+    con el nuevo `monto_asegurado`. Si la rechaza, `estado` pasa a `RECHAZADA`.
+- **`AJUSTADA`** (decisión automática): Solventa aprobaría un monto asegurado menor y espera que el cliente lo acepte. La v1
+  de la API no tiene cómo aceptarlo, así que esa venta no avanza: cotice de nuevo con un monto menor.
+
+**`decision.motivos`** explica la decisión automática. Si un asesor resolvió una venta derivada, conserva los motivos de la
+derivación aunque `decision.decision` ya no sea `DERIVADA`: muestre la decisión, no los motivos.
+
+## 6. Datos del ambiente de pruebas
 
 Staging no tiene clientes reales. Use estos datos sintéticos:
 
@@ -77,12 +148,17 @@ Staging no tiene clientes reales. Use estos datos sintéticos:
 Nunca envíe un número de tarjeta en `metodo_pago`: se rechaza. En producción, ese valor es el token que le entrega la pasarela
 de pagos al tokenizar la tarjeta en su app.
 
-## 6. Antes de pasar a producción
+- **`CC 1000000004`** se rechaza ya al cotizar con `cliente`: 400 `CONSENTIMIENTO_NO_VIGENTE`.
+- **En staging, una venta a `CC 1000000001` puede quedar en revisión manual** (`DERIVADA`) por los datos de prueba. Es la
+  oportunidad de probar ese estado. Para que avance, escriba a soporte con el `id` de la venta y un asesor la resolverá.
+
+## 7. Antes de pasar a producción
 
 Compruebe en staging que su integración:
 
 - obtiene y renueva el token;
 - cotiza, vende, firma y consulta la póliza emitida;
+- trata una venta en revisión manual (`DERIVADA`) como un estado de espera, y reconoce los estados terminales;
 - reintenta con la misma `X-Idempotency-Key` cuando no recibe respuesta;
 - respeta `Retry-After` en los 429 y en los 503;
 - muestra al usuario un mensaje comprensible para cada `code` y guarda el `trace_id` de los errores.

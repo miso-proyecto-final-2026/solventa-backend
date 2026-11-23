@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Solventa — API de socios",
-    "description": "API para socios de distribución (HU32). Autenticación OAuth2 client credentials en `/oauth/token`; cotización y venta embebida (suscripción, firma y póliza, HU33) en `/partners/v1`. Cada versión se publica bajo su propio prefijo.",
+    "description": "API para socios de distribución. Autenticación OAuth2 client credentials en `/oauth/token`; cotización y venta embebida (suscripción, firma y póliza) en `/partners/v1`. Cada versión se publica bajo su propio prefijo. Recorrido, estados de una venta y datos de prueba: `guia-de-inicio.md`; errores y reintentos: `errores-y-reintentos.md`.",
     "version": "1.0.0"
   },
   "paths": {
@@ -67,7 +67,7 @@
           {
             "name": "X-Idempotency-Key",
             "in": "header",
-            "required": false,
+            "required": true,
             "schema": {
               "anyOf": [
                 {
@@ -77,10 +77,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Obligatoria. Repetirla devuelve la respuesta original.",
+              "description": "Obligatoria: un valor único por operación que genera el socio (p. ej. un UUID), de 1 a 128 caracteres (letras, dígitos y `. _ : -`). Sin ella responde 400 `INVALID_REQUEST`. Repetirla con el mismo cuerpo devuelve la respuesta original (`X-Idempotent-Replayed: true`); con otro cuerpo, 409 `IDEMPOTENCY_CONFLICT`.",
               "title": "X-Idempotency-Key"
             },
-            "description": "Obligatoria. Repetirla devuelve la respuesta original."
+            "description": "Obligatoria: un valor único por operación que genera el socio (p. ej. un UUID), de 1 a 128 caracteres (letras, dígitos y `. _ : -`). Sin ella responde 400 `INVALID_REQUEST`. Repetirla con el mismo cuerpo devuelve la respuesta original (`X-Idempotent-Replayed: true`); con otro cuerpo, 409 `IDEMPOTENCY_CONFLICT`."
           }
         ],
         "requestBody": {
@@ -259,7 +259,7 @@
           {
             "name": "X-Idempotency-Key",
             "in": "header",
-            "required": false,
+            "required": true,
             "schema": {
               "anyOf": [
                 {
@@ -269,10 +269,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Obligatoria. Repetirla devuelve la respuesta original.",
+              "description": "Obligatoria: un valor único por operación que genera el socio (p. ej. un UUID), de 1 a 128 caracteres (letras, dígitos y `. _ : -`). Sin ella responde 400 `INVALID_REQUEST`. Repetirla con el mismo cuerpo devuelve la respuesta original (`X-Idempotent-Replayed: true`); con otro cuerpo, 409 `IDEMPOTENCY_CONFLICT`.",
               "title": "X-Idempotency-Key"
             },
-            "description": "Obligatoria. Repetirla devuelve la respuesta original."
+            "description": "Obligatoria: un valor único por operación que genera el socio (p. ej. un UUID), de 1 a 128 caracteres (letras, dígitos y `. _ : -`). Sin ella responde 400 `INVALID_REQUEST`. Repetirla con el mismo cuerpo devuelve la respuesta original (`X-Idempotent-Replayed: true`); con otro cuerpo, 409 `IDEMPOTENCY_CONFLICT`."
           }
         ],
         "requestBody": {
@@ -780,6 +780,7 @@
           "partners-v1"
         ],
         "summary": "Enviar al cliente el código de un solo uso para firmar",
+        "description": "Sin cuerpo y sin `X-Idempotency-Key`. Responde 202 sin cuerpo. Si el cliente no recibió el código, se puede pedir de nuevo.",
         "operationId": "solicitar_codigo_partners_v1_suscripciones__suscripcion_id__firma_codigo_post",
         "parameters": [
           {
@@ -910,7 +911,7 @@
           {
             "name": "X-Idempotency-Key",
             "in": "header",
-            "required": false,
+            "required": true,
             "schema": {
               "anyOf": [
                 {
@@ -920,10 +921,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Obligatoria. Repetirla devuelve la respuesta original.",
+              "description": "Obligatoria: un valor único por operación que genera el socio (p. ej. un UUID), de 1 a 128 caracteres (letras, dígitos y `. _ : -`). Sin ella responde 400 `INVALID_REQUEST`. Repetirla con el mismo cuerpo devuelve la respuesta original (`X-Idempotent-Replayed: true`); con otro cuerpo, 409 `IDEMPOTENCY_CONFLICT`.",
               "title": "X-Idempotency-Key"
             },
-            "description": "Obligatoria. Repetirla devuelve la respuesta original."
+            "description": "Obligatoria: un valor único por operación que genera el socio (p. ej. un UUID), de 1 a 128 caracteres (letras, dígitos y `. _ : -`). Sin ella responde 400 `INVALID_REQUEST`. Repetirla con el mismo cuerpo devuelve la respuesta original (`X-Idempotent-Replayed: true`); con otro cuerpo, 409 `IDEMPOTENCY_CONFLICT`."
           }
         ],
         "requestBody": {
@@ -1161,7 +1162,8 @@
         "properties": {
           "estado": {
             "type": "string",
-            "title": "Estado"
+            "title": "Estado",
+            "description": "`APROBADO` o `RECHAZADO`. Rechazado, la venta no avanza a la firma; el motivo viene en `motivo`."
           },
           "motivo": {
             "anyOf": [
@@ -1227,7 +1229,8 @@
           },
           "aproximada": {
             "type": "boolean",
-            "title": "Aproximada"
+            "title": "Aproximada",
+            "description": "True si el precio no usó el perfil financiero del cliente (cotización sin `cliente`): puede cambiar al comprar."
           },
           "aviso": {
             "anyOf": [
@@ -1238,7 +1241,8 @@
                 "type": "null"
               }
             ],
-            "title": "Aviso"
+            "title": "Aviso",
+            "description": "Texto para mostrar al cliente cuando `aproximada` es true."
           }
         },
         "type": "object",
@@ -1260,14 +1264,16 @@
         "properties": {
           "decision": {
             "type": "string",
-            "title": "Decision"
+            "title": "Decision",
+            "description": "`APROBADA`: la venta sigue sola al cobro. `RECHAZADA`: la venta termina. `DERIVADA`: la venta pasó a revisión manual de un asesor de Solventa y queda en `DECISION` hasta que la resuelva; no hay que enviar nada, siga consultando. `AJUSTADA`: Solventa aprueba un monto asegurado menor y espera que el cliente lo acepte; la v1 no tiene cómo aceptarlo, así que la venta no avanza: cotice de nuevo con un monto menor. Si un asesor resuelve una venta derivada, este campo muestra su decisión."
           },
           "motivos": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Motivos"
+            "title": "Motivos",
+            "description": "Explicación de la decisión automática, para mostrar al cliente o al operador. Si un asesor resolvió la revisión manual, conserva los motivos de la derivación aunque `decision` ya no sea `DERIVADA`."
           }
         },
         "type": "object",
@@ -1539,7 +1545,8 @@
         "properties": {
           "estado": {
             "type": "string",
-            "title": "Estado"
+            "title": "Estado",
+            "description": "`PENDIENTE` (se puede firmar hasta `vence_en`), `FIRMADA`, `VENCIDA` (pasó el plazo) o `FALLIDA` (no se pudo verificar al cliente). Vencida o fallida, Solventa devuelve el cobro y la venta termina `COMPENSADA`."
           },
           "vence_en": {
             "anyOf": [
@@ -1551,7 +1558,8 @@
                 "type": "null"
               }
             ],
-            "title": "Vence En"
+            "title": "Vence En",
+            "description": "Hasta cuándo se puede firmar: 24 horas desde el cobro confirmado."
           }
         },
         "type": "object",
@@ -1679,11 +1687,12 @@
           "estado": {
             "type": "string",
             "title": "Estado",
-            "description": "Estado de la saga; `EMITIDA` cuando la póliza ya está vigente."
+            "description": "Estado de la venta: `EN_PROGRESO` (en la decisión), `APROBADA` (aprobada, cobrando), `COBRO_REALIZADO` (cobrada, pendiente de firma), `FIRMADA`, `EMITIDA` (póliza vigente; terminal), `RECHAZADA` (terminal) o `COMPENSADA` (la firma falló o venció y el cobro se devolvió; terminal). Ver la guía de inicio, «Estados de una venta»."
           },
           "paso_actual": {
             "type": "string",
-            "title": "Paso Actual"
+            "title": "Paso Actual",
+            "description": "Paso en curso: `DECISION`, `COBRO`, `FIRMA` o `EMISION`."
           },
           "pasos": {
             "items": {
@@ -1782,7 +1791,8 @@
           },
           "estado": {
             "type": "string",
-            "title": "Estado"
+            "title": "Estado",
+            "description": "`PENDIENTE_FIRMA`, `VIGENTE` (emitida) o `ANULADA` (venta compensada)."
           },
           "vigencia_desde": {
             "type": "string",
@@ -1809,7 +1819,7 @@
           "documento_estado": {
             "type": "string",
             "title": "Documento Estado",
-            "description": "PENDIENTE mientras se genera el PDF; GENERADO cuando ya se puede firmar."
+            "description": "`PENDIENTE` mientras se genera el PDF; `GENERADO` cuando ya se puede firmar; `FALLIDO` si no se pudo generar."
           },
           "documento_sha256": {
             "anyOf": [
@@ -1842,6 +1852,7 @@
             "maxLength": 50,
             "minLength": 1,
             "title": "Producto",
+            "description": "Producto a cotizar: `microseguro_vida` o `proteccion_dispositivos`. Los campos de cada uno van en `datos`.",
             "examples": [
               "microseguro_vida"
             ]
@@ -1861,6 +1872,7 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Datos",
+            "description": "Campos del producto, todos obligatorios. `microseguro_vida`: `edad` (entero, 18 a 65) y `suma_asegurada` (entero en COP, 5.000.000 a 100.000.000). `proteccion_dispositivos`: `tipo_dispositivo` (`celular`, `portatil` o `tableta`), `valor_dispositivo` (entero en COP, 300.000 a 15.000.000) y `antiguedad_meses` (entero, 0 a 36). Un campo que falta o fuera de rango responde 400 `INVALID_REQUEST` con `details`.",
             "examples": [
               {
                 "edad": 35,
@@ -1877,7 +1889,7 @@
                 "type": "null"
               }
             ],
-            "description": "Cliente registrado en Solventa (KYC verificado y consentimiento vigente). Con él la cotización se puede suscribir (HU33); sin él es informativa y no se puede suscribir."
+            "description": "Cliente registrado en Solventa (KYC verificado y consentimiento vigente). Con él la cotización se puede suscribir; sin él es informativa y no se puede suscribir. Con `cliente`, las condiciones se validan aquí mismo y otra vez al vender, en este orden: registro (`CLIENTE_NO_REGISTRADO`), KYC (`KYC_NO_VERIFICADO`) y consentimiento (`CONSENTIMIENTO_NO_VIGENTE`); la primera que falla responde 400 con ese `reason`."
           }
         },
         "additionalProperties": false,
@@ -1950,11 +1962,12 @@
           "estado": {
             "type": "string",
             "title": "Estado",
-            "description": "Estado de la saga: EN_PROGRESO, APROBADA, COBRO_REALIZADO, FIRMADA, EMITIDA..."
+            "description": "Estado de la venta: `EN_PROGRESO` (en la decisión), `APROBADA` (aprobada, cobrando), `COBRO_REALIZADO` (cobrada, pendiente de firma), `FIRMADA`, `EMITIDA` (póliza vigente; terminal), `RECHAZADA` (terminal) o `COMPENSADA` (la firma falló o venció y el cobro se devolvió; terminal). Ver la guía de inicio, «Estados de una venta»."
           },
           "paso_actual": {
             "type": "string",
-            "title": "Paso Actual"
+            "title": "Paso Actual",
+            "description": "Paso en curso: `DECISION`, `COBRO`, `FIRMA` o `EMISION`."
           },
           "producto": {
             "type": "string",

@@ -91,3 +91,34 @@ def test_las_rutas_protegidas_declaran_el_bearer_y_el_estado_es_publico():
                 assert "security" not in operacion, (ruta, metodo)
             else:
                 assert operacion["security"] == [{"bearerAuth": []}], (ruta, metodo)
+
+
+def test_la_clave_de_idempotencia_es_obligatoria_en_las_escrituras_y_no_va_en_el_codigo_de_firma():
+    """HA07, D-02: el contrato marca `X-Idempotency-Key` como obligatoria donde la API ya la exige (400 sin ella)."""
+    rutas = app.openapi()["paths"]
+
+    def cabecera(ruta: str) -> dict | None:
+        parametros = rutas[ruta]["post"].get("parameters", [])
+        return next((p for p in parametros if p["name"] == "X-Idempotency-Key"), None)
+
+    for ruta in (
+        "/partners/v1/cotizaciones",
+        "/partners/v1/suscripciones",
+        "/partners/v1/suscripciones/{suscripcion_id}/firma",
+    ):
+        assert cabecera(ruta)["required"] is True, ruta
+    assert cabecera("/partners/v1/suscripciones/{suscripcion_id}/firma/codigo") is None
+
+
+def test_la_cotizacion_sin_clave_de_idempotencia_responde_400_del_catalogo(cliente, token):
+    """Lo que el contrato declara obligatorio lo es de verdad: sin la cabecera, 400 `INVALID_REQUEST`."""
+    respuesta = cliente.post(
+        "/partners/v1/cotizaciones",
+        json={"producto": "microseguro_vida", "referencia_cliente": "cli-1", "datos": {"edad": 35, "suma_asegurada": 50000000}},
+        headers={"Authorization": f"Bearer {token()}"},
+    )
+
+    assert respuesta.status_code == 400
+    error = respuesta.json()["error"]
+    assert error["code"] == "INVALID_REQUEST"
+    assert {"campo": "X-Idempotency-Key", "motivo": "requerida"} in error["details"]

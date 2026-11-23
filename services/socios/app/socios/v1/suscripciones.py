@@ -25,7 +25,7 @@ from app.socios.acceso import (
     exigir_endpoint,
 )
 from app.socios.almacen import ErrorAlmacen
-from app.socios.idempotencia import huella
+from app.socios.idempotencia import DESCRIPCION_CLAVE_IDEMPOTENCIA, huella
 from app.socios.identificacion import ClienteIn, identificar_exigiendo
 from app.socios.v1.api import _clave_idempotencia, respuestas_error
 
@@ -39,8 +39,17 @@ FirmarSuscripcion = Annotated[SocioAutorizado, Depends(exigir_endpoint(ENDPOINT_
 ConsultarPoliza = Annotated[SocioAutorizado, Depends(exigir_endpoint(ENDPOINT_POLIZAS_CONSULTAR, VERSION))]
 ClaveIdempotencia = Annotated[
     str | None,
-    Header(alias="X-Idempotency-Key", description="Obligatoria. Repetirla devuelve la respuesta original."),
+    Header(alias="X-Idempotency-Key", description=DESCRIPCION_CLAVE_IDEMPOTENCIA),
 ]
+
+# Solo documentación (HA07, D-04 a D-06): los valores son los que hoy devuelve Suscripción. No se declaran como `Literal`
+# porque eso validaría la respuesta y cambiaría el comportamiento ante un valor nuevo.
+_ESTADOS_VENTA = (
+    "Estado de la venta: `EN_PROGRESO` (en la decisión), `APROBADA` (aprobada, cobrando), `COBRO_REALIZADO` (cobrada, "
+    "pendiente de firma), `FIRMADA`, `EMITIDA` (póliza vigente; terminal), `RECHAZADA` (terminal) o `COMPENSADA` (la firma "
+    "falló o venció y el cobro se devolvió; terminal). Ver la guía de inicio, «Estados de una venta»."
+)
+_PASOS_VENTA = "Paso en curso: `DECISION`, `COBRO`, `FIRMA` o `EMISION`."
 
 
 class SuscripcionIn(BaseModel):
@@ -63,8 +72,8 @@ class SuscripcionIn(BaseModel):
 class SuscripcionIniciadaOut(BaseModel):
     id: str = Field(description="Identificador de la venta. Se usa en la consulta, el documento y la firma.")
     cotizacion_id: str
-    estado: str = Field(description="Estado de la saga: EN_PROGRESO, APROBADA, COBRO_REALIZADO, FIRMADA, EMITIDA...")
-    paso_actual: str
+    estado: str = Field(description=_ESTADOS_VENTA)
+    paso_actual: str = Field(description=_PASOS_VENTA)
     producto: str
     moneda: str
     monto_asegurado: int
@@ -74,35 +83,57 @@ class SuscripcionIniciadaOut(BaseModel):
 
 
 class DecisionOut(BaseModel):
-    decision: str
-    motivos: list[str]
+    decision: str = Field(
+        description=(
+            "`APROBADA`: la venta sigue sola al cobro. `RECHAZADA`: la venta termina. `DERIVADA`: la venta pasó a revisión "
+            "manual de un asesor de Solventa y queda en `DECISION` hasta que la resuelva; no hay que enviar nada, siga "
+            "consultando. `AJUSTADA`: Solventa aprueba un monto asegurado menor y espera que el cliente lo acepte; la v1 no "
+            "tiene cómo aceptarlo, así que la venta no avanza: cotice de nuevo con un monto menor. Si un asesor resuelve una "
+            "venta derivada, este campo muestra su decisión."
+        )
+    )
+    motivos: list[str] = Field(
+        description=(
+            "Explicación de la decisión automática, para mostrar al cliente o al operador. Si un asesor resolvió la "
+            "revisión manual, conserva los motivos de la derivación aunque `decision` ya no sea `DERIVADA`."
+        )
+    )
 
 
 class CobroOut(BaseModel):
-    estado: str
+    estado: str = Field(
+        description="`APROBADO` o `RECHAZADO`. Rechazado, la venta no avanza a la firma; el motivo viene en `motivo`."
+    )
     motivo: str | None
 
 
 class FirmaEstadoOut(BaseModel):
-    estado: str
-    vence_en: datetime | None
+    estado: str = Field(
+        description=(
+            "`PENDIENTE` (se puede firmar hasta `vence_en`), `FIRMADA`, `VENCIDA` (pasó el plazo) o `FALLIDA` (no se pudo "
+            "verificar al cliente). Vencida o fallida, Solventa devuelve el cobro y la venta termina `COMPENSADA`."
+        )
+    )
+    vence_en: datetime | None = Field(description="Hasta cuándo se puede firmar: 24 horas desde el cobro confirmado.")
 
 
 class PolizaOut(BaseModel):
     numero_poliza: str
-    estado: str
+    estado: str = Field(description="`PENDIENTE_FIRMA`, `VIGENTE` (emitida) o `ANULADA` (venta compensada).")
     vigencia_desde: datetime
     fecha_vencimiento: datetime
     fecha_emision: datetime | None
-    documento_estado: str = Field(description="PENDIENTE mientras se genera el PDF; GENERADO cuando ya se puede firmar.")
+    documento_estado: str = Field(
+        description="`PENDIENTE` mientras se genera el PDF; `GENERADO` cuando ya se puede firmar; `FALLIDO` si no se pudo generar."
+    )
     documento_sha256: str | None
 
 
 class PolizaConsultaOut(BaseModel):
     id: str
     cotizacion_id: str
-    estado: str = Field(description="Estado de la saga; `EMITIDA` cuando la póliza ya está vigente.")
-    paso_actual: str
+    estado: str = Field(description=_ESTADOS_VENTA)
+    paso_actual: str = Field(description=_PASOS_VENTA)
     pasos: list[str]
     producto: str
     moneda: str
@@ -320,6 +351,10 @@ async def documento_firma_pdf(suscripcion_id: str, request: Request, socio: Firm
     # Sin cuerpo: el contrato publica el 202 sin `content` (HA07), igual a lo que responde.
     response_class=Response,
     summary="Enviar al cliente el código de un solo uso para firmar",
+    description=(
+        "Sin cuerpo y sin `X-Idempotency-Key`. Responde 202 sin cuerpo. Si el cliente no recibió el código, se puede pedir "
+        "de nuevo."
+    ),
     responses=_ERRORES_LECTURA,
 )
 async def solicitar_codigo(suscripcion_id: str, request: Request, socio: FirmarSuscripcion) -> Response:

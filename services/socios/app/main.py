@@ -8,6 +8,7 @@ from app.logs import configurar_logs
 from app.socios.acceso import publicar_seguridad_bearer
 from app.socios.config import ConfigSocios
 from app.socios.errores import publicar_openapi_sin_422, registrar_errores
+from app.socios.idempotencia import publicar_idempotencia_obligatoria
 from app.socios.oauth import router as oauth_router
 from app.socios.v1.api import router as v1_router
 from app.socios.v1.suscripciones import router as suscripciones_router
@@ -30,8 +31,9 @@ app = FastAPI(
     title="Solventa — API de socios",
     version="1.0.0",
     description=(
-        "API para socios de distribución (HU32). Autenticación OAuth2 client credentials en `/oauth/token`; "
-        "cotización y venta embebida (suscripción, firma y póliza, HU33) en `/partners/v1`. Cada versión se publica bajo su propio prefijo."
+        "API para socios de distribución. Autenticación OAuth2 client credentials en `/oauth/token`; "
+        "cotización y venta embebida (suscripción, firma y póliza) en `/partners/v1`. Cada versión se publica bajo su propio prefijo. "
+        "Recorrido, estados de una venta y datos de prueba: `guia-de-inicio.md`; errores y reintentos: `errores-y-reintentos.md`."
     ),
     lifespan=lifespan,
 )
@@ -41,6 +43,7 @@ app.include_router(suscripciones_router)
 registrar_errores(app)
 publicar_openapi_sin_422(app)
 publicar_seguridad_bearer(app)
+publicar_idempotencia_obligatoria(app)
 app.add_middleware(MiddlewareCorrelacion)
 
 
