@@ -1,0 +1,13 @@
+{
+  "descripcion": "Agregar un campo opcional a la solicitud de cotización",
+  "esperado": "compatible",
+  "parche": [
+    {
+      "op": "add",
+      "path": "/components/schemas/SolicitudCotizacionIn/properties/canal",
+      "value": {
+        "type": "string"
+      }
+    }
+  ]
+}

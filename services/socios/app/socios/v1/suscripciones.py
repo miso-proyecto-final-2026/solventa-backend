@@ -317,6 +317,8 @@ async def documento_firma_pdf(suscripcion_id: str, request: Request, socio: Firm
 @router.post(
     "/suscripciones/{suscripcion_id}/firma/codigo",
     status_code=202,
+    # Sin cuerpo: el contrato publica el 202 sin `content` (HA07), igual a lo que responde.
+    response_class=Response,
     summary="Enviar al cliente el código de un solo uso para firmar",
     responses=_ERRORES_LECTURA,
 )

@@ -1,0 +1,11 @@
+{
+  "descripcion": "Cambiar la descripción del API",
+  "esperado": "compatible",
+  "parche": [
+    {
+      "op": "replace",
+      "path": "/info/description",
+      "value": "Otra descripción."
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+# TRANSITORIAS. Estas excepciones son solo para la transición del PR de HA07: el contrato pasa a describir lo que la API
+# ya hacía. Se deben vaciar después del merge: para entonces la rama base ya tiene el contrato nuevo y no hacen falta.
+# No se agregan excepciones nuevas sin justificarlas en el PR (ver ADR-0030).
+#
+# Formato (oasdiff --err-ignore): cada línea es «MÉTODO ruta mensaje» de un cambio que oasdiff marca como incompatible
+# pero que no cambia lo que recibe el socio.
+#
+# HA07: el contrato pasa a declarar `bearerAuth`. Las rutas ya exigían el Bearer (`exigir_endpoint`); solo faltaba
+# documentarlo. La colección de Postman de socios pasa igual antes y después (114 de 114 aserciones).
+POST /partners/v1/cotizaciones the endpoint no longer allows anonymous access and now only accepts `bearerAuth`
+POST /partners/v1/suscripciones the endpoint no longer allows anonymous access and now only accepts `bearerAuth`
+GET /partners/v1/polizas/{suscripcion_id} the endpoint no longer allows anonymous access and now only accepts `bearerAuth`
+GET /partners/v1/suscripciones/{suscripcion_id}/documento-firma the endpoint no longer allows anonymous access and now only accepts `bearerAuth`
+GET /partners/v1/suscripciones/{suscripcion_id}/documento-firma/pdf the endpoint no longer allows anonymous access and now only accepts `bearerAuth`
+POST /partners/v1/suscripciones/{suscripcion_id}/firma/codigo the endpoint no longer allows anonymous access and now only accepts `bearerAuth`
+POST /partners/v1/suscripciones/{suscripcion_id}/firma the endpoint no longer allows anonymous access and now only accepts `bearerAuth`
+# HA07: el 202 de `firma/codigo` siempre respondió sin cuerpo; el contrato documentaba un `application/json` vacío.
+POST /partners/v1/suscripciones/{suscripcion_id}/firma/codigo removed the media type `application/json` for the response with the status `202`

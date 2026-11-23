@@ -1,0 +1,10 @@
+{
+  "descripcion": "Quitar `GET /partners/v1/polizas/{suscripcion_id}` sin deprecarla",
+  "esperado": "rompe",
+  "parche": [
+    {
+      "op": "remove",
+      "path": "/paths/~1partners~1v1~1polizas~1{suscripcion_id}"
+    }
+  ]
+}

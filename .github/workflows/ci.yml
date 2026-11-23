@@ -63,7 +63,38 @@ jobs:
           name: pytest-reports-${{ matrix.service }}
           path: |
             services/${{ matrix.service }}/reports/junit.xml
+            services/${{ matrix.service }}/reports/conformidad-errores.json
             services/${{ matrix.service }}/coverage.xml
+
+  # HA07 (ADR-0030): un cambio incompatible en el contrato de /partners/v1 hace fallar el CI; uno compatible no.
+  contrato-socios:
+    name: contrato (socios)
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/socios
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Descargar oasdiff
+        run: docker pull -q tufin/oasdiff:v1.35.0
+      - name: Casos de muestra (cuatro compatibles y cinco que rompen)
+        run: python scripts/contrato/compatibilidad.py casos
+      - name: Compatibilidad con la versión anterior del contrato
+        env:
+          # En un PR, la rama base; en main, el commit anterior al push.
+          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: |
+          if ! git show "$BASE:services/socios/docs/api/openapi.json" > "$RUNNER_TEMP/openapi-base.json" 2>/dev/null; then
+            echo "La versión anterior no tiene contrato de socios: no hay con qué comparar."
+            exit 0
+          fi
+          python scripts/contrato/compatibilidad.py contra "$RUNNER_TEMP/openapi-base.json"
 
   # Lógica del despliegue por comentario (deploy-staging.yml): qué servicios toca un PR.
   pruebas-cd:

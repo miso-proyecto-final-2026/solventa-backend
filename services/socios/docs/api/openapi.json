@@ -208,7 +208,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/partners/v1/status": {
@@ -395,7 +400,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/partners/v1/polizas/{suscripcion_id}": {
@@ -514,7 +524,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/partners/v1/suscripciones/{suscripcion_id}/documento-firma": {
@@ -632,7 +647,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/partners/v1/suscripciones/{suscripcion_id}/documento-firma/pdf": {
@@ -746,7 +766,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/partners/v1/suscripciones/{suscripcion_id}/firma/codigo": {
@@ -769,12 +794,7 @@
         ],
         "responses": {
           "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+            "description": "Successful Response"
           },
           "400": {
             "description": "INVALID_REQUEST: cuerpo, cabecera o parámetro inválido (`details`), o una regla de negocio no se cumple (`reason`).",
@@ -862,7 +882,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/partners/v1/suscripciones/{suscripcion_id}/firma": {
@@ -1026,7 +1051,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     }
   },
@@ -1995,6 +2025,14 @@
           "scope"
         ],
         "title": "TokenOut"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Token de `POST /oauth/token` (OAuth2 client credentials); su vigencia, en segundos, viene en `expires_in`. Se envía como `Authorization: Bearer <token>`. Lo que el socio puede llamar lo decide su contrato API, no el token: un endpoint no habilitado responde 403 `ENDPOINT_NOT_AUTHORIZED`."
       }
     }
   }

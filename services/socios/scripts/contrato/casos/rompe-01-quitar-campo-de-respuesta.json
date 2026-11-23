@@ -1,0 +1,14 @@
+{
+  "descripcion": "Quitar `prima_mensual` de la cotización que recibe el socio",
+  "esperado": "rompe",
+  "parche": [
+    {
+      "op": "remove",
+      "path": "/components/schemas/CotizacionOut/properties/prima_mensual"
+    },
+    {
+      "op": "remove",
+      "path": "/components/schemas/CotizacionOut/required/5"
+    }
+  ]
+}

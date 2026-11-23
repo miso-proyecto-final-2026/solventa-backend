@@ -7,8 +7,9 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Any
 
-from fastapi import Request
+from fastapi import FastAPI, Request
 
 from app.socios.errores import (
     CuotaExcedida,
@@ -27,6 +28,8 @@ ENDPOINTS_CONOCIDOS = frozenset(
     {ENDPOINT_COTIZACIONES, ENDPOINT_SUSCRIPCIONES_CREAR, ENDPOINT_SUSCRIPCIONES_FIRMAR, ENDPOINT_POLIZAS_CONSULTAR}
 )
 _REALM = 'Bearer realm="solventa-partners"'
+ESQUEMA_BEARER = "bearerAuth"
+_RUTA_PUBLICA = "/partners/v1/status"
 
 
 @dataclass(frozen=True)
@@ -65,3 +68,33 @@ def exigir_endpoint(endpoint: str, version: str = "v1") -> Callable[[Request], A
         return SocioAutorizado(claims.client_id, contrato)
 
     return dependencia
+
+
+def publicar_seguridad_bearer(app: FastAPI) -> None:
+    """Declara en el OpenAPI el `Bearer` que ya exige `exigir_endpoint` (HA07): solo documenta, no cambia el acceso.
+
+    La validación del token es manual (`_token`), así que FastAPI no la ve; sin esto, un integrador que solo lee el
+    contrato no sabe que debe enviar `Authorization: Bearer <token>`.
+    """
+    original = app.openapi
+
+    def openapi() -> dict[str, Any]:
+        if app.openapi_schema is None:
+            esquema = original()
+            esquema.setdefault("components", {}).setdefault("securitySchemes", {})[ESQUEMA_BEARER] = {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+                "description": (
+                    "Token de `POST /oauth/token` (OAuth2 client credentials); su vigencia, en segundos, viene en "
+                    "`expires_in`. Se envía como `Authorization: Bearer <token>`. Lo que el socio puede llamar lo decide "
+                    "su contrato API, no el token: un endpoint no habilitado responde 403 `ENDPOINT_NOT_AUTHORIZED`."
+                ),
+            }
+            for ruta, metodos in esquema["paths"].items():
+                if ruta.startswith("/partners/") and ruta != _RUTA_PUBLICA:
+                    for operacion in metodos.values():
+                        operacion["security"] = [{ESQUEMA_BEARER: []}]
+        return app.openapi_schema or esquema
+
+    app.openapi = openapi  # type: ignore[method-assign]

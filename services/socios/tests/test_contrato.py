@@ -77,3 +77,17 @@ def test_el_retry_after_esta_documentado_en_429_503_y_409():
 
     for codigo in ("409", "429", "503"):
         assert "Retry-After" in cotizar[codigo]["headers"]
+
+
+def test_las_rutas_protegidas_declaran_el_bearer_y_el_estado_es_publico():
+    """HA07: el contrato dice cómo autenticarse; antes solo lo decía el README."""
+    esquema = app.openapi()
+    bearer = esquema["components"]["securitySchemes"]["bearerAuth"]
+
+    assert (bearer["type"], bearer["scheme"], bearer["bearerFormat"]) == ("http", "bearer", "JWT")
+    for ruta, metodos in esquema["paths"].items():
+        for metodo, operacion in metodos.items():
+            if ruta == "/partners/v1/status" or not ruta.startswith("/partners/"):
+                assert "security" not in operacion, (ruta, metodo)
+            else:
+                assert operacion["security"] == [{"bearerAuth": []}], (ruta, metodo)
