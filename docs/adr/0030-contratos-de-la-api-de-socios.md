@@ -57,8 +57,8 @@ desde FastAPI (`docs/api/openapi.json`). Lo que había:
 - El CI falla si una respuesta deja de cumplir el contrato, si un error sale sin un código del catálogo o si el contrato
   cambia de forma incompatible.
 - Corregir el contrato puede disparar oasdiff aunque la API no cambie. Las dos correcciones de HA07 (`bearerAuth` y el 202)
-  van en `excepciones.txt` solo para la transición de su PR, y se vacían después del merge. No se agregan excepciones nuevas sin
-  justificarlas en el PR.
+  fueron en `excepciones.txt` solo para la transición de su PR (#95) y se vaciaron después del merge. No se agregan
+  excepciones nuevas sin justificarlas en el PR.
 - Schemathesis corre con 50 casos por operación (`SOCIOS_CONTRATO_EJEMPLOS`), con semilla fija para que el CI sea
   reproducible. Subir el número encuentra más casos raros a cambio de tiempo.
 - La conformidad se prueba contra la app con dobles, no contra staging. Lo que pase entre servicios reales lo cubren la
